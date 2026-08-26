@@ -32,7 +32,13 @@ WORKDIR /build/Drawfish/src
 RUN make -j$(nproc) build ARCH=general-64 COMP=clang
 RUN cp drawfish /usr/local/bin/drawfish
 
-# Stage 3: runtime
+# Stage 3: build Node.js dependencies (node-gyp needs python3 + build tools)
+FROM node:22-bookworm AS node-build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Stage 4: runtime
 FROM node:22-bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -47,9 +53,8 @@ RUN chmod +x /usr/local/bin/lc0 /usr/local/bin/stockfish /usr/local/bin/drawfish
 
 WORKDIR /app
 
-# Install Node dependencies
-COPY package*.json ./
-RUN npm ci --omit=dev
+# Copy pre-built Node dependencies from node-build stage
+COPY --from=node-build /app/node_modules ./node_modules
 
 # Copy application source
 COPY src/ ./src/
