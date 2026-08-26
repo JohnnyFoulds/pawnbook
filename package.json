@@ -21,7 +21,7 @@
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "chess.js": "^1.4.0",
-    "express": "^4.19.2",
+    "express": "^5.2.1",
     "pino": "^9.3.2",
     "pino-pretty": "^11.2.2",
     "ts-fsrs": "^5.4.1",
@@ -29,11 +29,13 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^3.2.4",
-    "eslint": "^9.8.0",
-    "eslint-plugin-import": "^2.29.1",
-    "eslint-plugin-security": "^3.0.1",
-    "vitest": "^3.2.4"
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10.9.1",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-security": "^4.0.1",
+    "globals": "^17.11.0",
+    "vitest": "^4.1.11"
   },
   "optionalDependencies": {
     "chartscii": "^4.0.3",

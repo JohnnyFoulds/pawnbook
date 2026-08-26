@@ -10,21 +10,18 @@ import { dirname, join } from 'path';
 
 import express from 'express';
 
-import { PORT, BIND_ADDR, logger } from './config.js';
-import { initTelemetry } from './telemetry.js';
-
 import { openDb, SqliteGameRepository, SqlitePuzzleRepository, SqliteSettingsRepository } from './adapters/sqlite/repositories.js';
 import { SystemClock } from './adapters/clock/system-clock.js';
 import { FsrsScheduler } from './adapters/scheduler/fsrs-scheduler.js';
-import { DB_PATH } from './config.js';
-
+import { errorMiddleware } from './api/error-middleware.js';
 import { opponentsRouter } from './api/routes/opponents.js';
 import { gamesRouter } from './api/routes/games.js';
 import { puzzlesRouter } from './api/routes/puzzles.js';
 import { statsRouter } from './api/routes/stats.js';
 import { stateRouter } from './api/routes/state.js';
 import { attachWebSocketServer } from './api/ws/connection.js';
-import { errorMiddleware } from './api/error-middleware.js';
+import { PORT, BIND_ADDR, DB_PATH, logger } from './config.js';
+import { initTelemetry } from './telemetry.js';
 
 const log = logger.child({ mod: 'server' });
 const __dirname = dirname(fileURLToPath(import.meta.url));

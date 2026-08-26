@@ -8,10 +8,11 @@
  *   - streak/clock HTML presence
  */
 
-import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+
+import { describe, it, expect } from 'vitest';
 
 import { QUALITY } from '../../src/shared/quality.js';
 import { DUE_SOFT_CAP } from '../../src/shared/balance.js';

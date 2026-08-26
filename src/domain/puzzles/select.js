@@ -22,10 +22,9 @@ export function derivePhase({ fen, ply }) {
   const board = chess.board();
 
   let material = 0;
-  let hasCastlingRights = false;
 
   const castling = fen.split(' ')[2] ?? '-';
-  hasCastlingRights = castling !== '-';
+  const hasCastlingRights = castling !== '-';
 
   for (const row of board) {
     for (const sq of row) {
