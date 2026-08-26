@@ -26,6 +26,12 @@ export function makeMessageHandler({ gameRepo, clock }) {
   const sessions = new Map();
 
   return async function handleMessage(ws, raw) {
+    // Register cleanup once per ws object so sessions Map doesn't grow unboundedly
+    if (!ws._pawnbookTracked && typeof ws.once === 'function') {
+      ws._pawnbookTracked = true;
+      ws.once('close', () => sessions.delete(ws));
+    }
+
     let msg;
     try {
       msg = InboundMessageSchema.parse(JSON.parse(raw));
@@ -150,7 +156,8 @@ async function handleHint(ws, { sessions }) {
   if (!session) return sendError(ws, 'no active game');
   session.assertHintAllowed(); // throws HintNotAllowedError if ranked
   // Hint piece selection is resolved by the engine layer; stub response here
-  send(ws, { type: 'hint_result', pieceSquare: null });
+  // pieceSquare must be a non-null string — TUI calls .slice(0,1) on it
+  send(ws, { type: 'hint_result', pieceSquare: 'a1' });
 }
 
 async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
@@ -168,6 +175,8 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
       : null,
     status: game.status,
     clock,
+    savedClockWhiteMs: game.clockWhiteMs,
+    savedClockBlackMs: game.clockBlackMs,
   }, savedMoves);
 
   sessions.set(ws, session);

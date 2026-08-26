@@ -1,8 +1,8 @@
 # Implementation plan
 
-**Status:** Phase 0 complete. Phase 1 next.
+**Status:** ARCHIVED — superseded by `phase-11-review.md` (Phase 11 complete, 2026-08-26).
 
-This document tracks per-session pseudocode, the exact tests each session turns green, suggested commit messages, and DoD. Archived on Phase 11 completion.
+This document tracked per-session pseudocode, the exact tests each session turns green, suggested commit messages, and DoD.
 
 ---
 

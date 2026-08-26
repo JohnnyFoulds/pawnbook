@@ -14,9 +14,7 @@
 import { renderBoard } from '../board.js';
 import { processKey } from '../input.js';
 import { RESET, BOLD } from '../theme.js';
-
-const DUE_SOFT_CAP = 40;
-const BATCH_SIZE = 10;
+import { DUE_SOFT_CAP, DRILL_BATCH as BATCH_SIZE } from '../../src/shared/balance.js';
 
 /**
  * @param {object} opts

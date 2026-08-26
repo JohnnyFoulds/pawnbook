@@ -162,6 +162,10 @@ export class GameSession {
       session._chess.move({ from, to, promotion });
       session._moves.push(m);
     }
+    // Restore saved clock values so the server debits from the correct baseline,
+    // not from the initial time as set by the constructor.
+    if (opts.savedClockWhiteMs != null) session._clockWhiteMs = opts.savedClockWhiteMs;
+    if (opts.savedClockBlackMs != null) session._clockBlackMs = opts.savedClockBlackMs;
     return session;
   }
 
