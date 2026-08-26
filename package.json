@@ -19,7 +19,7 @@
     "format": "eslint . --fix"
   },
   "dependencies": {
-    "better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
     "chess.js": "^1.4.0",
     "express": "^4.19.2",
     "pino": "^9.3.2",
