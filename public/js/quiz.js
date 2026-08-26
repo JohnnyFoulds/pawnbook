@@ -6,7 +6,6 @@
  * {move, msTaken, hintUsed, attemptNo, phase:'quiz'}.
  */
 
-import { QUALITY } from '/shared/quality.js';
 
 const BASE = '';
 
@@ -76,7 +75,23 @@ function loadPosition(idx) {
   document.getElementById('skip-btn').style.display = '';
   document.getElementById('next-wrap').style.display = 'none';
 
-  // Board would be set here via boardInstance
+  initBoard(pos.fen, pos.sideToMove);
+}
+
+async function initBoard(fen, sideToMove) {
+  const el = document.getElementById('board-wrap');
+  if (!el) return;
+  el.innerHTML = '';
+  if (typeof Chessboard !== 'undefined') {
+    const lib = await import('./lib/board.js').catch(() => null);
+    if (lib?.createBoard) {
+      lib.createBoard(el, Chessboard, {
+        position: fen,
+        orientation: sideToMove === 'black' ? 'black' : 'white',
+        onMove: ({ from, to }) => submitMove(from + to),
+      });
+    }
+  }
 }
 
 async function submitMove(uci) {
@@ -156,7 +171,7 @@ document.getElementById('hint-btn').addEventListener('click', async () => {
     document.getElementById('hint-btn').textContent =
       `Move your ${piece}`;
     document.getElementById('hint-btn').disabled = true;
-  } catch {}
+  } catch { /* hint is best-effort; ignore fetch errors */ }
 });
 
 document.getElementById('skip-btn').addEventListener('click', () => {

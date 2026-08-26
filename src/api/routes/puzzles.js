@@ -10,7 +10,6 @@ import { z } from 'zod';
 import { gradeAttempt } from '../../domain/puzzles/attempt.js';
 import { sortDueCards, formatDueCount } from '../../domain/review/queue.js';
 import { DUE_SOFT_CAP, DRILL_BATCH } from '../../shared/balance.js';
-import { PuzzleNotFoundError } from '../../errors.js';
 import { logger } from '../../config.js';
 
 const log = logger.child({ mod: 'puzzles-route' });
@@ -31,7 +30,7 @@ const AttemptSchema = z.object({
  * @param {import('../../ports/repositories.js').SettingsRepository} deps.settingsRepo
  * @returns {Router}
  */
-export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }) {
+export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _settingsRepo }) {
   const router = Router();
 
   router.get('/due', (req, res, next) => {

@@ -316,14 +316,14 @@ function onAnalysisProgress(msg) {
     `Analysing… ${msg.phase ?? ''} ${Math.round(pct)}%`;
 }
 
-function onAnalysisDone(msg) {
+function onAnalysisDone(_msg) {
   document.getElementById('analysis-label').textContent = 'Analysis complete';
   document.getElementById('analysis-progress').style.width = '100%';
 }
 
 // ── Board ──────────────────────────────────────────────────────────────────
 
-function initBoard(fen, orientation) {
+async function initBoard(fen, orientation) {
   const el = document.getElementById('board-wrap');
   el.innerHTML = '';
 

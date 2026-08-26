@@ -224,7 +224,6 @@ function setupQuizLink(gameId, puzzleCount) {
 
 // ── Scrub board (read-only) ────────────────────────────────────────────────
 
-let boardInstance = null;
 let reviewMoves = [];
 
 function setupBoard(review) {
@@ -233,7 +232,6 @@ function setupBoard(review) {
   el.innerHTML = '';
 
   document.getElementById('ply-label').textContent = '';
-  // Board initialised when cm-chessboard is available (loaded by the server's HTML)
 }
 
 function scrubToPly(ply) {
@@ -241,7 +239,6 @@ function scrubToPly(ply) {
   if (!move) return;
   document.getElementById('ply-label').textContent =
     `Move ${Math.ceil(ply / 2)}${ply % 2 === 0 ? '…' : '.'}  ${move.san ?? ''}`;
-  // Board position set via boardInstance.setPosition when board is ready
 }
 
 boot();

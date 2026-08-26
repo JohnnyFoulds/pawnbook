@@ -14,7 +14,7 @@
 import { renderBoard } from '../board.js';
 import { processKey } from '../input.js';
 import { RESET, BOLD } from '../theme.js';
-import { DUE_SOFT_CAP, DRILL_BATCH as BATCH_SIZE } from '../../src/shared/balance.js';
+import { DRILL_BATCH as BATCH_SIZE } from '../../src/shared/balance.js';
 
 /**
  * @param {object} opts
@@ -48,7 +48,6 @@ export function createDrillScreen({ host, renderOpts = {}, apiCall }) {
     try {
       const due = await apiCall(host, '/api/puzzles/due');
       const cards = due.cards ?? [];
-      const total = due.total ?? cards.length;
 
       if (!cards.length) {
         state.empty = true;
