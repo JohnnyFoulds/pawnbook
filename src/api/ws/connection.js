@@ -9,8 +9,9 @@
 
 import { WebSocketServer } from 'ws';
 
-import { makeMessageHandler } from './handlers.js';
 import { logger } from '../../config.js';
+
+import { makeMessageHandler } from './handlers.js';
 
 const log = logger.child({ mod: 'ws-connection' });
 

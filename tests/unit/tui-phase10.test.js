@@ -12,31 +12,24 @@
  *   - drill feedback leads with glyph
  */
 
-import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const root  = resolve(__dir, '../..');
-
-function readSrc(rel) { return readFileSync(resolve(root, rel), 'utf8'); }
+import { describe, it, expect } from 'vitest';
 
 import {
-  fenToPieces,
   renderBoard,
   mouseHitTest,
   BOARD_WIDTH,
   BOARD_HEIGHT,
 } from '../../tui/board.js';
-
 import {
   filterMoves,
   tabComplete,
   resolveMove,
   longestCommonPrefix,
 } from '../../tui/input.js';
-
 import {
   luminance,
   contrast,
@@ -45,6 +38,11 @@ import {
   HEX,
   detectColorDepth,
 } from '../../tui/theme.js';
+
+const __dir = dirname(fileURLToPath(import.meta.url));
+const root  = resolve(__dir, '../..');
+
+function readSrc(rel) { return readFileSync(resolve(root, rel), 'utf8'); }
 
 // ── board: rendering ─────────────────────────────────────────────────────────
 
@@ -99,7 +97,6 @@ describe('board', () => {
     // renderBoard places glyph + VS15 + one space, so visually 2 cols
     const rows = renderBoard({ fen: startFen }, { ascii: false, hatch: false });
     const raw = rows.join('');
-    const VS15 = '︎';
     const glyphRe = /[♚♛♜♝♞♟]︎(.)/g;
     let m;
     while ((m = glyphRe.exec(raw)) !== null) {
@@ -385,7 +382,10 @@ describe('clock: TUI displays server clock, never decides flag-fall', () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const ESC = '\x1b'; // eslint-disable-line no-control-regex
+const ANSI_ESCAPE = new RegExp(ESC + '\\[[0-9;]*m', 'g');
+
 /** Strip ANSI escape sequences for visible-character counting. */
 function stripAnsi(str) {
-  return str.replace(/\x1b\[[0-9;]*m/g, '');
+  return str.replace(ANSI_ESCAPE, '');
 }

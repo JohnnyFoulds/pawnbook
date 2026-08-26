@@ -18,7 +18,6 @@
 
 import { renderBoard } from '../board.js';
 import { processKey, filterMoves } from '../input.js';
-import { QUALITY } from '../../src/shared/quality.js';
 
 const RESET = '\x1b[0m';
 const BOLD  = '\x1b[1m';

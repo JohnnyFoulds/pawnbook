@@ -23,6 +23,7 @@
  */
 
 import { parseArgs } from 'util';
+
 import { createClient, apiCall } from '../tui/client.js';
 import { createPlayScreen }  from '../tui/screens/play.js';
 import { createDrillScreen } from '../tui/screens/drill.js';
@@ -99,9 +100,6 @@ async function main() {
     // Just print board diagnostics and exit cleanly
     if (subcommand === 'stats') {
       try {
-        const stats = await apiCall(host, '/api/stats');
-        const appState = await apiCall(host, '/api/state').catch(() => ({}));
-        const { createStatsScreen: _ } = await import('../tui/screens/stats.js');
         const screen = createStatsScreen({ host, sessionOpts, apiCall: apiCallBound });
         await screen.boot();
         console.log(screen.render());

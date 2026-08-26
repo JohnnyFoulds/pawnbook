@@ -6,7 +6,6 @@
  * Scheduling is handled server-side; client never calls the scheduler.
  */
 
-import { QUALITY } from '/shared/quality.js';
 
 const BASE = '';
 const BATCH_SIZE = 10;
@@ -96,6 +95,24 @@ function loadCard(idx) {
   document.getElementById('hint-btn').disabled = false;
   document.getElementById('hint-btn').textContent = 'Show hint';
   document.getElementById('next-wrap').style.display = 'none';
+
+  initBoard(card.fen, card.sideToMove);
+}
+
+async function initBoard(fen, sideToMove) {
+  const el = document.getElementById('board-wrap');
+  if (!el) return;
+  el.innerHTML = '';
+  if (typeof Chessboard !== 'undefined') {
+    const lib = await import('./lib/board.js').catch(() => null);
+    if (lib?.createBoard) {
+      lib.createBoard(el, Chessboard, {
+        position: fen,
+        orientation: sideToMove === 'black' ? 'black' : 'white',
+        onMove: ({ from, to }) => submitMove(from + to),
+      });
+    }
+  }
 }
 
 async function submitMove(uci) {
@@ -119,7 +136,7 @@ async function submitMove(uci) {
   }
 }
 
-function showFeedback(result, card) {
+function showFeedback(result, _card) {
   const wrap = document.getElementById('feedback-wrap');
   const correct = result.correct;
   const pip = document.getElementById(`pip-${batchIdx}`);
