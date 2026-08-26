@@ -1,6 +1,6 @@
 import js from '@eslint/js';
 import globals from 'globals';
-import importPlugin from 'eslint-plugin-import';
+import importPlugin from 'eslint-plugin-import-x';
 import security from 'eslint-plugin-security';
 
 export default [
