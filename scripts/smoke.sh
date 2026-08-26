@@ -2,6 +2,18 @@
 # Engine acceptance tests — run inside the container or with ENGINE_MODE=native.
 set -euo pipefail
 
+# Cross-platform timeout: GNU timeout, gtimeout, or perl alarm fallback (macOS)
+_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$@"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$secs" "$@"
+    else
+        perl -e "alarm $secs; exec @ARGV" -- "$@"
+    fi
+}
+
 MODE="${ENGINE_MODE:-container}"
 
 if [[ "$MODE" == "native" ]]; then
@@ -35,7 +47,7 @@ uci_check() {
     local bin="$1"
     local name="$2"
     local response
-    response=$(echo -e "uci\nquit" | timeout 10 "$bin" 2>/dev/null) || true
+    response=$(echo -e "uci\nquit" | _timeout 10 "$bin" 2>/dev/null) || true
     if echo "$response" | grep -q "uciok"; then
         check "$name uci handshake" "ok"
     else
@@ -49,7 +61,7 @@ echo
 # Stockfish
 echo "--- Stockfish ---"
 uci_check "$SF_BIN" "stockfish"
-response=$(echo -e "uci\nquit" | timeout 10 "$SF_BIN" 2>/dev/null) || true
+response=$(echo -e "uci\nquit" | _timeout 10 "$SF_BIN" 2>/dev/null) || true
 if echo "$response" | grep -q "UCI_Elo"; then
     check "stockfish UCI_Elo option present" "ok"
 else
@@ -77,7 +89,7 @@ for elo in "${REQUIRED_ELOS[@]}"; do
     wf="$WEIGHTS_DIR/maia-${elo}.pb.gz"
     if [[ -f "$wf" ]]; then
         response=$(echo -e "setoption name WeightsFile value $wf\nuci\nquit" \
-            | timeout 15 "$LC0_BIN" --backend=eigen 2>/dev/null) || true
+            | _timeout 15 "$LC0_BIN" --backend=eigen 2>/dev/null) || true
         if echo "$response" | grep -q "uciok"; then
             check "maia-${elo} loads on lc0" "ok"
         else
@@ -97,7 +109,7 @@ if [[ "$MODE" != "native" ]] && [[ -n "$DRAWFISH_BIN" ]]; then
     # Identity test: stalemate-hunting position
     STALEMATE_FEN="4k3/4P3/8/4K3/8/8/8/8 w - - 0 1"
     response=$(printf "position fen %s\ngo depth 6\nquit\n" "$STALEMATE_FEN" \
-        | timeout 30 "$DRAWFISH_BIN" 2>/dev/null) || true
+        | _timeout 30 "$DRAWFISH_BIN" 2>/dev/null) || true
     if echo "$response" | grep -q "bestmove e5e6"; then
         check "drawfish stalemate identity (bestmove e5e6)" "ok"
     else

@@ -1,7 +1,7 @@
 # Stage 1: build lc0 v0.32.1 for linux/arm64
 FROM debian:bookworm AS lc0-build
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git build-essential ninja-build meson pkg-config python3 \
+    git build-essential ninja-build meson pkg-config python3 ca-certificates \
     zlib1g-dev libeigen3-dev libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
@@ -20,7 +20,7 @@ RUN cp build/release/lc0 /usr/local/bin/lc0
 # Stage 2: build Stockfish 18 and Drawfish for linux/arm64
 FROM debian:bookworm AS engines-build
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git build-essential clang \
+    git build-essential clang ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 
