@@ -1,0 +1,77 @@
+import { describe, it, expect } from 'vitest';
+import { shouldGraduate, formatDueCount, sortDueCards } from '../../src/domain/review/queue.js';
+import { DUE_SOFT_CAP, GRADUATE_REPS, GRADUATE_INTERVAL_D } from '../../src/shared/balance.js';
+
+describe('queue', () => {
+  describe('shouldGraduate', () => {
+    it('returns true when reps >= GRADUATE_REPS, no lapses, and interval > GRADUATE_INTERVAL_D', () => {
+      const card = { reps: GRADUATE_REPS, lapses: 0, scheduled_days: GRADUATE_INTERVAL_D + 1 };
+      expect(shouldGraduate(card)).toBe(true);
+    });
+
+    it('returns false when reps < GRADUATE_REPS', () => {
+      const card = { reps: GRADUATE_REPS - 1, lapses: 0, scheduled_days: GRADUATE_INTERVAL_D + 1 };
+      expect(shouldGraduate(card)).toBe(false);
+    });
+
+    it('returns false when there are lapses', () => {
+      const card = { reps: GRADUATE_REPS, lapses: 1, scheduled_days: GRADUATE_INTERVAL_D + 1 };
+      expect(shouldGraduate(card)).toBe(false);
+    });
+
+    it('returns false when interval <= GRADUATE_INTERVAL_D', () => {
+      const card = { reps: GRADUATE_REPS, lapses: 0, scheduled_days: GRADUATE_INTERVAL_D };
+      expect(shouldGraduate(card)).toBe(false);
+    });
+
+    it('returns false for null/undefined card', () => {
+      expect(shouldGraduate(null)).toBe(false);
+      expect(shouldGraduate(undefined)).toBe(false);
+    });
+  });
+
+  describe('formatDueCount', () => {
+    it('returns the count as a string when at or below DUE_SOFT_CAP', () => {
+      const result = formatDueCount(DUE_SOFT_CAP);
+      expect(result.display).toBe(String(DUE_SOFT_CAP));
+      expect(result.overCap).toBe(false);
+    });
+
+    it('returns "N+" and overCap=true when above DUE_SOFT_CAP', () => {
+      const result = formatDueCount(DUE_SOFT_CAP + 1);
+      expect(result.display).toBe(`${DUE_SOFT_CAP}+`);
+      expect(result.overCap).toBe(true);
+    });
+
+    it('handles zero', () => {
+      const result = formatDueCount(0);
+      expect(result.display).toBe('0');
+      expect(result.overCap).toBe(false);
+    });
+  });
+
+  describe('sortDueCards', () => {
+    const now = new Date('2025-01-10T12:00:00Z');
+
+    it('returns cards sorted by due date when at or below DUE_SOFT_CAP', () => {
+      const cards = [
+        { due: '2025-01-09T12:00:00Z', instructiveness: 5 },
+        { due: '2025-01-08T12:00:00Z', instructiveness: 3 },
+        { due: '2025-01-10T12:00:00Z', instructiveness: 8 },
+      ];
+      const sorted = sortDueCards(cards, now);
+      expect(new Date(sorted[0].due) <= new Date(sorted[1].due)).toBe(true);
+      expect(new Date(sorted[1].due) <= new Date(sorted[2].due)).toBe(true);
+    });
+
+    it('when over DUE_SOFT_CAP, higher instructiveness x overdue comes first', () => {
+      const cards = Array.from({ length: DUE_SOFT_CAP + 5 }, (_, i) => ({
+        due: new Date(now.getTime() - i * 86_400_000).toISOString(),
+        instructiveness: i % 3 === 0 ? 50 : 1,
+      }));
+      const sorted = sortDueCards(cards, now);
+      // First card should have high instructiveness
+      expect(sorted[0].instructiveness).toBe(50);
+    });
+  });
+});
