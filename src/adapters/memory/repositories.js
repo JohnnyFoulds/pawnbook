@@ -49,6 +49,16 @@ export class InMemoryGameRepository {
   getEloHistory() {
     return [...this._eloHistory].sort((a, b) => a.recordedAt - b.recordedAt);
   }
+
+  listRecent(limit = 50) {
+    return [...this._games.values()]
+      .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
+      .slice(0, limit);
+  }
+
+  getEvals(gameId) {
+    return this._evals ? (this._evals.get(gameId) ?? []) : [];
+  }
 }
 
 export class InMemoryPuzzleRepository {
@@ -90,6 +100,29 @@ export class InMemoryPuzzleRepository {
 
   saveCard(card) {
     this._cards.set(card.puzzleId, { ...card });
+  }
+
+  getCard(puzzleId) {
+    const card = this._cards.get(puzzleId);
+    return card ? { ...card } : null;
+  }
+
+  listAll() {
+    return [...this._puzzles.values()].map(p => {
+      const card = this._cards.get(p.id);
+      return { ...p, graduated: card?.graduated ?? false, reps: card?.reps ?? 0, lapses: card?.lapses ?? 0 };
+    });
+  }
+
+  listByGame(gameId) {
+    return [...this._puzzles.values()]
+      .filter(p => p.sourceGameId === gameId)
+      .sort((a, b) => (a.sourcePly ?? 0) - (b.sourcePly ?? 0));
+  }
+
+  saveReview(review) {
+    if (!this._reviews) this._reviews = [];
+    this._reviews.push({ ...review, id: review.id ?? randomUUID() });
   }
 }
 
