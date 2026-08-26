@@ -4,7 +4,9 @@
  */
 
 import { randomUUID } from 'crypto';
+
 import { ZodError } from 'zod';
+
 import { InboundMessageSchema } from '../../schemas/messages.js';
 import { GameSession } from '../../domain/game/session.js';
 import { getOpponent } from '../../domain/game/roster.js';

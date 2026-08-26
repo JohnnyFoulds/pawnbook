@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { inferRating } from '../../src/domain/review/rating.js';
 import { RATING_FAST_MS, RATING_SLOW_MS } from '../../src/shared/balance.js';
 

@@ -5,10 +5,12 @@
  */
 
 import { Chess } from 'chess.js';
+
 import { logger } from '../../config.js';
+import { FINDABILITY_MIN, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
+
 import { classify, winPct, moveAccuracy, gameAccuracy } from './grade.js';
 import { probeFindability } from './findability.js';
-import { FINDABILITY_MIN, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
 
 const log = logger.child({ mod: 'analysis-pipeline' });
 
@@ -28,7 +30,7 @@ const PASS_WEIGHTS = [0.76, 0.22, 0.02];
  * @returns {Promise<{moveEvals: object[], accuracy: number, opponentAccuracy: number, puzzleCandidates: object[]}>}
  */
 export async function runAnalysis({
-  plies, playerColor, sfClient, maiaClient, maiaModel, playerElo, wasTimed,
+  plies, playerColor, sfClient, maiaClient, maiaModel, playerElo: _playerElo, wasTimed: _wasTimed,
   onProgress = () => {},
 }) {
   const chess = new Chess();

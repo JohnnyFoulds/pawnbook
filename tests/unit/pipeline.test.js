@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+
 import { runAnalysis } from '../../src/domain/analysis/pipeline.js';
 import { ScriptedEngineClient } from '../../src/adapters/engine/scripted-engine-client.js';
 
@@ -37,7 +38,7 @@ describe('pipeline', () => {
     const sfClient = makeSfClient();
     const maiaClient = makeMaiaClient();
 
-    const result = await runAnalysis({
+    await runAnalysis({
       plies: FOUR_MOVE_PLIES,
       playerColor: 'white',
       sfClient,
@@ -140,12 +141,6 @@ describe('pipeline', () => {
   });
 
   it('puzzle candidates are drawn from player plies only', async () => {
-    // Use a scripted client that returns a blunder on ply 1 (white/player)
-    // by giving startpos a high cp, then after white's move a very low cp
-    const fixtures = {
-      default: SF_DEFAULT['default'],
-    };
-
     // Build a per-fen fixture map to simulate a blunder on ply 1
     const chess = (await import('chess.js')).Chess;
     const game = new chess();
@@ -153,7 +148,6 @@ describe('pipeline', () => {
     game.move({ from: 'e2', to: 'e4' });
     const pos1 = game.fen(); // after e4
     game.move({ from: 'e7', to: 'e5' });
-    const pos2 = game.fen(); // after e5
 
     // pos0: cp=100 (slightly favourable for white)
     // pos1: cp=-500 (white blundered e4?!)
@@ -213,7 +207,6 @@ describe('pipeline', () => {
   });
 
   it('progress events cover phases pass1, pass2, maia, select', async () => {
-    const sfClient = makeSfClient();
     const policyMap = new Map([['e2e4', 0.5], ['d2d4', 0.3]]);
     const maiaClient = makeMaiaClient('e2e4', policyMap);
 

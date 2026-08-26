@@ -2,12 +2,13 @@
  * Contract test suite — same assertions run against BOTH repository implementations.
  * Any behaviour difference between sqlite and memory is a defect.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { unlinkSync, existsSync } from 'fs';
+
 import Database from 'better-sqlite3';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { applySchema } from '../../src/adapters/sqlite/schema.js';
 import {
@@ -232,5 +233,23 @@ describe('[sqlite] schema', () => {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     expect(() => stmt.run('x', 1, 'maia-1300', 'white', 'finished', 'zzz')).toThrow();
+  });
+});
+
+// ─── openDb helper ───────────────────────────────────────────────────────────
+
+describe('[sqlite] openDb', () => {
+  it('openDb creates a database and applies the schema', async () => {
+    const { openDb } = await import('../../src/adapters/sqlite/repositories.js');
+    const dbPath = join(tmpdir(), `pawnbook-opendb-${randomUUID()}.db`);
+    let db;
+    try {
+      db = openDb(dbPath);
+      // Schema applied — games table should exist
+      expect(() => db.prepare('SELECT 1 FROM games LIMIT 0').all()).not.toThrow();
+    } finally {
+      if (db) db.close();
+      if (existsSync(dbPath)) unlinkSync(dbPath);
+    }
   });
 });

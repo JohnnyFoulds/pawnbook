@@ -4,19 +4,20 @@
  * Pure domain logic — no engine calls, no persistence here.
  */
 
-import { Chess } from 'chess.js';
 import { randomUUID } from 'crypto';
+
+import { Chess } from 'chess.js';
+
 import {
   IllegalMoveError, GameAlreadyOverError, GameNotResumableError, HintNotAllowedError,
 } from '../../errors.js';
-import { updateElo, validateRanked } from './elo.js';
 
 const TERMINATION_MAP = {
-  checkmate: 'checkmate',
-  stalemate: 'stalemate',
-  threefoldRepetition: 'threefold',
-  insufficientMaterial: 'insufficient_material',
-  fiftyMoves: 'fifty_move',
+  isCheckmate: 'checkmate',
+  isStalemate: 'stalemate',
+  isThreefoldRepetition: 'threefold',
+  isInsufficientMaterial: 'insufficient_material',
+  isDrawByFiftyMoves: 'fifty_move',
 };
 
 export class GameSession {
@@ -180,7 +181,7 @@ export class GameSession {
       result = playerWon ? 'win' : 'loss';
     } else {
       for (const [method, term] of Object.entries(TERMINATION_MAP)) {
-        if (method !== 'checkmate' && chess[method]?.()) {
+        if (method !== 'isCheckmate' && chess[method]?.()) {
           termination = term;
           break;
         }

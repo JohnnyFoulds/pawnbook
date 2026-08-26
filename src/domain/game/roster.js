@@ -4,7 +4,8 @@
  */
 
 import { existsSync } from 'fs';
-import { WEIGHTS_DIR, ENGINE_PATHS, logger } from '../../config.js';
+
+import { WEIGHTS_DIR, logger } from '../../config.js';
 import { WeightsMissingError } from '../../errors.js';
 
 const log = logger.child({ mod: 'roster' });

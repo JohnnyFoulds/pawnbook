@@ -1,0 +1,325 @@
+import { describe, it, expect, vi } from 'vitest';
+
+import { makeMessageHandler } from '../../src/api/ws/handlers.js';
+import { InMemoryGameRepository } from '../../src/adapters/memory/repositories.js';
+import { FixedClock } from '../../src/adapters/clock/fixed-clock.js';
+
+// Make all weight files appear to exist (needed for roster.getAvailableOpponents)
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, existsSync: vi.fn().mockReturnValue(true) };
+});
+
+// Simple mock WebSocket
+function makeWs() {
+  const ws = {
+    readyState: 1, // OPEN
+    OPEN: 1,
+    _messages: [],
+    _events: {},
+    send(data) { this._messages.push(JSON.parse(data)); },
+    emit(event, ...args) {
+      if (this._events[event]) this._events[event](...args);
+    },
+    on(event, fn) { this._events[event] = fn; },
+    lastMessage() { return this._messages[this._messages.length - 1]; },
+  };
+  return ws;
+}
+
+const CLOCK = new FixedClock(1_000_000);
+
+describe('ws-handlers: makeMessageHandler', () => {
+  it('returns a function', () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    expect(typeof handler).toBe('function');
+  });
+
+  it('malformed JSON returns validation_failed', async () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    const ws = makeWs();
+    await handler(ws, '{invalid json}');
+    expect(ws._messages[0].type).toBe('error');
+  });
+
+  it('unknown type returns validation error', async () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    const ws = makeWs();
+    await handler(ws, JSON.stringify({ type: 'bogus_type' }));
+    expect(ws._messages[0].type).toBe('error');
+  });
+
+  it('new_game with valid payload sends game_started', async () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: null,
+    }));
+
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('game_started');
+    expect(msg.youPlay).toBe('white');
+    expect(msg.fen).toBeDefined();
+    expect(Array.isArray(msg.legalMoves)).toBe(true);
+  });
+
+  it('move without a game session returns internal_error', async () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    const ws = makeWs();
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'e2e4' }));
+    expect(ws.lastMessage().type).toBe('error');
+  });
+
+  it('resign without a game session returns internal_error', async () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    const ws = makeWs();
+    await handler(ws, JSON.stringify({ type: 'resign' }));
+    expect(ws.lastMessage().type).toBe('error');
+  });
+
+  it('hint without a game session returns internal_error', async () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    const ws = makeWs();
+    await handler(ws, JSON.stringify({ type: 'hint' }));
+    expect(ws.lastMessage().type).toBe('error');
+  });
+
+  it('new_game with random color picks white or black', async () => {
+    const handler = makeMessageHandler({
+      gameRepo: new InMemoryGameRepository(),
+      clock: CLOCK,
+    });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'random',
+      ranked: false,
+      timeControl: null,
+    }));
+
+    const msg = ws.lastMessage();
+    if (msg.type === 'game_started') {
+      expect(['white', 'black']).toContain(msg.youPlay);
+    }
+  });
+
+  it('resign after a game sends game_over', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    // Start a game
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: null,
+    }));
+
+    expect(ws.lastMessage().type).toBe('game_started');
+
+    // Resign
+    await handler(ws, JSON.stringify({ type: 'resign' }));
+    const lastMsg = ws.lastMessage();
+    expect(lastMsg.type).toBe('game_over');
+    expect(lastMsg.termination).toBe('resignation');
+  });
+
+  it('a legal move sends move_accepted', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    // Start a game as white
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: null,
+    }));
+
+    expect(ws.lastMessage().type).toBe('game_started');
+    const engineTurnSpy = vi.fn();
+    ws.on('engine_turn', engineTurnSpy);
+
+    // Play e4
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'e2e4' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('move_accepted');
+    expect(msg.fen).toBeDefined();
+  });
+
+  it('an illegal move sends an error', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: null,
+    }));
+
+    // Play an illegal move (valid UCI format but not a legal chess move from startpos)
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'e2e5' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('error');
+    // WS handler wraps domain errors as internal_error — the error message carries the detail
+    expect(msg.message).toMatch(/illegal|invalid|move/i);
+  });
+
+  it('new_game with timeControl sends clock in game_started', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: { initialSec: 300, incSec: 3 },
+    }));
+
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('game_started');
+    expect(msg.clock).toBeDefined();
+    expect(msg.clock.whiteMs).toBe(300 * 1000);
+  });
+
+  it('hint in a casual game returns hint_result', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: null,
+    }));
+
+    await handler(ws, JSON.stringify({ type: 'hint' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('hint_result');
+  });
+
+  it('resume sends game_started with resumed=true', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    // Start and save a game
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: null,
+    }));
+
+    const startMsg = ws.lastMessage();
+    expect(startMsg.type).toBe('game_started');
+    const gameId = startMsg.gameId;
+
+    // Resume it on a fresh WS connection
+    const ws2 = makeWs();
+    await handler(ws2, JSON.stringify({ type: 'resume', gameId }));
+    const resumeMsg = ws2.lastMessage();
+    expect(resumeMsg.type).toBe('game_started');
+    expect(resumeMsg.resumed).toBe(true);
+  });
+
+  it('resume with time control includes clock in response', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    // Start a timed game
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: { initialSec: 300, incSec: 3 },
+    }));
+
+    const startMsg = ws.lastMessage();
+    expect(startMsg.type).toBe('game_started');
+    const gameId = startMsg.gameId;
+
+    // Resume the timed game
+    const ws2 = makeWs();
+    await handler(ws2, JSON.stringify({ type: 'resume', gameId }));
+    const resumeMsg = ws2.lastMessage();
+    expect(resumeMsg.type).toBe('game_started');
+    expect(resumeMsg.clock).toBeDefined();
+  });
+
+  it("player move that checkmates the engine sends game_over via handleMove", async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    // Register engine_turn handler BEFORE starting the game (player is black;
+    // engine plays white via fool's mate setup: f2f3 then g2g4)
+    const engineQueue = ['f2f3', 'g2g4'];
+    ws.on('engine_turn', (session) => {
+      if (engineQueue.length > 0) session.applyMove(engineQueue.shift());
+    });
+
+    // Start a casual game as black so the player delivers checkmate
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'black',
+      ranked: false,
+      timeControl: null,
+    }));
+    // engine_turn fires immediately → white plays f2f3
+
+    // Player (black) plays e7e5 → engine_turn fires → white plays g2g4
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'e7e5' }));
+
+    // Player (black) delivers Qh4# (fool's mate)
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'd8h4' }));
+
+    const lastMsg = ws.lastMessage();
+    // Lines 122-124: moveResult.gameOver=true → finishGame → game_over
+    expect(lastMsg.type).toBe('game_over');
+    expect(lastMsg.termination).toBe('checkmate');
+  });
+});

@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
+
 import { GameSession } from '../../src/domain/game/session.js';
 import { FixedClock } from '../../src/adapters/clock/fixed-clock.js';
 import {
@@ -36,9 +37,6 @@ describe('session', () => {
 
   it('checkmate sets result=win and termination=checkmate', () => {
     // Fool's mate: 1.f3 e5 2.g4 Qh4#
-    const session = makeSession({ playerColor: 'black' });
-    // Black moves first is actually wrong here — this is for testing purposes
-    // Set up a fresh session where we can reach checkmate
     const s2 = makeSession({ playerColor: 'white', ranked: false });
     // f3, e5, g4, Qh4 — white gets mated
     s2.applyMove('f2f3');
@@ -184,5 +182,58 @@ describe('clock', () => {
     const wBefore = session._clockWhiteMs;
     // No time passes (clock frozen) → white clock unchanged on next check
     expect(session._clockWhiteMs).toBe(wBefore);
+  });
+
+  it('black clock is debited when black makes a timed move', () => {
+    const clock = new FixedClock(1_000_000);
+    const session = makeSession({
+      playerColor: 'black',
+      timeControl: { initialSec: 300, incSec: 0 },
+      clock,
+    });
+    // First white move (engine-side, but we apply it to advance the board)
+    session.applyMove('e2e4');
+    clock.advance(3000);
+    // Now it is black's turn; black makes a move
+    const result = session.applyMove('e7e5');
+    // Black's clock should be debited
+    expect(result.clockUpdate.blackMs).toBeLessThan(300_000);
+    expect(result.clockUpdate.blackMs).toBeCloseTo(297_000, -2);
+  });
+
+  it('checkTimeout returns null when time has not run out', () => {
+    const clock = new FixedClock(1_000_000);
+    const session = makeSession({ timeControl: { initialSec: 300, incSec: 0 }, clock });
+    // No time has elapsed — clock is positive
+    const result = session.checkTimeout('white');
+    expect(result).toBeNull();
+  });
+
+  it('checkTimeout returns null for an untimed game', () => {
+    const session = makeSession({ timeControl: null });
+    expect(session.checkTimeout('white')).toBeNull();
+  });
+});
+
+describe('draw detection', () => {
+  it('stalemate terminates as a draw via _checkGameOver', () => {
+    const session = makeSession({ ranked: false, playerColor: 'white' });
+    // Load a classic stalemate FEN: black to move, no legal moves (not in check)
+    // K+P vs K where pawn is on 7th and black king is trapped
+    session._chess.load('5k2/5P2/5K2/8/8/8/8/8 b - - 0 1');
+    const result = session._checkGameOver();
+    expect(result).not.toBeNull();
+    expect(result.result).toBe('draw');
+    expect(result.termination).toBe('stalemate');
+  });
+
+  it('insufficient material terminates as a draw', () => {
+    const session = makeSession({ ranked: false, playerColor: 'white' });
+    // K vs K — insufficient material
+    session._chess.load('4k3/8/8/8/8/8/8/4K3 w - - 0 1');
+    const result = session._checkGameOver();
+    expect(result).not.toBeNull();
+    expect(result.result).toBe('draw');
+    expect(result.termination).toBe('insufficient_material');
   });
 });

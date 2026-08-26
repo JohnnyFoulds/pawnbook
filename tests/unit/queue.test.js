@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { shouldGraduate, formatDueCount, sortDueCards } from '../../src/domain/review/queue.js';
 import { DUE_SOFT_CAP, GRADUATE_REPS, GRADUATE_INTERVAL_D } from '../../src/shared/balance.js';
 
@@ -7,6 +8,16 @@ describe('queue', () => {
     it('returns true when reps >= GRADUATE_REPS, no lapses, and interval > GRADUATE_INTERVAL_D', () => {
       const card = { reps: GRADUATE_REPS, lapses: 0, scheduled_days: GRADUATE_INTERVAL_D + 1 };
       expect(shouldGraduate(card)).toBe(true);
+    });
+
+    it('works with camelCase scheduledDays property', () => {
+      const card = { reps: GRADUATE_REPS, lapses: 0, scheduledDays: GRADUATE_INTERVAL_D + 1 };
+      expect(shouldGraduate(card)).toBe(true);
+    });
+
+    it('treats missing reps as 0', () => {
+      const card = { lapses: 0, scheduled_days: GRADUATE_INTERVAL_D + 1 };
+      expect(shouldGraduate(card)).toBe(false); // reps=0 < GRADUATE_REPS
     });
 
     it('returns false when reps < GRADUATE_REPS', () => {
@@ -27,6 +38,17 @@ describe('queue', () => {
     it('returns false for null/undefined card', () => {
       expect(shouldGraduate(null)).toBe(false);
       expect(shouldGraduate(undefined)).toBe(false);
+    });
+
+    it('card without reps field defaults to 0 (returns false)', () => {
+      const card = { lapses: 0, scheduled_days: GRADUATE_INTERVAL_D + 1 };
+      expect(shouldGraduate(card)).toBe(false);
+    });
+
+    it('card without lapses field defaults to 0', () => {
+      const card = { reps: GRADUATE_REPS, scheduled_days: GRADUATE_INTERVAL_D + 1 };
+      // lapses defaults to 0, so should graduate if other conditions met
+      expect(shouldGraduate(card)).toBe(true);
     });
   });
 
@@ -72,6 +94,18 @@ describe('queue', () => {
       const sorted = sortDueCards(cards, now);
       // First card should have high instructiveness
       expect(sorted[0].instructiveness).toBe(50);
+    });
+
+    it('handles cards with missing instructiveness (defaults to 0)', () => {
+      const cards = Array.from({ length: DUE_SOFT_CAP + 2 }, (_, i) => ({
+        due: new Date(now.getTime() - i * 86_400_000).toISOString(),
+        // no instructiveness field
+      }));
+      expect(() => sortDueCards(cards, now)).not.toThrow();
+    });
+
+    it('returns empty array for empty input', () => {
+      expect(sortDueCards([], now)).toEqual([]);
     });
   });
 });

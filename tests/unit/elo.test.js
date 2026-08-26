@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { expectedScore, updateElo, kFactor, validateRanked } from '../../src/domain/game/elo.js';
 
 describe('elo', () => {

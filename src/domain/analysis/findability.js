@@ -4,7 +4,6 @@
  */
 
 import { logger } from '../../config.js';
-import { FINDABILITY_MIN, POLICY_TEMPERATURE } from '../../shared/balance.js';
 
 const log = logger.child({ mod: 'findability' });
 

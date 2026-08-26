@@ -8,13 +8,6 @@ import pino from 'pino';
 
 import * as balance from './shared/balance.js';
 
-/** @param {string} name @returns {string} */
-function requireEnv(name) {
-  const val = process.env[name];
-  if (!val) throw new Error(`Required environment variable missing: ${name}`);
-  return val;
-}
-
 export const PORT = parseInt(process.env.PORT || '3000', 10);
 export const BIND_ADDR = process.env.BIND_ADDR || '127.0.0.1';
 export const NODE_ENV = process.env.NODE_ENV || 'development';

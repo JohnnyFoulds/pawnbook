@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from 'crypto';
+
 import { GameNotFoundError, PuzzleNotFoundError } from '../../errors.js';
 
 export class InMemoryGameRepository {

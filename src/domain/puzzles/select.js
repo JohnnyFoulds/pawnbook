@@ -4,6 +4,7 @@
  */
 
 import { Chess } from 'chess.js';
+
 import { FINDABILITY_MIN, PUZZLES_PER_GAME_MAX, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
 
 /** Point values for non-king, non-pawn material. */

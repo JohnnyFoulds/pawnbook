@@ -1,10 +1,16 @@
 import js from '@eslint/js';
+import globals from 'globals';
 import importPlugin from 'eslint-plugin-import';
 import security from 'eslint-plugin-security';
 
 export default [
   js.configs.recommended,
   {
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
     plugins: {
       import: importPlugin,
       security,

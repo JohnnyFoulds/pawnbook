@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import {
   winningChances,
   winPct,
@@ -85,6 +86,12 @@ describe('grade', () => {
     // position was already worse than -700cp and we missed a forced mate
     const result = classify(30, 0, { wasMate: false, mateMissed: true, cpBefore: -750 });
     expect(result.classification).toBe('mistake');
+  });
+
+  it('missing a forced mate in a winnable position (cpBefore >= -700) is a Blunder', () => {
+    // cpBefore = -500 (not already losing); mateMissed, winLoss >= BLUNDER threshold
+    const result = classify(30, 0, { wasMate: false, mateMissed: true, cpBefore: -500 });
+    expect(result.classification).toBe('blunder');
   });
 
   it("White's first move uses the synthetic +0.15 prior eval", () => {

@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+
+import { describe, it, expect } from 'vitest';
+
 import { parsePolicyLines } from '../../src/adapters/engine/uci-engine-client.js';
 import { ScriptedEngineClient } from '../../src/adapters/engine/scripted-engine-client.js';
 

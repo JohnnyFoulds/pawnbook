@@ -3,10 +3,14 @@
  * SQLite implementations of GameRepository, PuzzleRepository, SettingsRepository.
  */
 
-import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
-import { applySchema } from './schema.js';
+
+import Database from 'better-sqlite3';
+
 import { GameNotFoundError, PuzzleNotFoundError } from '../../errors.js';
+
+import { applySchema } from './schema.js';
+
 
 /**
  * @param {string} dbPath
