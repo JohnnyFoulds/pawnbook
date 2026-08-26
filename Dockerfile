@@ -2,7 +2,7 @@
 FROM debian:bookworm AS lc0-build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git build-essential ninja-build meson pkg-config python3 ca-certificates \
-    zlib1g-dev libeigen3-dev libopenblas-dev \
+    zlib1g-dev libeigen3-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 RUN git clone --depth 1 --branch v0.32.1 https://github.com/LeelaChessZero/lc0.git
@@ -10,6 +10,7 @@ WORKDIR /build/lc0
 RUN ./build.sh release \
     -Dgtest=false \
     -Dnative_arch=false
+RUN strip build/release/lc0
 RUN cp build/release/lc0 /usr/local/bin/lc0
 
 # Stage 2: build Stockfish 18 and Drawfish for linux/arm64
@@ -23,6 +24,7 @@ WORKDIR /build
 RUN git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
 WORKDIR /build/Stockfish/src
 RUN make -j$(nproc) profile-build ARCH=armv8-dotprod COMP=gcc
+RUN strip stockfish
 RUN cp stockfish /usr/local/bin/stockfish
 
 # Drawfish (Stockfish fork that scores stalemate as win)
@@ -30,6 +32,7 @@ WORKDIR /build
 RUN git clone --depth 1 https://github.com/nmrugg/Drawfish.git
 WORKDIR /build/Drawfish/src
 RUN make -j$(nproc) build ARCH=general-64 COMP=clang
+RUN strip drawfish
 RUN cp drawfish /usr/local/bin/drawfish
 
 # Stage 3: build Node.js dependencies (node-gyp needs python3 + build tools)
@@ -40,10 +43,6 @@ RUN npm ci --omit=dev
 
 # Stage 4: runtime
 FROM node:22-bookworm-slim AS runtime
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libopenblas0 \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy compiled engines
 COPY --from=lc0-build /usr/local/bin/lc0 /usr/local/bin/lc0

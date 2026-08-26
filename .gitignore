@@ -1,6 +1,6 @@
 node_modules/
 data/
-weights/
+weights/*.pb.gz
 .env
 coverage/
 .nyc_output/
