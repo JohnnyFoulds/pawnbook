@@ -15,7 +15,7 @@ RUN cp build/release/lc0 /usr/local/bin/lc0
 # Stage 2: build Stockfish 18 and Drawfish for linux/arm64
 FROM debian:bookworm AS engines-build
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git build-essential clang ca-certificates \
+    git build-essential clang ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 
