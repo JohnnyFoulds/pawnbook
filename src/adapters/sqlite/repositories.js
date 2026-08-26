@@ -125,6 +125,26 @@ export class SqliteGameRepository {
       .map(r => ({ id: r.id, recordedAt: r.recorded_at, elo: r.elo, gameId: r.game_id }));
   }
 
+  /**
+   * @param {number} limit
+   * @returns {object[]}
+   */
+  listRecent(limit = 50) {
+    return this._db.prepare(
+      'SELECT * FROM games ORDER BY started_at DESC LIMIT ?'
+    ).all(limit).map(r => this._rowToGame(r));
+  }
+
+  /**
+   * @param {string} gameId
+   * @returns {object[]}
+   */
+  getEvals(gameId) {
+    return this._db.prepare(
+      'SELECT * FROM move_evals WHERE game_id = ? ORDER BY ply'
+    ).all(gameId);
+  }
+
   _rowToGame(row) {
     return {
       id: row.id,
@@ -226,6 +246,69 @@ export class SqlitePuzzleRepository {
       WHERE f.due <= ? AND f.graduated = 0
       ORDER BY f.due ASC
     `).all(now);
+  }
+
+  /**
+   * @param {string} puzzleId
+   * @returns {object|null}
+   */
+  getCard(puzzleId) {
+    const row = this._db.prepare('SELECT * FROM fsrs_cards WHERE puzzle_id = ?').get(puzzleId);
+    if (!row) return null;
+    return {
+      puzzleId: row.puzzle_id,
+      due: row.due,
+      stability: row.stability,
+      difficulty: row.difficulty,
+      elapsedDays: row.elapsed_days,
+      scheduledDays: row.scheduled_days,
+      reps: row.reps,
+      lapses: row.lapses,
+      state: row.state,
+      lastReview: row.last_review,
+      graduated: row.graduated === 1,
+    };
+  }
+
+  /** @returns {object[]} */
+  listAll() {
+    return this._db.prepare(`
+      SELECT p.*, f.graduated, f.reps, f.lapses
+      FROM puzzles p
+      LEFT JOIN fsrs_cards f ON f.puzzle_id = p.id
+    `).all();
+  }
+
+  /**
+   * @param {string} gameId
+   * @returns {object[]}
+   */
+  listByGame(gameId) {
+    return this._db.prepare(
+      'SELECT * FROM puzzles WHERE source_game_id = ? ORDER BY source_ply'
+    ).all(gameId);
+  }
+
+  /**
+   * @param {object} review
+   */
+  saveReview(review) {
+    this._db.prepare(`
+      INSERT INTO reviews (id, puzzle_id, reviewed_at, correct, rating, ms_taken,
+        attempted_move_uci, attempt_no, practice, suspect_recall)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      review.id ?? randomUUID(),
+      review.puzzleId,
+      review.reviewedAt,
+      review.correct ? 1 : 0,
+      review.rating ?? null,
+      review.msTaken ?? null,
+      review.attemptedMoveUci ?? null,
+      review.attemptNo ?? 1,
+      review.practice ?? 0,
+      review.suspectRecall ?? 0,
+    );
   }
 
   /** @param {object} card */
