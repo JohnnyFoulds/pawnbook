@@ -1,0 +1,247 @@
+/**
+ * @module public/js/review
+ * Review page: eval graph, breakdown bar, accuracy bars, mistake list.
+ * The board is read-only (scrub board driven by graph hover).
+ * No eval is computed here — all data comes from the server.
+ */
+
+import { drawEvalGraph, renderEvalTable, renderBreakdownBar } from './lib/chart.js';
+import { QUALITY, GLYPH_TIERS } from '/shared/quality.js';
+
+const BASE = '';
+
+async function api(path) {
+  const r = await fetch(BASE + path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+function getGameId() {
+  return new URLSearchParams(location.search).get('game');
+}
+
+async function boot() {
+  const gameId = getGameId();
+  if (!gameId) {
+    document.getElementById('game-meta').textContent = 'No game specified.';
+    return;
+  }
+
+  try {
+    const [review, state] = await Promise.all([
+      api(`/api/games/${gameId}/review`),
+      api('/api/state').catch(() => ({})),
+    ]);
+
+    const dueCount = state.dueCount ?? 0;
+    document.querySelectorAll('#due-count').forEach((el) => { el.textContent = String(dueCount); });
+
+    renderHeader(review);
+    renderAccuracyBars(review);
+    renderMoveList(review.moves ?? []);
+    renderEvalGraphSection(review);
+    renderBreakdownSection(review);
+    renderMistakeList(review);
+    setupQuizLink(gameId, review.puzzleCount ?? 0);
+    setupBoard(review);
+  } catch (err) {
+    console.error('Review error:', err);
+    document.getElementById('game-meta').textContent = 'Failed to load review.';
+  }
+}
+
+function renderHeader(review) {
+  const termMap = {
+    checkmate: 'by checkmate', resignation: 'by resignation',
+    stalemate: 'by stalemate', threefold: 'by threefold repetition',
+    fifty_move: 'by fifty-move rule', insufficient_material: 'by insufficient material',
+    timeout: 'on time', abandoned: 'game abandoned',
+  };
+  const result = review.result === 'win' ? 'Won' : review.result === 'loss' ? 'Lost' : 'Drew';
+  document.getElementById('game-meta').textContent =
+    `vs ${review.opponentId} · you were ${review.playerColor} · ${result} ${termMap[review.termination] ?? ''}`;
+}
+
+function renderAccuracyBars(review) {
+  const container = document.getElementById('acc-bars');
+  const rows = [
+    { label: 'You', pct: review.accuracy ?? 0 },
+    { label: review.opponentId ?? 'Opponent', pct: review.opponentAccuracy ?? 0 },
+  ];
+  container.innerHTML = rows.map((r) => `
+    <div class="acc-bar-row">
+      <div class="acc-bar-label">${r.label}</div>
+      <div class="acc-bar-track">
+        <div class="acc-bar-fill" style="width:${r.pct}%"></div>
+      </div>
+      <div class="acc-bar-pct">${Math.round(r.pct)}%</div>
+    </div>
+  `).join('');
+}
+
+function renderMoveList(moves) {
+  const list = document.getElementById('move-list');
+  list.innerHTML = '';
+  for (let i = 0; i < moves.length; i += 2) {
+    const moveNum = Math.floor(i / 2) + 1;
+    const white = moves[i];
+    const black = moves[i + 1];
+    const row = document.createElement('div');
+    row.className = 'move-list__row';
+
+    const chipFor = (m) => {
+      if (!m || !m.classification || !GLYPH_TIERS.includes(m.classification)) return '';
+      const tier = QUALITY[m.classification];
+      return `<span class="quality-chip quality-chip--${m.classification}">${tier.glyph}</span>`;
+    };
+
+    row.innerHTML = `
+      <span class="move-list__num">${moveNum}.</span>
+      <span class="move-list__move" data-ply="${white?.ply}">${white?.san ?? ''} ${chipFor(white)}</span>
+      <span class="move-list__move" data-ply="${black?.ply}">${black?.san ?? ''} ${chipFor(black)}</span>
+    `;
+    list.appendChild(row);
+  }
+
+  list.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-ply]');
+    if (!el || !el.dataset.ply) return;
+    const ply = parseInt(el.dataset.ply);
+    scrubToPly(ply);
+    document.querySelectorAll('.move-list__move').forEach((m) =>
+      m.classList.toggle('move-list__move--active', parseInt(m.dataset.ply) === ply));
+  });
+}
+
+function renderEvalGraphSection(review) {
+  const canvas = document.getElementById('eval-canvas');
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.offsetWidth * window.devicePixelRatio || 600;
+  canvas.height = 120 * window.devicePixelRatio;
+  canvas.style.width = '100%';
+  canvas.style.height = '120px';
+
+  const evals = (review.moves ?? []).map((m) => ({
+    ply: m.ply,
+    winPct: m.winPct ?? 50,
+  }));
+
+  const mistakes = (review.moves ?? []).filter((m) =>
+    m.mover === 'player' && m.classification && m.classification !== 'ok' && m.classification !== 'good' && m.classification !== 'best'
+  );
+
+  drawEvalGraph(canvas, evals, mistakes, {
+    onHover: (plyIdx, evalData) => {
+      if (plyIdx >= 0 && evalData) scrubToPly(evalData.ply);
+    },
+  });
+
+  // Table view toggle
+  document.getElementById('eval-table-toggle').addEventListener('click', () => {
+    const wrap = document.getElementById('eval-table-wrap');
+    const visible = wrap.style.display !== 'none';
+    wrap.style.display = visible ? 'none' : '';
+    renderEvalTable(document.getElementById('eval-table-body'),
+      (review.moves ?? []).map((m) => ({
+        ply: m.ply, san: m.san, winPct: m.winPct, classification: m.classification,
+      })));
+  });
+}
+
+function renderBreakdownSection(review) {
+  const moves = (review.moves ?? []).filter((m) => m.mover === 'player');
+  document.getElementById('move-count').textContent = `· ${moves.length} graded`;
+
+  const counts = {};
+  moves.forEach((m) => { counts[m.classification] = (counts[m.classification] || 0) + 1; });
+
+  renderBreakdownBar(document.getElementById('breakdown-bar'), counts);
+
+  document.getElementById('breakdown-table-toggle').addEventListener('click', () => {
+    const wrap = document.getElementById('breakdown-table-wrap');
+    const visible = wrap.style.display !== 'none';
+    wrap.style.display = visible ? 'none' : '';
+    const total = moves.length || 1;
+    const tbody = document.getElementById('breakdown-table-body');
+    tbody.innerHTML = Object.entries(QUALITY).map(([key, tier]) => {
+      const n = counts[key] || 0;
+      return `<tr>
+        <td>${tier.label}</td>
+        <td class="num">${n}</td>
+        <td class="num">${Math.round((n / total) * 100)}%</td>
+      </tr>`;
+    }).join('');
+  });
+}
+
+function renderMistakeList(review) {
+  const drillable = (review.mistakes ?? []).filter((m) => !m.engineOnly);
+  const engineOnly = (review.mistakes ?? []).filter((m) => m.engineOnly);
+
+  document.getElementById('drill-count').textContent = `· ${drillable.length}`;
+  document.getElementById('engine-only-count').textContent = `(${engineOnly.length})`;
+
+  const renderMistake = (m) => {
+    const tier = QUALITY[m.classification];
+    const glyph = tier?.glyph ?? '';
+    const chip = glyph
+      ? `<span class="quality-chip quality-chip--${m.classification}">${glyph}</span>`
+      : '';
+    return `<div class="mistake-row">
+      <div class="mistake-row__head">
+        ${chip}
+        <span class="mistake-row__move">${m.moveSan}</span>
+        <span class="mistake-row__loss">lost ${m.winLoss != null ? Math.round(m.winLoss) : '?'}% win</span>
+        ${m.tags?.includes('common_trap') ? '<span class="mistake-row__tag">common trap</span>' : ''}
+      </div>
+      <div class="mistake-row__detail">
+        Best was ${m.bestMoveSan}${m.findability != null
+          ? ` — ${m.maiaNearestModel ?? 'Maia'} finds it ${Math.round(m.findability * 100)}% of the time`
+          : ''}
+      </div>
+    </div>`;
+  };
+
+  document.getElementById('mistake-list').innerHTML =
+    drillable.length ? drillable.map(renderMistake).join('') : '<div style="color:var(--ink-muted);font-size:13px">No drillable mistakes found.</div>';
+
+  document.getElementById('engine-only-list').innerHTML =
+    engineOnly.map(renderMistake).join('');
+}
+
+function setupQuizLink(gameId, puzzleCount) {
+  const link = document.getElementById('quiz-link');
+  link.href = `quiz.html?game=${gameId}`;
+  if (puzzleCount > 0) {
+    link.textContent = `Start quiz (${puzzleCount} position${puzzleCount === 1 ? '' : 's'})`;
+  } else {
+    link.textContent = 'No puzzles found';
+    link.classList.add('btn--ghost');
+    link.classList.remove('btn--primary');
+    link.style.pointerEvents = 'none';
+  }
+}
+
+// ── Scrub board (read-only) ────────────────────────────────────────────────
+
+let boardInstance = null;
+let reviewMoves = [];
+
+function setupBoard(review) {
+  reviewMoves = review.moves ?? [];
+  const el = document.getElementById('board-wrap');
+  el.innerHTML = '';
+
+  document.getElementById('ply-label').textContent = '';
+  // Board initialised when cm-chessboard is available (loaded by the server's HTML)
+}
+
+function scrubToPly(ply) {
+  const move = reviewMoves.find((m) => m.ply === ply);
+  if (!move) return;
+  document.getElementById('ply-label').textContent =
+    `Move ${Math.ceil(ply / 2)}${ply % 2 === 0 ? '…' : '.'}  ${move.san ?? ''}`;
+  // Board position set via boardInstance.setPosition when board is ready
+}
+
+boot();

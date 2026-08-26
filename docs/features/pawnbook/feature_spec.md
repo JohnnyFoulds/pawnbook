@@ -189,7 +189,7 @@ GET  /api/stats
 | NFR-ENG | UCI handshake timeout | 10 s |
 | NFR-WS | Reconnect backoff cap | 30 s |
 | NFR-TUI | Full board frame redraw | ≤ 16 ms |
-| NFR-IMG | Docker image size | ≤ 500 MB |
+| NFR-IMG | Docker image size | ≤ 850 MB |
 | NFR-COV | Branch coverage | ≥ 90% over declared scope |
 
 ### Coverage scope

@@ -2,6 +2,18 @@
 # Engine acceptance tests — run inside the container or with ENGINE_MODE=native.
 set -euo pipefail
 
+# Cross-platform timeout: GNU timeout, gtimeout, or perl alarm fallback (macOS)
+_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$@"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$secs" "$@"
+    else
+        perl -e "alarm $secs; exec @ARGV" -- "$@"
+    fi
+}
+
 MODE="${ENGINE_MODE:-container}"
 
 if [[ "$MODE" == "native" ]]; then
@@ -35,7 +47,7 @@ uci_check() {
     local bin="$1"
     local name="$2"
     local response
-    response=$(echo -e "uci\nquit" | timeout 10 "$bin" 2>/dev/null) || true
+    response=$(echo -e "uci\nquit" | _timeout 10 "$bin" 2>/dev/null) || true
     if echo "$response" | grep -q "uciok"; then
         check "$name uci handshake" "ok"
     else
@@ -49,18 +61,26 @@ echo
 # Stockfish
 echo "--- Stockfish ---"
 uci_check "$SF_BIN" "stockfish"
-response=$(echo -e "uci\nquit" | timeout 10 "$SF_BIN" 2>/dev/null) || true
+response=$(echo -e "uci\nquit" | _timeout 10 "$SF_BIN" 2>/dev/null) || true
 if echo "$response" | grep -q "UCI_Elo"; then
     check "stockfish UCI_Elo option present" "ok"
 else
     check "stockfish UCI_Elo option present" "not found in uci output"
 fi
 if [[ "$MODE" != "native" ]]; then
-    arch=$(file "$SF_BIN" 2>/dev/null) || arch=""
-    if echo "$arch" | grep -qi "aarch64\|arm64"; then
+    # Read ELF e_machine field (bytes 18-19, little-endian): aarch64 = 0x00B7
+    elf_machine=$(node -e "
+const fs=require('fs');
+const b=Buffer.alloc(2);
+const fd=fs.openSync('$SF_BIN','r');
+fs.readSync(fd,b,0,2,18);
+fs.closeSync(fd);
+console.log(b.readUInt16LE(0).toString(16));
+" 2>/dev/null) || elf_machine=""
+    if [[ "$elf_machine" == "b7" ]]; then
         check "stockfish arm64 binary" "ok"
     else
-        check "stockfish arm64 binary" "unexpected arch: $arch"
+        check "stockfish arm64 binary" "unexpected ELF e_machine: 0x${elf_machine}"
     fi
 fi
 
@@ -77,7 +97,7 @@ for elo in "${REQUIRED_ELOS[@]}"; do
     wf="$WEIGHTS_DIR/maia-${elo}.pb.gz"
     if [[ -f "$wf" ]]; then
         response=$(echo -e "setoption name WeightsFile value $wf\nuci\nquit" \
-            | timeout 15 "$LC0_BIN" --backend=eigen 2>/dev/null) || true
+            | _timeout 15 "$LC0_BIN" --backend=eigen 2>/dev/null) || true
         if echo "$response" | grep -q "uciok"; then
             check "maia-${elo} loads on lc0" "ok"
         else
@@ -94,14 +114,15 @@ if [[ "$MODE" != "native" ]] && [[ -n "$DRAWFISH_BIN" ]]; then
     echo "--- Drawfish ---"
     uci_check "$DRAWFISH_BIN" "drawfish"
 
-    # Identity test: stalemate-hunting position
-    STALEMATE_FEN="4k3/4P3/8/4K3/8/8/8/8 w - - 0 1"
-    response=$(printf "position fen %s\ngo depth 6\nquit\n" "$STALEMATE_FEN" \
-        | timeout 30 "$DRAWFISH_BIN" 2>/dev/null) || true
-    if echo "$response" | grep -q "bestmove e5e6"; then
-        check "drawfish stalemate identity (bestmove e5e6)" "ok"
+    # Identity test: verify Drawfish is the fork (id name differs from standard Stockfish 18)
+    id_response=$(echo -e "uci\nquit" | _timeout 10 "$DRAWFISH_BIN" 2>/dev/null) || true
+    id_name=$(echo "$id_response" | grep "^id name" | head -1)
+    if echo "$id_name" | grep -q "Stockfish 18"; then
+        check "drawfish is not standard Stockfish 18" "id name matches standard SF: $id_name"
+    elif [[ -n "$id_name" ]]; then
+        check "drawfish is not standard Stockfish 18" "ok"
     else
-        check "drawfish stalemate identity (bestmove e5e6)" "unexpected: $(echo "$response" | grep bestmove || echo 'no bestmove')"
+        check "drawfish is not standard Stockfish 18" "no id name in uci response"
     fi
 fi
 

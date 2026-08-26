@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pawnbook</title>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+<div class="app-shell">
+  <header class="top-bar">
+    <a href="index.html" class="top-bar__brand">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2a2 2 0 0 1 2 2c0 .74-.4 1.38-1 1.73V7h1.5l.5 1H13l1 3H4l1-3h1l.5-1H8V5.73A2 2 0 0 1 7 4a2 2 0 0 1 2-2zm-3 11h6v1H6v-1zm-1 2h8v1H5v-1z"/></svg>
+      pawnbook
+    </a>
+    <nav class="top-bar__nav">
+      <a href="index.html"   class="nav-link nav-link--active">Home</a>
+      <a href="play.html"    class="nav-link">Play</a>
+      <a href="puzzles.html" class="nav-link">Drill <span class="due-badge" id="due-count">0</span></a>
+      <a href="games.html"   class="nav-link">Games</a>
+      <a href="stats.html"   class="nav-link">Stats</a>
+    </nav>
+    <div class="top-bar__elo"><span id="elo-display">—</span></div>
+  </header>
+
+  <main class="page" id="dashboard">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:32px">
+      <div class="stat-tile" id="tile-elo">
+        <div class="stat-tile__label">Rating</div>
+        <div class="stat-tile__value" id="elo-value">—</div>
+        <div class="stat-tile__delta" id="elo-delta"></div>
+      </div>
+      <div class="stat-tile" id="tile-due">
+        <div class="stat-tile__label">Puzzles due</div>
+        <div class="stat-tile__value" id="due-value">—</div>
+        <canvas class="sparkline" id="spark-due" width="80" height="24" style="display:block;margin-top:8px"></canvas>
+      </div>
+      <div class="stat-tile" id="tile-streak" data-show-streak="1">
+        <div class="stat-tile__label">Day streak</div>
+        <div class="stat-tile__value" id="streak-value">—</div>
+        <canvas class="sparkline" id="spark-streak" width="80" height="24" style="display:block;margin-top:8px"></canvas>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px">
+      <a href="play.html" class="card" style="display:block;text-decoration:none;cursor:pointer">
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px">Play</div>
+        <div style="font-size:13px;color:var(--ink-muted)" id="suggested-opponent">Loading…</div>
+      </a>
+      <a href="puzzles.html" class="card" style="display:block;text-decoration:none;cursor:pointer">
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px">Drill <span id="drill-count">—</span> puzzles</div>
+        <div style="font-size:13px;color:var(--ink-muted)">from your own games</div>
+      </a>
+    </div>
+
+    <div class="card" style="margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600">Rating over time</div>
+        <div style="display:flex;gap:8px" id="time-filter">
+          <button class="btn btn--ghost" data-range="30" style="font-size:12px;padding:2px 8px">30d</button>
+          <button class="btn btn--ghost" data-range="90" style="font-size:12px;padding:2px 8px">90d</button>
+          <button class="btn btn--ghost" data-range="all" style="font-size:12px;padding:2px 8px">All</button>
+        </div>
+      </div>
+      <canvas id="elo-chart" height="100" style="width:100%;display:block"></canvas>
+    </div>
+
+    <div class="card">
+      <div style="font-size:14px;font-weight:600;margin-bottom:16px">Recent games</div>
+      <table class="games-table" id="recent-games">
+        <thead>
+          <tr>
+            <th></th><th>Opponent</th><th>Accuracy</th><th>Puzzles</th><th>When</th>
+          </tr>
+        </thead>
+        <tbody id="recent-games-body">
+          <tr><td colspan="5" style="color:var(--ink-muted);font-size:13px;padding:12px 0">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
