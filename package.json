@@ -1,0 +1,45 @@
+{
+  "name": "pawnbook",
+  "version": "0.1.0",
+  "description": "Play chess engines locally, then drill your own mistakes with spaced repetition",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "chess": "./bin/chess.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "eslint . --fix"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "chess.js": "^1.4.0",
+    "express": "^4.19.2",
+    "node-uci": "^1.3.4",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.2",
+    "ts-fsrs": "^5.4.1",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.0.5",
+    "eslint": "^9.8.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-security": "^3.0.1",
+    "vitest": "^2.0.5"
+  },
+  "optionalDependencies": {
+    "chartscii": "^4.0.3",
+    "sparkly": "^6.0.1",
+    "terminal-image": "^5.0.1",
+    "terminal-kit": "^3.1.4"
+  }
+}

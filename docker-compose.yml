@@ -1,0 +1,14 @@
+services:
+  pawnbook:
+    build: .
+    platform: linux/arm64
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      NODE_ENV: production
+      BIND_ADDR: "${BIND_ADDR:-127.0.0.1}"
+      PORT: "${PORT:-3000}"
+      ENGINE_MODE: container
+    restart: unless-stopped
