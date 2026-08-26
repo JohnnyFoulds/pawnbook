@@ -1,0 +1,80 @@
+/* Design tokens — validated palette. Do not edit without re-running validators.
+   Palette arms validated:
+     Red: node scripts/validate_palette.js --ordinal "#8f4a45,#b85a50,#dd7065" --mode dark  → PASS
+     Blue: node scripts/validate_palette.js --ordinal "#256abf,#3987e5,#6da7ec" --mode dark → PASS
+     Board: node scripts/validate_board.js → PASS
+*/
+
+:root {
+  /* Surfaces */
+  --surface-page: #0d0d0d;
+  --surface-1:    #151517;
+  --surface-2:    #1e1e21;
+
+  /* Ink */
+  --ink-primary:   #ffffff;
+  --ink-secondary: #c3c2b7;
+  --ink-muted:     #898781;
+
+  /* Structure */
+  --gridline:  #2c2c2a;
+  --baseline:  #383835;
+  --hairline:  rgba(255, 255, 255, 0.10);
+
+  /* Accent */
+  --accent: #3987e5;
+
+  /* Status — always paired with icon + label, never colour alone */
+  --good:     #0ca30c;
+  --critical: #d03b3b;
+  --warning:  #d9b310;
+
+  /* Move quality — diverging scale. Red arm: inaccuracy/mistake/blunder.
+     Blue arm: good/great/best. Neutral midpoint: ok (#6f6f69).
+     Only the five glyph tiers are annotated in the move list.
+     All seven appear in the breakdown bar with direct text labels. */
+  --q-blunder:    #dd7065;
+  --q-mistake:    #b85a50;
+  --q-inaccuracy: #8f4a45;
+  --q-ok:         #6f6f69;
+  --q-good:       #256abf;
+  --q-great:      #3987e5;
+  --q-best:       #6da7ec;
+
+  /* Board — web (validated; differs from TUI intentionally) */
+  --sq-light:    #b0a89d;
+  --sq-dark:     #63666b;
+  --sq-lastmove: rgba(217, 179, 16, 0.46);
+  --sq-check:    rgba(208,  59, 59, 0.45);
+  --sq-selected: rgba( 57, 135, 229, 0.44);
+
+  /* Typography */
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Motion — zeroed when prefers-reduced-motion: reduce */
+  --dur-piece:  200ms;
+  --dur-panel:  150ms;
+  --dur-flash:  400ms;
+  --dur-pulse:  1.4s;
+
+  /* Spacing grid: 4px base */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Radius */
+  --radius-card: 12px;
+  --radius-chip: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-piece: 0ms;
+    --dur-panel: 0ms;
+    --dur-flash: 0ms;
+    --dur-pulse: 0ms;
+  }
+}

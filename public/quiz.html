@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz — pawnbook</title>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+<div class="app-shell">
+  <header class="top-bar">
+    <a href="index.html" class="top-bar__brand">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2a2 2 0 0 1 2 2c0 .74-.4 1.38-1 1.73V7h1.5l.5 1H13l1 3H4l1-3h1l.5-1H8V5.73A2 2 0 0 1 7 4a2 2 0 0 1 2-2zm-3 11h6v1H6v-1zm-1 2h8v1H5v-1z"/></svg>
+      pawnbook
+    </a>
+    <nav class="top-bar__nav">
+      <a href="index.html"   class="nav-link">Home</a>
+      <a href="play.html"    class="nav-link">Play</a>
+      <a href="puzzles.html" class="nav-link">Drill</a>
+      <a href="games.html"   class="nav-link">Games</a>
+      <a href="stats.html"   class="nav-link">Stats</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:16px" id="quiz-header">
+      Position <span id="pos-num">1</span> of <span id="pos-total">?</span>
+      <span style="margin-left:8px">from your game vs <span id="game-opp"></span></span>
+    </div>
+
+    <div class="drill-layout">
+      <div>
+        <div class="board-wrap" id="board-wrap"></div>
+      </div>
+      <div class="drill-info">
+        <div style="font-size:14px;font-weight:600" id="move-label">Move — · — to play</div>
+        <div class="drill-prompt" id="drill-prompt"></div>
+        <div id="feedback-wrap"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn--ghost" id="hint-btn">Show hint</button>
+          <button class="btn btn--ghost" id="skip-btn">Skip</button>
+        </div>
+        <div id="next-wrap" style="display:none;margin-top:8px">
+          <button class="btn btn--primary" id="next-btn">Next position</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/quiz.js"></script>
+</body>
+</html>

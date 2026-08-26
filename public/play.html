@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Play — pawnbook</title>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <style>
+    .setup-section { margin-bottom: 24px; }
+    .setup-section__label { font-size: 13px; color: var(--ink-muted); margin-bottom: 8px; }
+
+    .color-chips { display: flex; gap: 8px; }
+    .color-chip {
+      padding: 6px 16px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-chip);
+      font-size: 13px;
+      cursor: pointer;
+      background: var(--surface-1);
+      transition: border-color var(--dur-panel);
+    }
+    .color-chip:hover { border-color: var(--ink-muted); }
+    .color-chip--selected { border-color: var(--accent); color: var(--accent); }
+
+    #setup-panel { max-width: 600px; }
+    #game-area { display: none; }
+
+    .think-stats { font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="top-bar">
+    <a href="index.html" class="top-bar__brand">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2a2 2 0 0 1 2 2c0 .74-.4 1.38-1 1.73V7h1.5l.5 1H13l1 3H4l1-3h1l.5-1H8V5.73A2 2 0 0 1 7 4a2 2 0 0 1 2-2zm-3 11h6v1H6v-1zm-1 2h8v1H5v-1z"/></svg>
+      pawnbook
+    </a>
+    <nav class="top-bar__nav">
+      <a href="index.html"   class="nav-link">Home</a>
+      <a href="play.html"    class="nav-link nav-link--active">Play</a>
+      <a href="puzzles.html" class="nav-link">Drill <span class="due-badge" id="due-count">0</span></a>
+      <a href="games.html"   class="nav-link">Games</a>
+      <a href="stats.html"   class="nav-link">Stats</a>
+    </nav>
+    <div class="top-bar__elo"><span id="elo-display">—</span></div>
+  </header>
+
+  <main class="page">
+    <!-- Setup panel -->
+    <div id="setup-panel">
+      <div class="setup-section">
+        <div class="setup-section__label">Human-like (Maia)</div>
+        <div class="opponent-grid" id="maia-grid"></div>
+      </div>
+      <div class="setup-section">
+        <div class="setup-section__label">Engine (Stockfish)</div>
+        <div class="opponent-grid" id="sf-grid"></div>
+      </div>
+      <div class="setup-section">
+        <div class="setup-section__label">Novelty</div>
+        <div class="opponent-grid" id="novelty-grid"></div>
+      </div>
+
+      <div class="setup-section" style="display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap">
+        <div>
+          <div class="setup-section__label">Color</div>
+          <div class="color-chips" id="color-chips">
+            <button class="color-chip" data-color="white">White</button>
+            <button class="color-chip" data-color="black">Black</button>
+            <button class="color-chip color-chip--selected" data-color="random">Random</button>
+          </div>
+        </div>
+        <div>
+          <div class="setup-section__label">Time control</div>
+          <div class="time-chips" id="time-chips">
+            <button class="time-chip time-chip--selected" data-tc="null">Untimed</button>
+            <button class="time-chip" data-tc="600,0">10+0</button>
+            <button class="time-chip" data-tc="300,3">5+3</button>
+            <button class="time-chip" data-tc="180,2">3+2</button>
+          </div>
+        </div>
+        <div id="ranked-wrap">
+          <div class="setup-section__label">Ranked</div>
+          <div class="ranked-row">
+            <label class="toggle">
+              <input type="checkbox" id="ranked-toggle" checked>
+              <span class="toggle__track"></span>
+              <span class="toggle__thumb"></span>
+            </label>
+            <span style="font-size:13px;color:var(--ink-secondary)">Yes</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="drawfish-note" style="display:none;font-size:13px;color:var(--ink-muted);margin-bottom:16px"></div>
+
+      <button class="btn btn--primary btn--large" id="start-btn" style="width:100%;max-width:320px">Start game</button>
+    </div>
+
+    <!-- Game area -->
+    <div id="game-area">
+      <div class="play-layout">
+        <div>
+          <div class="board-wrap" id="board-wrap"></div>
+          <div id="clock-you" class="clock-row" style="margin-top:8px;display:none">
+            <div class="clock-row__pip clock-row__pip--active"></div>
+            <span style="font-size:13px">You</span>
+            <span class="clock-row__time" id="clock-you-time">—</span>
+          </div>
+        </div>
+
+        <div class="play-rail">
+          <div style="font-size:14px;font-weight:600" id="opponent-name-display"></div>
+          <div id="thinking-display" class="thinking-pulse" style="display:none">
+            <div class="thinking-dot"></div>
+            <span>thinking</span>
+            <span class="think-stats" id="think-stats"></span>
+          </div>
+
+          <div id="clock-opp" class="clock-row" style="display:none">
+            <div class="clock-row__pip"></div>
+            <span style="font-size:13px" id="opp-name-clock"></span>
+            <span class="clock-row__time" id="clock-opp-time">—</span>
+          </div>
+
+          <div class="move-list" id="move-list" style="max-height:320px;overflow-y:auto"></div>
+
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--ghost" id="flip-btn">Flip</button>
+            <button class="btn btn--ghost" id="hint-btn" style="display:none">Hint</button>
+            <button class="btn btn--ghost" id="resign-btn">Resign</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result overlay -->
+      <div id="result-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:300">
+        <div class="result-card" style="max-width:360px;width:100%">
+          <div class="result-card__outcome" id="result-outcome"></div>
+          <div class="result-card__termination" id="result-termination"></div>
+          <div class="result-card__elo" id="result-elo"></div>
+          <div class="progress-bar" style="width:100%;margin:4px 0">
+            <div class="progress-bar__fill" id="analysis-progress" style="width:0%"></div>
+          </div>
+          <div style="font-size:13px;color:var(--ink-muted)" id="analysis-label">Analysing…</div>
+          <div class="result-card__actions">
+            <a id="review-link" href="#" class="btn btn--primary btn--large" style="width:100%">Review &amp; quiz</a>
+            <button class="btn btn--ghost" id="play-again-btn" style="width:100%">Play again</button>
+            <a href="index.html" class="btn btn--ghost" style="width:100%;text-align:center">Home</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/play.js"></script>
+</body>
+</html>

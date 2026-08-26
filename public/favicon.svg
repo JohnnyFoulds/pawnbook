@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>pawnbook</title>
+  <!-- Drawn pawn silhouette — NOT U+265F which renders as emoji in some browsers -->
+  <path d="
+    M 16 3
+    a 5 5 0 1 1 0 10
+    a 5 5 0 1 1 0 -10
+    M 13 13
+    C 12 15 11 17 10 19
+    L 22 19
+    C 21 17 20 15 19 13
+    Z
+    M 8 22
+    L 24 22
+    L 24 29
+    L 8 29
+    Z
+  " fill="#ffffff"/>
+</svg>

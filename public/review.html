@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review — pawnbook</title>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <style>
+    .review-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 900px) { .review-grid { grid-template-columns: 1fr; } }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .section-title { font-size: 14px; font-weight: 600; }
+    .table-view-btn {
+      font-size: 12px;
+      color: var(--ink-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    .table-view-btn:hover { color: var(--ink-secondary); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="top-bar">
+    <a href="index.html" class="top-bar__brand">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2a2 2 0 0 1 2 2c0 .74-.4 1.38-1 1.73V7h1.5l.5 1H13l1 3H4l1-3h1l.5-1H8V5.73A2 2 0 0 1 7 4a2 2 0 0 1 2-2zm-3 11h6v1H6v-1zm-1 2h8v1H5v-1z"/></svg>
+      pawnbook
+    </a>
+    <nav class="top-bar__nav">
+      <a href="index.html"   class="nav-link">Home</a>
+      <a href="play.html"    class="nav-link">Play</a>
+      <a href="puzzles.html" class="nav-link">Drill <span class="due-badge" id="due-count">0</span></a>
+      <a href="games.html"   class="nav-link">Games</a>
+      <a href="stats.html"   class="nav-link">Stats</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <div id="review-header" style="margin-bottom:24px">
+      <div style="font-size:13px;color:var(--ink-muted)" id="game-meta">Loading…</div>
+      <div class="acc-bar-wrap" id="acc-bars" style="margin-top:16px;max-width:480px"></div>
+    </div>
+
+    <div class="review-grid">
+      <!-- Left: scrub board (read-only) -->
+      <div>
+        <div class="board-wrap" id="board-wrap" style="margin-bottom:8px"></div>
+        <div style="font-size:12px;color:var(--ink-muted);text-align:center" id="ply-label"></div>
+        <div class="move-list" id="move-list" style="max-height:300px;overflow-y:auto;margin-top:8px"></div>
+      </div>
+
+      <!-- Right: graphs & mistakes -->
+      <div style="display:flex;flex-direction:column;gap:24px">
+        <!-- Eval graph -->
+        <div class="card">
+          <div class="section-head">
+            <div class="section-title">Evaluation</div>
+            <button class="table-view-btn" id="eval-table-toggle">table view</button>
+          </div>
+          <div class="eval-graph-wrap"><canvas id="eval-canvas"></canvas></div>
+          <div id="eval-table-wrap" style="display:none;margin-top:8px">
+            <table class="chart-table">
+              <thead><tr><th>Move</th><th>SAN</th><th class="num">Win%</th><th></th></tr></thead>
+              <tbody id="eval-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Breakdown bar -->
+        <div class="card">
+          <div class="section-head">
+            <div class="section-title">Your moves <span id="move-count" style="color:var(--ink-muted);font-weight:400;font-size:13px"></span></div>
+            <button class="table-view-btn" id="breakdown-table-toggle">table view</button>
+          </div>
+          <div class="breakdown-bar" id="breakdown-bar"></div>
+          <div id="breakdown-table-wrap" style="display:none;margin-top:8px">
+            <table class="chart-table">
+              <thead><tr><th>Tier</th><th class="num">Count</th><th class="num">%</th></tr></thead>
+              <tbody id="breakdown-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mistake list -->
+        <div class="card">
+          <div class="section-title" style="margin-bottom:12px">Worth drilling <span id="drill-count" style="color:var(--ink-muted);font-weight:400;font-size:13px"></span></div>
+          <div class="mistake-list" id="mistake-list"></div>
+
+          <div style="margin-top:16px">
+            <details>
+              <summary style="font-size:13px;color:var(--ink-muted);cursor:pointer">
+                Not drilled · engine-only <span id="engine-only-count"></span>
+              </summary>
+              <div class="mistake-list" id="engine-only-list" style="margin-top:8px"></div>
+            </details>
+          </div>
+
+          <div style="margin-top:16px">
+            <a id="quiz-link" href="#" class="btn btn--primary btn--large" style="width:100%">Start quiz</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/review.js"></script>
+</body>
+</html>
