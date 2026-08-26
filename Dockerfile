@@ -9,12 +9,7 @@ RUN git clone --depth 1 --branch v0.32.1 https://github.com/LeelaChessZero/lc0.g
 WORKDIR /build/lc0
 RUN ./build.sh release \
     -Dgtest=false \
-    -Dnative_arch=false \
-    -Dispc=false \
-    -Dcudnn=false \
-    -Dopencl=false \
-    -Ddx=false \
-    -Dmetal=false
+    -Dnative_arch=false
 RUN cp build/release/lc0 /usr/local/bin/lc0
 
 # Stage 2: build Stockfish 18 and Drawfish for linux/arm64
@@ -61,6 +56,9 @@ COPY src/ ./src/
 COPY public/ ./public/
 COPY bin/ ./bin/
 COPY tui/ ./tui/
+
+# Copy scripts (includes smoke.sh for in-container engine acceptance tests)
+COPY scripts/ /app/scripts/
 
 # Copy Maia weights (populated by make setup / fetch-weights.sh)
 COPY weights/ /app/weights/
