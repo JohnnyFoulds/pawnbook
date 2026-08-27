@@ -20,6 +20,7 @@ import { puzzlesRouter } from './api/routes/puzzles.js';
 import { statsRouter } from './api/routes/stats.js';
 import { stateRouter } from './api/routes/state.js';
 import { attachWebSocketServer } from './api/ws/connection.js';
+import { createEnginePool } from './adapters/engine/engine-pool.js';
 import { PORT, BIND_ADDR, DB_PATH, logger } from './config.js';
 import { initTelemetry } from './telemetry.js';
 
@@ -74,7 +75,8 @@ async function start() {
   // ── HTTP + WS server ─────────────────────────────────────────────────────
   const httpServer = createServer(app);
 
-  attachWebSocketServer({ httpServer, gameRepo, clock, enginePool: null });
+  const enginePool = createEnginePool();
+  attachWebSocketServer({ httpServer, gameRepo, clock, enginePool });
 
   httpServer.listen(PORT, BIND_ADDR, () => {
     log.info({ port: PORT, bind: BIND_ADDR }, 'pawnbook listening');

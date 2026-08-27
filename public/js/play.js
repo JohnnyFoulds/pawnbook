@@ -154,7 +154,7 @@ function startGame() {
   }
 
   document.getElementById('setup-panel').style.display = 'none';
-  document.getElementById('game-area').style.display = '';
+  document.getElementById('game-area').style.display = 'block';
   isRanked = ranked;
 
   connectWS(() => {
@@ -327,17 +327,15 @@ async function initBoard(fen, orientation) {
   const el = document.getElementById('board-wrap');
   el.innerHTML = '';
 
-  // cm-chessboard loaded from CDN in the HTML; use vanilla interaction
-  if (typeof Chessboard !== 'undefined') {
-    const { createBoard } = await import('./lib/board.js').catch(() => null);
-    if (createBoard) {
-      board = createBoard(el, Chessboard, {
-        position: fen,
-        orientation,
-        onMove: handlePlayerMove,
-      });
-    }
-  }
+  const [{ Chessboard }, { createBoard }] = await Promise.all([
+    import('https://cdn.jsdelivr.net/npm/cm-chessboard@8/src/Chessboard.js'),
+    import('./lib/board.js'),
+  ]);
+  board = await createBoard(el, Chessboard, {
+    position: fen,
+    orientation,
+    onMove: handlePlayerMove,
+  });
 }
 
 function handlePlayerMove({ from, to }) {

@@ -1,0 +1,101 @@
+/**
+ * @module adapters/engine/engine-pool
+ * Engine pool: one persistent UCI client per opponent type.
+ * Provides requestMove(session) for the WebSocket game loop.
+ *
+ * Maia   — lc0 policy head, movetime 200 ms (pure policy at low nodes)
+ * Stockfish — strength-limited by UCI_Elo
+ * Drawfish  — bestmove (plays for stalemate)
+ */
+
+import { createUciEngineClient } from './uci-engine-client.js';
+import { ENGINE_PATHS, WEIGHTS_DIR, logger } from '../../config.js';
+
+const log = logger.child({ mod: 'engine-pool' });
+
+// Stockfish UCI_Elo per opponent id
+const SF_ELO = {
+  'sf-1400': 1400,
+  'sf-1700': 1700,
+  'sf-2000': 2000,
+  'sf-2300': 2300,
+  'sf-2600': 2600,
+  'sf-2900': 2900,
+  'sf-max':  null, // full strength
+};
+
+const MAIA_MOVETIME_MS = 200;
+const SF_MOVETIME_MS   = 500;
+
+/**
+ * Create and return an engine pool.
+ * Clients are lazily started and cached for the process lifetime.
+ *
+ * @returns {{ requestMove(session: object): Promise<{uci: string}> }}
+ */
+export function createEnginePool() {
+  /** @type {Map<string, import('./uci-engine-client.js').UciEngineClient>} */
+  const pool = new Map();
+
+  async function getClient(key, binary, args = []) {
+    if (pool.has(key)) return pool.get(key);
+    log.info({ key, binary }, 'starting engine');
+    const client = await createUciEngineClient(binary, args);
+    pool.set(key, client);
+    return client;
+  }
+
+  return {
+    /**
+     * @param {object} session - GameSession with .opponent and .fen
+     * @returns {Promise<{uci: string}>}
+     */
+    async requestMove(session) {
+      const { opponent, fen } = session;
+
+      if (opponent.type === 'maia') {
+        const weightsPath = `${WEIGHTS_DIR}/${opponent.id}.pb.gz`;
+        const client = await getClient(
+          opponent.id,
+          ENGINE_PATHS.lc0,
+          [`--weights=${weightsPath}`]
+        );
+        const result = await client.eval(fen, { movetime: MAIA_MOVETIME_MS });
+        return { uci: result.bestmove };
+      }
+
+      if (opponent.type === 'stockfish') {
+        const client = await getClient('stockfish', ENGINE_PATHS.stockfish);
+        const targetElo = SF_ELO[opponent.id];
+        if (targetElo !== null && targetElo !== undefined) {
+          client._write('setoption name UCI_LimitStrength value true\n');
+          client._write(`setoption name UCI_Elo value ${targetElo}\n`);
+        } else {
+          client._write('setoption name UCI_LimitStrength value false\n');
+        }
+        const result = await client.eval(fen, { movetime: SF_MOVETIME_MS });
+        return { uci: result.bestmove };
+      }
+
+      if (opponent.type === 'drawfish') {
+        if (!ENGINE_PATHS.drawfish) {
+          throw new Error('Drawfish is not available in native mode (x86-64 ELF)');
+        }
+        const client = await getClient('drawfish', ENGINE_PATHS.drawfish);
+        const result = await client.eval(fen, { movetime: SF_MOVETIME_MS });
+        return { uci: result.bestmove };
+      }
+
+      throw new Error(`Unknown opponent type: ${opponent.type}`);
+    },
+
+    /** Shut down all engine processes. */
+    dispose() {
+      for (const [key, client] of pool) {
+        log.info({ key }, 'disposing engine');
+        client.dispose();
+      }
+      pool.clear();
+    },
+  };
+}

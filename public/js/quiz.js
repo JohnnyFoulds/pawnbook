@@ -82,16 +82,15 @@ async function initBoard(fen, sideToMove) {
   const el = document.getElementById('board-wrap');
   if (!el) return;
   el.innerHTML = '';
-  if (typeof Chessboard !== 'undefined') {
-    const lib = await import('./lib/board.js').catch(() => null);
-    if (lib?.createBoard) {
-      lib.createBoard(el, Chessboard, {
-        position: fen,
-        orientation: sideToMove === 'black' ? 'black' : 'white',
-        onMove: ({ from, to }) => submitMove(from + to),
-      });
-    }
-  }
+  const [{ Chessboard }, { createBoard }] = await Promise.all([
+    import('https://cdn.jsdelivr.net/npm/cm-chessboard@8/src/Chessboard.js'),
+    import('./lib/board.js'),
+  ]);
+  await createBoard(el, Chessboard, {
+    position: fen,
+    orientation: sideToMove === 'black' ? 'black' : 'white',
+    onMove: ({ from, to }) => submitMove(from + to),
+  });
 }
 
 async function submitMove(uci) {

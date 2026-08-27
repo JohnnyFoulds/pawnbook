@@ -33,7 +33,6 @@ export default [
     languageOptions: {
       globals: {
         ...globals.browser,
-        Chessboard: 'readonly',
       },
     },
     plugins: {

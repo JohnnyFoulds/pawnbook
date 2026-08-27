@@ -5,8 +5,32 @@
  * One component, two modes. cm-chessboard loaded via CDN ESM import.
  */
 
-// cm-chessboard ESM import — loaded by individual pages that need it
-// so this module does not import it directly; the caller passes it.
+const CDN = 'https://cdn.jsdelivr.net/npm/cm-chessboard@8';
+
+function injectCdnCss() {
+  if (document.getElementById('cm-chessboard-css')) return;
+  // Inline critical pointer-events rule so it takes effect synchronously
+  // (before the board renders) — avoids a race with async <link> loading.
+  const style = document.createElement('style');
+  style.id = 'cm-chessboard-css';
+  style.textContent = [
+    `.cm-chessboard .coordinates,`,
+    `.cm-chessboard .pieces-layer,`,
+    `.cm-chessboard .markers-layer,`,
+    `.cm-chessboard .markers-top-layer { pointer-events: none; }`,
+    `.cm-chessboard .board { pointer-events: all; cursor: pointer; }`,
+  ].join('\n');
+  document.head.appendChild(style);
+  // Also load the full stylesheet for visuals (colours, coordinates, markers)
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `${CDN}/assets/chessboard.css`;
+  document.head.appendChild(link);
+  const markersLink = document.createElement('link');
+  markersLink.rel = 'stylesheet';
+  markersLink.href = `${CDN}/assets/extensions/markers/markers.css`;
+  document.head.appendChild(markersLink);
+}
 
 /**
  * Create a pawnbook board.
@@ -16,10 +40,10 @@
  * @param {boolean} [opts.readOnly=false] - review scrub board (no interaction)
  * @param {string} [opts.position='start']
  * @param {string} [opts.orientation='white']
- * @param {function} [opts.onMove] - called with {from, to, promotion} — play/quiz mode
- * @returns {object} board instance + helpers
+ * @param {function} [opts.onMove] - called with {from, to} — play/quiz mode
+ * @returns {Promise<object>} board instance + helpers
  */
-export function createBoard(el, Chessboard, opts = {}) {
+export async function createBoard(el, Chessboard, opts = {}) {
   const {
     readOnly = false,
     position = 'start',
@@ -27,30 +51,29 @@ export function createBoard(el, Chessboard, opts = {}) {
     onMove = null,
   } = opts;
 
+  injectCdnCss();
+
+  const { Markers, MARKER_TYPE } = await import(`${CDN}/src/extensions/markers/Markers.js`);
+
   const boardConfig = {
     position,
-    orientation,
+    orientation: orientation === 'black' ? 'b' : 'w',
+    assetsUrl: `${CDN}/assets/`,
     style: {
-      cssClass: 'pawnbook-board',
-      moveFromMarker: undefined,
-      moveToMarker: undefined,
+      cssClass: 'default',
+      pieces: {
+        file: 'pieces/staunty.svg',
+      },
     },
-    // Piece set — staunty for heavier silhouettes and outline at small sizes
-    sprite: {
-      url: 'https://cdn.jsdelivr.net/npm/cm-chessboard@8/assets/pieces/staunty.svg',
-    },
+    extensions: [{ class: Markers }],
   };
 
   const board = new Chessboard(el, boardConfig);
 
-  // Read-only mode: no drag, no click handlers
   if (!readOnly && onMove) {
     board.enableMoveInput((ev) => {
-      // cm-chessboard fires MOVE_INPUT_STARTED, PIECE_SELECTED, MOVE_FINALIZED
-      if (ev.type === 'moveInputFinalized') {
-        const { squareFrom, squareTo } = ev;
-        onMove({ from: squareFrom, to: squareTo });
-        return false; // always return false — server validates and sets position
+      if (ev.type === 'moveInputFinished') {
+        onMove({ from: ev.squareFrom, to: ev.squareTo });
       }
       return true;
     });
@@ -59,21 +82,22 @@ export function createBoard(el, Chessboard, opts = {}) {
   return {
     board,
     /**
-     * Update position and optionally highlight last move.
+     * Update position and optionally highlight last move squares.
      * @param {string} fen
      * @param {string} [lastFrom]
      * @param {string} [lastTo]
      */
     setPosition(fen, lastFrom, lastTo) {
-      board.setPosition(fen, false); // false = no animation for instant moves
+      board.setPosition(fen, false);
+      board.removeMarkers();
       if (lastFrom && lastTo) {
-        board.addMarker({ square: lastFrom, class: 'lastmove' });
-        board.addMarker({ square: lastTo,   class: 'lastmove' });
+        board.addMarker(MARKER_TYPE.framePrimary, lastFrom);
+        board.addMarker(MARKER_TYPE.framePrimary, lastTo);
       }
     },
     /** Show legal move destination dots. */
     showLegalDots(squares) {
-      squares.forEach((sq) => board.addMarker({ square: sq, class: 'legal-dot' }));
+      squares.forEach((sq) => board.addMarker(MARKER_TYPE.dot, sq));
     },
     /** Clear all markers. */
     clearMarkers() {
@@ -81,11 +105,11 @@ export function createBoard(el, Chessboard, opts = {}) {
     },
     /** Show check marker on a square. */
     showCheck(square) {
-      board.addMarker({ square, class: 'check' });
+      board.addMarker(MARKER_TYPE.frameDanger, square);
     },
     /** Flip board. */
     flip() {
-      board.setOrientation(board.getOrientation() === 'white' ? 'black' : 'white');
+      board.setOrientation(board.getOrientation() === 'w' ? 'b' : 'w');
     },
   };
 }
