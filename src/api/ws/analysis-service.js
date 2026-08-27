@@ -75,7 +75,8 @@ export async function analyseGame({
     log.error({ err, gameId }, 'failed to start analysis engines');
     gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
       playerColor, ranked, status: 'finished', result: result.result,
-      termination: result.termination, analysisState: 'failed' });
+      termination: result.termination, analysisState: 'failed',
+      analysisError: err.message });
     _sendIfOpen(ws, { type: 'error', error_code: 'analysis_failed',
       message: 'Analysis engine unavailable', detail: {} });
     return;
@@ -210,7 +211,8 @@ export async function analyseGame({
     log.error({ err, gameId }, 'analysis failed');
     gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
       playerColor, ranked, status: 'finished', result: result.result,
-      termination: result.termination, analysisState: 'failed' });
+      termination: result.termination, analysisState: 'failed',
+      analysisError: err.message });
     _sendIfOpen(ws, { type: 'error', error_code: 'analysis_failed',
       message: `Analysis failed: ${err.message}`, detail: {} });
   }

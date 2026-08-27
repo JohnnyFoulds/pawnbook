@@ -31,26 +31,36 @@ export class SqliteGameRepository {
   /** @param {object} game */
   save(game) {
     const stmt = this._db.prepare(`
-      INSERT INTO games (id, started_at, opponent_id, opponent_elo, player_color,
+      INSERT INTO games (
+        id, started_at, opponent_id, opponent_elo, player_color,
         status, ranked, time_control_initial_sec, time_control_inc_sec,
-        clock_white_ms, clock_black_ms, elo_before, analysis_state)
-      VALUES (@id, @started_at, @opponent_id, @opponent_elo, @player_color,
+        clock_white_ms, clock_black_ms,
+        result, termination, pgn, played_at,
+        elo_before, elo_after, accuracy, opponent_accuracy,
+        analysis_state, analysis_error, analysed_at
+      ) VALUES (
+        @id, @started_at, @opponent_id, @opponent_elo, @player_color,
         @status, @ranked, @time_control_initial_sec, @time_control_inc_sec,
-        @clock_white_ms, @clock_black_ms, @elo_before, @analysis_state)
+        @clock_white_ms, @clock_black_ms,
+        @result, @termination, @pgn, @played_at,
+        @elo_before, @elo_after, @accuracy, @opponent_accuracy,
+        @analysis_state, @analysis_error, @analysed_at
+      )
       ON CONFLICT(id) DO UPDATE SET
-        status                   = excluded.status,
-        result                   = excluded.result,
-        termination              = excluded.termination,
-        pgn                      = excluded.pgn,
-        played_at                = excluded.played_at,
-        clock_white_ms           = excluded.clock_white_ms,
-        clock_black_ms           = excluded.clock_black_ms,
-        elo_before               = excluded.elo_before,
-        elo_after                = excluded.elo_after,
-        accuracy                 = excluded.accuracy,
-        opponent_accuracy        = excluded.opponent_accuracy,
-        analysis_state           = excluded.analysis_state,
-        analysed_at              = excluded.analysed_at
+        status           = excluded.status,
+        result           = excluded.result,
+        termination      = excluded.termination,
+        pgn              = excluded.pgn,
+        played_at        = excluded.played_at,
+        clock_white_ms   = excluded.clock_white_ms,
+        clock_black_ms   = excluded.clock_black_ms,
+        elo_before       = excluded.elo_before,
+        elo_after        = excluded.elo_after,
+        accuracy         = excluded.accuracy,
+        opponent_accuracy= excluded.opponent_accuracy,
+        analysis_state   = excluded.analysis_state,
+        analysis_error   = excluded.analysis_error,
+        analysed_at      = excluded.analysed_at
     `);
     stmt.run({
       id: game.id ?? randomUUID(),
@@ -64,15 +74,16 @@ export class SqliteGameRepository {
       time_control_inc_sec: game.timeControlIncSec ?? null,
       clock_white_ms: game.clockWhiteMs ?? null,
       clock_black_ms: game.clockBlackMs ?? null,
-      elo_before: game.eloBefore ?? null,
-      analysis_state: game.analysisState ?? 'pending',
       result: game.result ?? null,
       termination: game.termination ?? null,
       pgn: game.pgn ?? null,
       played_at: game.playedAt ?? null,
+      elo_before: game.eloBefore ?? null,
       elo_after: game.eloAfter ?? null,
       accuracy: game.accuracy ?? null,
       opponent_accuracy: game.opponentAccuracy ?? null,
+      analysis_state: game.analysisState ?? 'pending',
+      analysis_error: game.analysisError ?? null,
       analysed_at: game.analysedAt ?? null,
     });
   }

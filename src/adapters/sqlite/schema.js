@@ -8,6 +8,12 @@ export function applySchema(db) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
+  `);
+
+  // Idempotent migrations for columns added after initial schema creation.
+  try { db.exec('ALTER TABLE games ADD COLUMN analysis_error TEXT'); } catch { /* already exists */ }
+
+  db.exec(`
 
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
@@ -39,6 +45,7 @@ export function applySchema(db) {
       opponent_accuracy      REAL,
       analysis_state         TEXT NOT NULL DEFAULT 'pending'
                                CHECK(analysis_state IN ('pending','running','done','failed')),
+      analysis_error         TEXT,
       analysed_at            INTEGER
     );
 
