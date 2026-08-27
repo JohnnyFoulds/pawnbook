@@ -33,7 +33,7 @@ RUN cp stockfish /usr/local/bin/stockfish
 WORKDIR /build
 RUN git clone --depth 1 https://github.com/nmrugg/Drawfish.git
 WORKDIR /build/Drawfish/src
-RUN make -j$(nproc) build ARCH=general-64 COMP=clang
+RUN make -j$(nproc) build ARCH=armv8 COMP=clang
 RUN strip drawfish
 RUN cp drawfish /usr/local/bin/drawfish
 

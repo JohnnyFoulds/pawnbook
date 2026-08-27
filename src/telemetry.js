@@ -5,7 +5,7 @@
  * Failure to initialise must never fail a game.
  */
 
-import { logger, OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_TRACE_CONSOLE } from './config.js';
+import { logger, OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_TRACE_CONSOLE, registerSpanContextGetter } from './config.js';
 
 const log = logger.child({ mod: 'telemetry' });
 
@@ -42,6 +42,13 @@ export async function initTelemetry() {
     sdk.start();
     const { trace } = await import('@opentelemetry/api');
     _tracer = trace.getTracer('pawnbook');
+    // Wire the pino mixin so every log record carries traceId/spanId when inside a span
+    registerSpanContextGetter(() => {
+      const span = trace.getActiveSpan();
+      if (!span?.isRecording()) return null;
+      const ctx = span.spanContext();
+      return { traceId: ctx.traceId, spanId: ctx.spanId };
+    });
     log.info('OTel: SDK started');
   } catch (err) {
     // OTel failure must never fail the app

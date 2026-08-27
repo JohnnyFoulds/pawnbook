@@ -6,6 +6,8 @@ Every test name below is written before implementation. Tests for future phases 
 
 ## Phase 0 — Spec (no code)
 
+**Status:** Complete — 2026-08-26
+
 **DoD:** §9 completeness checklist passes. Every FR is MUST/SHOULD/MAY, every error named with its code and HTTP status, every NFR has a measurable bound, every requirement in `initial_idea.md` either maps to a spec entry or is explicitly out of scope.
 
 Exit gate: self-conducted production readiness review (`D1…Dn` findings resolved).
@@ -13,6 +15,8 @@ Exit gate: self-conducted production readiness review (`D1…Dn` findings resolv
 ---
 
 ## Phase 1 — Scaffold, errors, config
+
+**Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-1-scaffold`  
 **Files:** `package.json`, `Makefile`, `vitest.config.js`, `eslint.config.js`, `src/errors.js`, `src/config.js`, `src/ports/*`, `.github/workflows/ci.yml`
@@ -32,6 +36,8 @@ coverage: the exclusion list matches the one documented in feature_spec.md
 ---
 
 ## Phase 2 — Domain: grading and Elo
+
+**Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-2-grading`  
 **Files:** `src/domain/analysis/grade.js`, `src/domain/game/elo.js`, `src/domain/analysis/findability.js`, `src/shared/balance.js`
@@ -71,6 +77,8 @@ balance: every parameter in config matches docs/game/balance.md
 
 ## Phase 3 — Persistence
 
+**Status:** Complete — 2026-08-26
+
 **Branch:** `feat/phase-3-persistence`  
 **Files:** `src/adapters/sqlite/schema.js`, `src/adapters/sqlite/repositories.js`, `src/adapters/memory/repositories.js`, `src/adapters/clock/`
 
@@ -95,6 +103,8 @@ sqlite: startup re-derives settings.elo and logs error when it disagrees
 ---
 
 ## Phase 4 — Engine client
+
+**Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-4-engine`  
 **Files:** `src/adapters/engine/uci-engine-client.js`, `src/adapters/engine/pool.js`, `src/adapters/engine/scripted-engine-client.js`, `scripts/record-fixtures.sh`
@@ -123,6 +133,8 @@ scripted: replays fixture output identically to the parsed real output
 ---
 
 ## Phase 5 — Game session and WS play
+
+**Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-5-play`  
 **Files:** `src/domain/game/session.js`, `src/domain/game/roster.js`, `src/api/ws/`, `src/api/routes/`, `src/api/error-middleware.js`, `src/schemas/`
@@ -162,6 +174,8 @@ api: an unexpected throw maps to 500 and is logged with the error attached
 
 ## Phase 6 — Analysis pipeline
 
+**Status:** Complete — 2026-08-26
+
 **Branch:** `feat/phase-6-analysis`  
 **Files:** `src/domain/analysis/pipeline.js`
 
@@ -189,6 +203,8 @@ findability: unparseable policy output falls back to binary 1.0/0.25 and logs a 
 ---
 
 ## Phase 7 — Puzzle selection and scheduling
+
+**Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-7-puzzles`  
 **Files:** `src/domain/puzzles/select.js`, `src/domain/puzzles/dedupe.js`, `src/domain/puzzles/attempt.js`, `src/domain/review/queue.js`, `src/domain/review/rating.js`, `src/adapters/scheduler/`
@@ -239,6 +255,8 @@ balance: every parameter in config.js matches docs/game/balance.md
 
 ## Phase 8 — Docker build and engine acceptance
 
+**Status:** Complete — 2026-08-26
+
 **Branch:** `feat/phase-8-docker`  
 **Files:** `Dockerfile`, `docker-compose.yml`, `scripts/smoke.sh`, `scripts/fetch-weights.sh`
 
@@ -247,6 +265,8 @@ Gated by `scripts/smoke.sh` passing in-container plus the verification section i
 ---
 
 ## Phase 9 — Web UI
+
+**Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-9-ui`  
 **Files:** `public/`, `src/shared/quality.js`, `src/shared/strings.json`
@@ -278,6 +298,8 @@ motion: prefers-reduced-motion zeroes every duration and disables auto-advance
 
 ## Phase 10 — TUI
 
+**Status:** Complete — 2026-08-26
+
 **Branch:** `feat/phase-10-tui`  
 **Files:** `bin/chess.js`, `tui/`
 
@@ -305,6 +327,8 @@ drill: feedback leads with a glyph and survives --plain and --ascii
 ---
 
 ## Phase 11 — Production readiness review
+
+**Status:** Complete — 2026-08-27
 
 **Branch:** `docs/phase-11-review`
 

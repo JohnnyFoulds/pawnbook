@@ -44,6 +44,7 @@ export class UciEngineClient {
     try {
       proc = spawn(this._binaryPath, this._args, { stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (err) {
+      log.warn({ binary: this._binaryPath, err }, 'engine spawn failed — engine unavailable');
       throw new EngineUnavailableError(
         `Engine '${this._binaryPath}' could not be spawned`,
         { cause: err }

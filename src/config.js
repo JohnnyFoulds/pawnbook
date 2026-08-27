@@ -19,11 +19,12 @@ export const ENGINE_MODE = process.env.ENGINE_MODE || 'native';
 export const OTEL_EXPORTER_OTLP_ENDPOINT = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || null;
 export const OTEL_TRACE_CONSOLE = process.env.OTEL_TRACE_CONSOLE === '1';
 
-// Engine binary paths — resolved by ENGINE_MODE
+// Engine binary paths — resolved by ENGINE_MODE.
+// Override individual binaries with STOCKFISH_PATH, LC0_PATH, DRAWFISH_PATH env vars.
 const NATIVE_PATHS = {
-  stockfish: '/opt/homebrew/opt/stockfish/bin/stockfish',
-  lc0: '/opt/homebrew/Cellar/lc0/0.32.1/libexec/lc0',
-  drawfish: null, // x86-64 ELF, not runnable natively
+  stockfish: process.env.STOCKFISH_PATH || '/opt/homebrew/opt/stockfish/bin/stockfish',
+  lc0: process.env.LC0_PATH || '/opt/homebrew/Cellar/lc0/0.32.1/libexec/lc0',
+  drawfish: process.env.DRAWFISH_PATH || null, // arm64 ELF built in container; null skips it in native mode
 };
 const CONTAINER_PATHS = {
   stockfish: '/usr/local/bin/stockfish',
@@ -43,6 +44,12 @@ export const DB_PATH = `${DATA_DIR}/chess.db`;
 
 // Re-export balance constants so consumers only need one import
 export { balance };
+
+// OTel span-context hook — registered by telemetry.js after SDK init so the pino
+// mixin can inject traceId/spanId without a hard dependency on @opentelemetry/api.
+let _spanCtxGetter = null;
+/** @param {() => object|null} fn */
+export function registerSpanContextGetter(fn) { _spanCtxGetter = fn; }
 
 // Ensure data directory exists so the log file can be created at startup
 mkdirSync(DATA_DIR, { recursive: true });
@@ -67,4 +74,9 @@ const _logTransport = pino.transport({
 });
 
 /** Root pino logger. Use logger.child({ mod: 'module-name' }) per module. */
-export const logger = pino({ level: _logLevel }, _logTransport);
+export const logger = pino({
+  level: _logLevel,
+  mixin() {
+    return _spanCtxGetter?.() ?? {};
+  },
+}, _logTransport);

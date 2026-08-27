@@ -3,15 +3,15 @@
  * Standard Elo rating with FIDE ±400 diff clamp and K-factor tiers.
  */
 
-import { ELO_DIFF_CLAMP, ELO_FLOOR, K_PROVISIONAL, K_MID, K_HIGH } from '../../shared/balance.js';
+import { ELO_DIFF_CLAMP, ELO_FLOOR, K_PROVISIONAL, K_MID, K_HIGH, K_PROVISIONAL_GAMES, K_MID_ELO_MAX } from '../../shared/balance.js';
 
 /**
  * @param {{ gamesPlayed: number, myElo: number }} opts
  * @returns {number}
  */
 export function kFactor({ gamesPlayed, myElo }) {
-  if (gamesPlayed < 15) return K_PROVISIONAL;
-  if (myElo < 2100) return K_MID;
+  if (gamesPlayed < K_PROVISIONAL_GAMES) return K_PROVISIONAL;
+  if (myElo < K_MID_ELO_MAX) return K_MID;
   return K_HIGH;
 }
 

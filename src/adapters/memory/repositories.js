@@ -199,6 +199,11 @@ export class InMemoryPuzzleRepository {
     if (!this._reviews) this._reviews = [];
     this._reviews.push({ ...review, id: review.id ?? randomUUID() });
   }
+
+  saveReviewAndCard(review, card) {
+    this.saveReview(review);
+    this.saveCard(card);
+  }
 }
 
 export class InMemorySettingsRepository {

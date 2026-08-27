@@ -491,6 +491,18 @@ export class SqlitePuzzleRepository {
     );
   }
 
+  /**
+   * Atomically save a review row and update the FSRS card in one transaction.
+   * @param {object} review
+   * @param {object} card
+   */
+  saveReviewAndCard(review, card) {
+    this._db.transaction(() => {
+      this.saveReview(review);
+      this.saveCard(card);
+    })();
+  }
+
   /** @param {object} card */
   saveCard(card) {
     this._db.prepare(`
