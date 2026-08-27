@@ -15,6 +15,7 @@ import { nearestMaiaModel } from '../../domain/analysis/findability.js';
 import { updateElo } from '../../domain/game/elo.js';
 import { getAvailableOpponents } from '../../domain/game/roster.js';
 import { logger } from '../../config.js';
+import { getTracer } from '../../telemetry.js';
 
 const log = logger.child({ mod: 'analysis-service' });
 
@@ -37,6 +38,11 @@ export async function analyseGame({
   const { opponent, playerColor, ranked } = session;
 
   log.info({ gameId, opponentId: opponent.id, playerColor, ranked }, 'analysis initiated');
+
+  const tracer = getTracer();
+  const span = tracer?.startSpan('analyse_game', {
+    attributes: { 'analysis.game_id': gameId, 'analysis.opponent': opponent.id, 'analysis.ranked': ranked },
+  });
 
   // Mark analysis as running
   gameRepo.save({
@@ -77,6 +83,9 @@ export async function analyseGame({
     maiaClient = maiaModel ? await enginePool.getMaiaAnalysisClient(maiaModel) : null;
   } catch (err) {
     log.error({ err, gameId }, 'failed to start analysis engines');
+    span?.recordException(err);
+    span?.setStatus({ code: 2, message: err.message });
+    span?.end();
     gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
       playerColor, ranked, status: 'finished', result: result.result,
       termination: result.termination, analysisState: 'failed',
@@ -145,20 +154,22 @@ export async function analyseGame({
         wasTimed: wasTimed ? 1 : 0,
       });
 
-      // Init FSRS card with due = tomorrow (post-game quiz creates it, not schedules it)
-      puzzleRepo.saveCard({
-        puzzleId,
-        due: tomorrow,
-        stability: 0,
-        difficulty: 0,
-        elapsedDays: 0,
-        scheduledDays: 0,
-        reps: 0,
-        lapses: 0,
-        state: 0,
-        lastReview: null,
-        graduated: 0,
-      });
+      // Only init FSRS card if none exists — do not overwrite a card with existing review history
+      if (!puzzleRepo.getCard(puzzleId)) {
+        puzzleRepo.saveCard({
+          puzzleId,
+          due: tomorrow,
+          stability: 0,
+          difficulty: 0,
+          elapsedDays: 0,
+          scheduledDays: 0,
+          reps: 0,
+          lapses: 0,
+          state: 0,
+          lastReview: null,
+          graduated: 0,
+        });
+      }
     }
 
     // Update ELO if ranked game with a known opponent ELO
@@ -214,9 +225,14 @@ export async function analyseGame({
       puzzleCount: selected.length,
     });
 
+    span?.setStatus({ code: 1 }); // OK
+    span?.end();
     log.info({ gameId, puzzles: selected.length, accuracy }, 'analysis complete');
   } catch (err) {
     log.error({ err, gameId }, 'analysis failed');
+    span?.recordException(err);
+    span?.setStatus({ code: 2, message: err.message }); // ERROR
+    span?.end();
     gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
       playerColor, ranked, status: 'finished', result: result.result,
       termination: result.termination, analysisState: 'failed',

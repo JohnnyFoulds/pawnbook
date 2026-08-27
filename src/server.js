@@ -41,6 +41,8 @@ async function start() {
   // Abandon any games left in_progress from the previous server run — engine
   // connections are dead after a restart so those games cannot be resumed.
   gameRepo.abandonAllInProgress();
+  // Mark any analysis that was mid-run as failed — the engine process died with the server.
+  gameRepo.resetRunningAnalyses();
 
   // Verify settings.elo is consistent with elo_history
   const history = gameRepo.getEloHistory();

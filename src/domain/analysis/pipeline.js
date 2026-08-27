@@ -8,6 +8,7 @@ import { Chess } from 'chess.js';
 
 import { logger } from '../../config.js';
 import { FINDABILITY_MIN, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
+import { getTracer } from '../../telemetry.js';
 
 import { classify, winPct, moveAccuracy, gameAccuracy } from './grade.js';
 import { probeFindability } from './findability.js';
@@ -64,15 +65,26 @@ export async function runAnalysis({
   }
 
   // ── Pass 1: full game, every position ────────────────────────────────────
+  const tracer = getTracer();
+  const pass1Span = tracer?.startSpan('engine_pass_1', { attributes: { 'analysis.ply_count': total } });
   log.debug({ total }, 'analysis pass 1 starting');
-  for (let i = 0; i < positions.length; i++) {
-    const { fen } = positions[i];
-    const stored = storedEvalByIdx.get(i);
-    const evalResult = stored?.bestmove ? stored : await sfClient.eval(fen, { depth: 18 });
-    pass1Results.push({ ...positions[i], ...evalResult });
+  try {
+    for (let i = 0; i < positions.length; i++) {
+      const { fen } = positions[i];
+      const stored = storedEvalByIdx.get(i);
+      const evalResult = stored?.bestmove ? stored : await sfClient.eval(fen, { depth: 18 });
+      pass1Results.push({ ...positions[i], ...evalResult });
 
-    const pct = Math.round(((i + 1) / total) * 100 * PASS_WEIGHTS[0]);
-    onProgress({ phase: 'pass1', done: i + 1, total, overallPct: pct });
+      const pct = Math.round(((i + 1) / total) * 100 * PASS_WEIGHTS[0]);
+      onProgress({ phase: 'pass1', done: i + 1, total, overallPct: pct });
+    }
+    pass1Span?.setStatus({ code: 1 });
+  } catch (err) {
+    pass1Span?.recordException(err);
+    pass1Span?.setStatus({ code: 2, message: err.message });
+    throw err;
+  } finally {
+    pass1Span?.end();
   }
 
   // ── Compute move evaluations ──────────────────────────────────────────────
@@ -154,63 +166,87 @@ export async function runAnalysis({
     e.mover === 'player' && (e.classification === 'blunder' || e.classification === 'mistake' || e.classification === 'inaccuracy')
   );
 
+  const pass2Span = tracer?.startSpan('engine_pass_2', { attributes: { 'analysis.candidates': candidates.length } });
   log.debug({ candidates: candidates.length }, 'analysis pass 2 starting');
-  for (let i = 0; i < candidates.length; i++) {
-    const c = candidates[i];
-    const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3 });
-    const altMoves = (deepEval.lines ?? [])
-      .filter(l => l.pv && l.pv.split(' ')[0] !== c.bestMoveUci)
-      .map(l => ({ uci: l.pv.split(' ')[0], pv: l.pv, cp: l.cp }))
-      .filter(a => {
-        if (a.cp === null || c.winBefore === undefined) return true;
-        const altWin = winPct(a.cp);
-        return Math.abs(altWin - winPct(deepEval.cp ?? 0)) <= NEAR_MISS_WIN_PTS;
-      });
-    c.altMovesJson = JSON.stringify(altMoves);
+  try {
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3 });
+      const altMoves = (deepEval.lines ?? [])
+        .filter(l => l.pv && l.pv.split(' ')[0] !== c.bestMoveUci)
+        .map(l => ({ uci: l.pv.split(' ')[0], pv: l.pv, cp: l.cp }))
+        .filter(a => {
+          if (a.cp === null || c.winBefore === undefined) return true;
+          const altWin = winPct(a.cp);
+          return Math.abs(altWin - winPct(deepEval.cp ?? 0)) <= NEAR_MISS_WIN_PTS;
+        });
+      c.altMovesJson = JSON.stringify(altMoves);
 
-    const pass2Pct = Math.round(PASS_WEIGHTS[0] * 100 + ((i + 1) / candidates.length) * 100 * PASS_WEIGHTS[1]);
-    onProgress({ phase: 'pass2', done: i + 1, total: candidates.length, overallPct: pass2Pct });
+      const pass2Pct = Math.round(PASS_WEIGHTS[0] * 100 + ((i + 1) / candidates.length) * 100 * PASS_WEIGHTS[1]);
+      onProgress({ phase: 'pass2', done: i + 1, total: candidates.length, overallPct: pass2Pct });
+    }
+    pass2Span?.setStatus({ code: 1 });
+  } catch (err) {
+    pass2Span?.recordException(err);
+    pass2Span?.setStatus({ code: 2, message: err.message });
+    throw err;
+  } finally {
+    pass2Span?.end();
   }
 
   // ── Pass 3: Maia findability ──────────────────────────────────────────────
   const puzzleCandidates = [];
 
+  const pass3Span = tracer?.startSpan('maia_findability', { attributes: { 'analysis.candidates': candidates.length } });
   log.debug({ candidates: candidates.length }, 'analysis pass 3 starting');
-  for (let i = 0; i < candidates.length; i++) {
-    const c = candidates[i];
-    const { findability, temptation, instructiveness, degraded } = await probeFindability({
-      maiaClient,
-      fen: c.fen,
-      bestMoveUci: c.bestMoveUci,
-      playedMoveUci: c.moveUci,
-      winLossPts: c.winLoss,
-      maiaModel,
-    });
+  try {
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      const { findability, temptation, instructiveness, degraded } = await probeFindability({
+        maiaClient,
+        fen: c.fen,
+        bestMoveUci: c.bestMoveUci,
+        playedMoveUci: c.moveUci,
+        winLossPts: c.winLoss,
+        maiaModel,
+      });
 
-    const tags = [];
-    if (temptation > 0.3) tags.push('common_trap');
-    if (findability < FINDABILITY_MIN) tags.push('engine_only');
+      const tags = [];
+      if (temptation > 0.3) tags.push('common_trap');
+      if (findability < FINDABILITY_MIN) tags.push('engine_only');
 
-    puzzleCandidates.push({
-      ...c,
-      findability,
-      temptation,
-      instructiveness,
-      maiaModel,
-      policyTemperature: 1.0,
-      tags: tags.join(','),
-      engineOnly: findability < FINDABILITY_MIN,
-      degraded,
-    });
+      puzzleCandidates.push({
+        ...c,
+        findability,
+        temptation,
+        instructiveness,
+        maiaModel,
+        policyTemperature: 1.0,
+        tags: tags.join(','),
+        engineOnly: findability < FINDABILITY_MIN,
+        degraded,
+      });
 
-    const pass3Pct = Math.round((PASS_WEIGHTS[0] + PASS_WEIGHTS[1]) * 100 + ((i + 1) / candidates.length) * 100 * PASS_WEIGHTS[2]);
-    onProgress({ phase: 'maia', done: i + 1, total: candidates.length, overallPct: Math.min(99, pass3Pct) });
+      const pass3Pct = Math.round((PASS_WEIGHTS[0] + PASS_WEIGHTS[1]) * 100 + ((i + 1) / candidates.length) * 100 * PASS_WEIGHTS[2]);
+      onProgress({ phase: 'maia', done: i + 1, total: candidates.length, overallPct: Math.min(99, pass3Pct) });
+    }
+    pass3Span?.setStatus({ code: 1 });
+  } catch (err) {
+    pass3Span?.recordException(err);
+    pass3Span?.setStatus({ code: 2, message: err.message });
+    throw err;
+  } finally {
+    pass3Span?.end();
   }
 
+  const selectSpan = tracer?.startSpan('select_puzzles');
   onProgress({ phase: 'select', done: 1, total: 1, overallPct: 100 });
 
   const accuracy = gameAccuracy(playerAccuracies);
   const opponentAcc = gameAccuracy(opponentAccuracies);
+
+  selectSpan?.setStatus({ code: 1 });
+  selectSpan?.end();
 
   return {
     moveEvals,

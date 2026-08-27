@@ -10,8 +10,7 @@ import { ZodError } from 'zod';
 import { InboundMessageSchema } from '../../schemas/messages.js';
 import { GameSession } from '../../domain/game/session.js';
 import { getOpponent } from '../../domain/game/roster.js';
-import { updateElo } from '../../domain/game/elo.js';
-import { ErrorCode } from '../../errors.js';
+import { ErrorCode, errorCodeFor } from '../../errors.js';
 import { logger } from '../../config.js';
 
 const log = logger.child({ mod: 'ws-handlers' });
@@ -57,8 +56,8 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
       log.error({ err }, 'ws handler error');
       send(ws, {
         type: 'error',
-        error_code: 'internal_error',
-        message: err.message,
+        error_code: errorCodeFor(err),
+        message: err instanceof Error ? err.message : 'An internal error occurred',
         detail: {},
       });
     }
@@ -128,8 +127,11 @@ async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions }) {
 
   const moveResult = session.applyMove(msg.uci);
 
-  // Persist the move
+  // Persist the move and live clock state
   gameRepo.appendMove(session.id, session.moves[session.moves.length - 1]);
+  if (moveResult.clockUpdate) {
+    gameRepo.updateClock(session.id, moveResult.clockUpdate.whiteMs, moveResult.clockUpdate.blackMs);
+  }
 
   if (moveResult.gameOver) {
     finishGame(ws, session, moveResult.result, gameRepo, settingsRepo);
@@ -178,6 +180,9 @@ async function handleHint(ws, { sessions, enginePool }) {
 
 async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
   const game = gameRepo.findById(msg.gameId);
+  if (!game) {
+    return send(ws, { type: 'error', error_code: ErrorCode.GAME_NOT_FOUND, message: `Game '${msg.gameId}' not found`, detail: {} });
+  }
   const savedMoves = gameRepo.getMoves(msg.gameId);
   const opponent = getOpponent(game.opponentId);
 
@@ -222,80 +227,28 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function finishGame(ws, session, result, gameRepo, settingsRepo) {
+function finishGame(ws, session, result, gameRepo, _settingsRepo) {
   log.info({ gameId: session.id, result: result.result, termination: result.termination }, 'game finished');
 
-  let eloBefore = null;
-  let eloAfter = null;
+  gameRepo.save({
+    id: session.id,
+    opponentId: session.opponent.id,
+    opponentElo: session.opponent.elo,
+    playerColor: session.playerColor,
+    ranked: session.ranked,
+    status: 'finished',
+    result: result.result,
+    termination: result.termination,
+    playedAt: Date.now(),
+  });
 
-  if (session.ranked && session.opponent.elo != null && settingsRepo) {
-    try {
-      const storedElo = parseInt(settingsRepo.get('elo') ?? '1200', 10);
-      // Count ranked finished games for K-factor (excluding this game, which isn't saved yet)
-      const history = gameRepo.getEloHistory();
-      const gamesPlayed = history.length;
-      const score = result.result === 'win' ? 1 : result.result === 'draw' ? 0.5 : 0;
-      const { newElo, delta: _delta } = updateElo({
-        myElo: storedElo,
-        oppElo: session.opponent.elo,
-        score,
-        gamesPlayed,
-      });
-      eloBefore = storedElo;
-      eloAfter = newElo;
-      gameRepo.save({
-        id: session.id,
-        opponentId: session.opponent.id,
-        opponentElo: session.opponent.elo,
-        playerColor: session.playerColor,
-        ranked: session.ranked,
-        status: 'finished',
-        result: result.result,
-        termination: result.termination,
-        playedAt: Date.now(),
-        eloBefore,
-        eloAfter,
-      });
-      gameRepo.updateElo(session.id, {
-        eloBefore,
-        eloAfter,
-        recordedAt: Date.now(),
-      });
-      log.info({ gameId: session.id, eloBefore, eloAfter }, 'elo updated');
-    } catch (err) {
-      log.error({ err, gameId: session.id }, 'elo update failed — saving game without elo');
-      gameRepo.save({
-        id: session.id,
-        opponentId: session.opponent.id,
-        opponentElo: session.opponent.elo,
-        playerColor: session.playerColor,
-        ranked: session.ranked,
-        status: 'finished',
-        result: result.result,
-        termination: result.termination,
-        playedAt: Date.now(),
-      });
-    }
-  } else {
-    gameRepo.save({
-      id: session.id,
-      opponentId: session.opponent.id,
-      opponentElo: session.opponent.elo,
-      playerColor: session.playerColor,
-      ranked: session.ranked,
-      status: 'finished',
-      result: result.result,
-      termination: result.termination,
-      playedAt: Date.now(),
-    });
-  }
-
+  // ELO is computed by analyseGame after analysis completes; initial game_over carries null ELO
   send(ws, {
     type: 'game_over',
     result: result.result,
     termination: result.termination,
-    eloBefore,
-    eloAfter,
+    eloBefore: null,
+    eloAfter: null,
   });
 
   // Signal connection.js to trigger background analysis

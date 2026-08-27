@@ -70,6 +70,19 @@ export class InMemoryGameRepository {
     }
   }
 
+  resetRunningAnalyses() {
+    for (const [id, game] of this._games) {
+      if (game.analysisState === 'running') {
+        this._games.set(id, { ...game, analysisState: 'failed', analysisError: 'Server restarted during analysis' });
+      }
+    }
+  }
+
+  updateClock(gameId, whiteMs, blackMs) {
+    const game = this._games.get(gameId);
+    if (game) this._games.set(gameId, { ...game, clockWhiteMs: whiteMs, clockBlackMs: blackMs });
+  }
+
   updateElo(gameId, { eloBefore, eloAfter, historyId, recordedAt }) {
     const game = this._games.get(gameId);
     if (game) {

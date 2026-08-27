@@ -4,6 +4,7 @@
  */
 
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
 
 import { EngineUnavailableError, EngineTimeoutError, WeightsMissingError } from '../../errors.js';
 import { logger } from '../../config.js';
@@ -34,6 +35,7 @@ export class UciEngineClient {
     this._proc = null;
     this._lineBuffer = '';
     this._listeners = [];
+    this._evalQueue = Promise.resolve();
   }
 
   async _handshake() {
@@ -83,6 +85,10 @@ export class UciEngineClient {
    * @returns {Promise<{cp: number|null, mate: number|null, bestmove: string, pv: string, lines: object[]}>}
    */
   async eval(fen, opts = {}) {
+    return (this._evalQueue = this._evalQueue.then(() => this._doEval(fen, opts)));
+  }
+
+  async _doEval(fen, opts = {}) {
     const { depth = 18, movetime, multiPV = 1 } = opts;
     this._write(`setoption name MultiPV value ${multiPV}\n`);
     this._write(`position fen ${fen}\n`);
@@ -123,6 +129,10 @@ export class UciEngineClient {
    * @returns {Promise<Map<string, number>>} move → probability (0–1)
    */
   async policy(fen, nodes = 2) {
+    return (this._evalQueue = this._evalQueue.then(() => this._doPolicy(fen, nodes)));
+  }
+
+  async _doPolicy(fen, nodes = 2) {
     this._write(`position fen ${fen}\n`);
 
     const policyLines = [];
@@ -292,9 +302,7 @@ export function parsePolicyLines(lines) {
  * @param {string} weightsPath
  */
 export function assertWeightsExist(weightsPath) {
-  import('fs').then(fs => {
-    if (!fs.existsSync(weightsPath)) {
-      throw new WeightsMissingError(`Weights file '${weightsPath}' not found`);
-    }
-  });
+  if (!existsSync(weightsPath)) {
+    throw new WeightsMissingError(`Weights file '${weightsPath}' not found`);
+  }
 }
