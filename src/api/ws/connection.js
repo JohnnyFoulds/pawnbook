@@ -42,6 +42,7 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
       try {
         const result = await enginePool.requestMove(session);
         if (!result) return; // game ended or cancelled
+        log.debug({ gameId: session.id, uci: result.uci }, 'engine move');
         const move = session.applyMove(result.uci);
 
         // Persist the engine's move
@@ -103,6 +104,7 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
         log.warn({ gameId: session.id }, 'game_finished but no engine pool — skipping analysis');
         return;
       }
+      log.info({ gameId: session.id, result: result.result }, 'triggering post-game analysis');
       analyseGame({ gameId: session.id, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool })
         .catch(err => log.error({ err, gameId: session.id }, 'analyseGame threw unexpectedly'));
     });

@@ -96,6 +96,8 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
 
   sessions.set(ws, session);
 
+  log.info({ gameId: session.id, opponentId: opponent.id, playerColor, ranked: session.ranked }, 'game started');
+
   const reply = {
     type: 'game_started',
     gameId: session.id,
@@ -120,6 +122,8 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
 async function handleMove(ws, msg, { gameRepo, sessions }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
+
+  log.debug({ gameId: session.id, uci: msg.uci }, 'player move');
 
   const moveResult = session.applyMove(msg.uci);
 
@@ -147,6 +151,7 @@ async function handleMove(ws, msg, { gameRepo, sessions }) {
 async function handleResign(ws, { gameRepo, sessions }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
+  log.info({ gameId: session.id }, 'player resigned');
   const result = session.resign();
   finishGame(ws, session, result, gameRepo);
 }
@@ -181,6 +186,8 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
 
   sessions.set(ws, session);
 
+  log.info({ gameId: msg.gameId, ply: savedMoves.length, opponentId: game.opponentId }, 'game resumed');
+
   const reply = {
     type: 'game_started',
     gameId: session.id,
@@ -205,6 +212,7 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function finishGame(ws, session, result, gameRepo) {
+  log.info({ gameId: session.id, result: result.result, termination: result.termination }, 'game finished');
   gameRepo.save({
     id: session.id,
     opponentId: session.opponent.id,

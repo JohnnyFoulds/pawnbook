@@ -34,6 +34,8 @@ export async function analyseGame({
 }) {
   const { opponent, playerColor, ranked } = session;
 
+  log.info({ gameId, opponentId: opponent.id, playerColor, ranked }, 'analysis initiated');
+
   // Mark analysis as running
   gameRepo.save({
     id: gameId,

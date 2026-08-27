@@ -4,6 +4,8 @@
  * Fails loudly on missing required env so misconfiguration is caught at startup.
  */
 
+import { mkdirSync } from 'fs';
+
 import pino from 'pino';
 
 import * as balance from './shared/balance.js';
@@ -42,10 +44,27 @@ export const DB_PATH = `${DATA_DIR}/chess.db`;
 // Re-export balance constants so consumers only need one import
 export { balance };
 
-/** Root pino logger. Use logger.child({ mod: 'module-name' }) per module. */
-export const logger = pino({
-  level: process.env.LOG_LEVEL || (NODE_ENV === 'production' ? 'info' : 'debug'),
-  ...(NODE_ENV !== 'production' && {
-    transport: { target: 'pino-pretty', options: { colorize: true } },
-  }),
+// Ensure data directory exists so the log file can be created at startup
+mkdirSync(DATA_DIR, { recursive: true });
+
+const _logLevel = process.env.LOG_LEVEL || (NODE_ENV === 'production' ? 'info' : 'debug');
+const _logFile = `${DATA_DIR}/pawnbook.log`;
+
+// Always write structured JSON to a persistent log file so game history is
+// traceable across server restarts.  In dev also write a pretty stream to
+// stdout; in production write plain JSON to stdout (Docker log driver picks
+// it up) and JSON to the file.
+const _logTransport = pino.transport({
+  targets: NODE_ENV !== 'production'
+    ? [
+        { target: 'pino-pretty', options: { colorize: true }, level: _logLevel },
+        { target: 'pino/file', options: { destination: _logFile, append: true }, level: _logLevel },
+      ]
+    : [
+        { target: 'pino/file', options: { destination: 1 }, level: _logLevel },
+        { target: 'pino/file', options: { destination: _logFile, append: true }, level: _logLevel },
+      ],
 });
+
+/** Root pino logger. Use logger.child({ mod: 'module-name' }) per module. */
+export const logger = pino({ level: _logLevel }, _logTransport);
