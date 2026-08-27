@@ -79,7 +79,7 @@ RUN useradd -r -s /bin/false pawnbook && chown -R pawnbook:pawnbook /app
 USER pawnbook
 
 ENV NODE_ENV=production
-ENV BIND_ADDR=127.0.0.1
+ENV BIND_ADDR=0.0.0.0
 ENV PORT=3000
 ENV ENGINE_MODE=container
 
