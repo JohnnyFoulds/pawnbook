@@ -8,8 +8,9 @@
  * Drawfish  — bestmove (plays for stalemate)
  */
 
-import { createUciEngineClient } from './uci-engine-client.js';
 import { ENGINE_PATHS, WEIGHTS_DIR, logger } from '../../config.js';
+
+import { createUciEngineClient } from './uci-engine-client.js';
 
 const log = logger.child({ mod: 'engine-pool' });
 
@@ -87,6 +88,34 @@ export function createEnginePool() {
       }
 
       throw new Error(`Unknown opponent type: ${opponent.type}`);
+    },
+
+    /**
+     * Get a dedicated Stockfish client for analysis (separate from game-play client).
+     * @returns {Promise<import('./uci-engine-client.js').UciEngineClient>}
+     */
+    async getAnalysisSfClient() {
+      return getClient('sf-analysis', ENGINE_PATHS.stockfish);
+    },
+
+    /**
+     * Get an lc0/Maia client configured for findability probing.
+     * Uses classic mode with VerboseMoveStats=true and PolicyTemperature=1.0.
+     * @param {string} maiaId — e.g. 'maia-1300'
+     * @returns {Promise<import('./uci-engine-client.js').UciEngineClient>}
+     */
+    async getMaiaAnalysisClient(maiaId) {
+      const weightsPath = `${WEIGHTS_DIR}/${maiaId}.pb.gz`;
+      const key = `maia-analysis-${maiaId}`;
+      if (pool.has(key)) return pool.get(key);
+      log.info({ key, maiaId }, 'starting maia analysis engine');
+      const client = await createUciEngineClient(ENGINE_PATHS.lc0, [
+        `--weights=${weightsPath}`,
+        '--VerboseMoveStats=true',
+        '--PolicyTemperature=1.0',
+      ]);
+      pool.set(key, client);
+      return client;
     },
 
     /** Shut down all engine processes. */

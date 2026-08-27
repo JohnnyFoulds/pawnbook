@@ -59,6 +59,13 @@ export class InMemoryGameRepository {
   getEvals(gameId) {
     return this._evals ? (this._evals.get(gameId) ?? []) : [];
   }
+
+  saveMoveEval(eval_) {
+    if (!this._evals) this._evals = new Map();
+    const list = this._evals.get(eval_.gameId) ?? [];
+    list.push(eval_);
+    this._evals.set(eval_.gameId, list);
+  }
 }
 
 export class InMemoryPuzzleRepository {

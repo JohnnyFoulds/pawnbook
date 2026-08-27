@@ -316,9 +316,15 @@ function onAnalysisProgress(msg) {
     `Analysing… ${msg.phase ?? ''} ${Math.round(pct)}%`;
 }
 
-function onAnalysisDone(_msg) {
+function onAnalysisDone(msg) {
   document.getElementById('analysis-label').textContent = 'Analysis complete';
   document.getElementById('analysis-progress').style.width = '100%';
+  const count = msg.puzzleCount ?? 0;
+  const reviewLink = document.getElementById('review-link');
+  if (reviewLink && count > 0) {
+    reviewLink.textContent = `Review & quiz (${count} positions)`;
+    reviewLink.href = `quiz.html?game=${gameId}`;
+  }
 }
 
 // ── Board ──────────────────────────────────────────────────────────────────

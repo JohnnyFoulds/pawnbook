@@ -12,6 +12,7 @@ import { WebSocketServer } from 'ws';
 import { logger } from '../../config.js';
 
 import { makeMessageHandler } from './handlers.js';
+import { analyseGame } from './analysis-service.js';
 
 const log = logger.child({ mod: 'ws-connection' });
 
@@ -19,11 +20,13 @@ const log = logger.child({ mod: 'ws-connection' });
  * @param {object} opts
  * @param {import('http').Server} opts.httpServer
  * @param {import('../../ports/repositories.js').GameRepository} opts.gameRepo
+ * @param {import('../../ports/repositories.js').PuzzleRepository} opts.puzzleRepo
+ * @param {import('../../adapters/sqlite/repositories.js').SqliteSettingsRepository} opts.settingsRepo
  * @param {import('../../ports/clock.js').Clock} opts.clock
  * @param {object|null} opts.enginePool — engine dispatch function; null in test/dev without engines
  * @returns {WebSocketServer}
  */
-export function attachWebSocketServer({ httpServer, gameRepo, clock, enginePool }) {
+export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool }) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
   const handleMessage = makeMessageHandler({ gameRepo, clock });
 
@@ -58,6 +61,17 @@ export function attachWebSocketServer({ httpServer, gameRepo, clock, enginePool 
         }
 
         if (move.gameOver && move.result) {
+          gameRepo.save({
+            id: session.id,
+            opponentId: session.opponent.id,
+            opponentElo: session.opponent.elo,
+            playerColor: session.playerColor,
+            ranked: session.ranked,
+            status: 'finished',
+            result: move.result.result,
+            termination: move.result.termination,
+            playedAt: Date.now(),
+          });
           reply.gameOver = { result: move.result.result, termination: move.result.termination };
           ws.send(JSON.stringify(reply));
           send(ws, {
@@ -67,6 +81,7 @@ export function attachWebSocketServer({ httpServer, gameRepo, clock, enginePool 
             eloBefore: null,
             eloAfter: null,
           });
+          ws.emit('game_finished', { session, result: move.result });
           return;
         }
 
@@ -80,6 +95,16 @@ export function attachWebSocketServer({ httpServer, gameRepo, clock, enginePool 
           detail: {},
         });
       }
+    });
+
+    // Trigger background analysis after any game ends
+    ws.on('game_finished', ({ session, result }) => {
+      if (!enginePool) {
+        log.warn({ gameId: session.id }, 'game_finished but no engine pool — skipping analysis');
+        return;
+      }
+      analyseGame({ gameId: session.id, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool })
+        .catch(err => log.error({ err, gameId: session.id }, 'analyseGame threw unexpectedly'));
     });
 
     ws.on('message', (raw) => handleMessage(ws, raw.toString()));

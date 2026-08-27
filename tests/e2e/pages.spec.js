@@ -116,7 +116,7 @@ test.describe('Play page (play.html)', () => {
 
 test.describe('Review page (review.html)', () => {
   test('loads without JS errors (no game id)', async ({ page }) => {
-    const { errors, failedRequests } = capturePageErrors(page);
+    const { errors } = capturePageErrors(page);
     await page.goto('/review.html');
     await page.waitForLoadState('networkidle');
     expect(errors, `JS errors: ${errors.join('\n')}`).toEqual([]);
@@ -139,7 +139,7 @@ test.describe('Review page (review.html)', () => {
 
 test.describe('Quiz page (quiz.html)', () => {
   test('loads without JS errors', async ({ page }) => {
-    const { errors, failedRequests } = capturePageErrors(page);
+    const { errors } = capturePageErrors(page);
     await page.goto('/quiz.html');
     await page.waitForLoadState('networkidle');
     expect(errors, `JS errors: ${errors.join('\n')}`).toEqual([]);

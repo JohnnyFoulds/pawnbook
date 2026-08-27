@@ -76,7 +76,7 @@ async function start() {
   const httpServer = createServer(app);
 
   const enginePool = createEnginePool();
-  attachWebSocketServer({ httpServer, gameRepo, clock, enginePool });
+  attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool });
 
   httpServer.listen(PORT, BIND_ADDR, () => {
     log.info({ port: PORT, bind: BIND_ADDR }, 'pawnbook listening');

@@ -207,6 +207,7 @@ function finishGame(ws, session, result, gameRepo) {
     status: 'finished',
     result: result.result,
     termination: result.termination,
+    playedAt: Date.now(),
   });
 
   send(ws, {
@@ -216,6 +217,9 @@ function finishGame(ws, session, result, gameRepo) {
     eloBefore: null,
     eloAfter: null,
   });
+
+  // Signal connection.js to trigger background analysis
+  ws.emit('game_finished', { session, result });
 }
 
 function send(ws, obj) {

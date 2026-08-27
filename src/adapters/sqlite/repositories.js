@@ -145,6 +145,39 @@ export class SqliteGameRepository {
     ).all(gameId);
   }
 
+  /** @param {object} eval_ */
+  saveMoveEval(eval_) {
+    this._db.prepare(`
+      INSERT OR IGNORE INTO move_evals (
+        game_id, ply, fen, move_uci, move_san, cp_white, mate_in,
+        best_move_uci, pv, mover, win_before, win_after, cp_loss,
+        win_loss_pts, classification, move_accuracy, alt_moves_json
+      ) VALUES (
+        @game_id, @ply, @fen, @move_uci, @move_san, @cp_white, @mate_in,
+        @best_move_uci, @pv, @mover, @win_before, @win_after, @cp_loss,
+        @win_loss_pts, @classification, @move_accuracy, @alt_moves_json
+      )
+    `).run({
+      game_id: eval_.gameId,
+      ply: eval_.ply,
+      fen: eval_.fen,
+      move_uci: eval_.moveUci,
+      move_san: eval_.moveSan ?? null,
+      cp_white: eval_.cpWhite ?? null,
+      mate_in: eval_.mateIn ?? null,
+      best_move_uci: eval_.bestMoveUci ?? null,
+      pv: eval_.pv ?? null,
+      mover: eval_.mover,
+      win_before: eval_.winBefore,
+      win_after: eval_.winAfter,
+      cp_loss: eval_.cpLoss ?? null,
+      win_loss_pts: eval_.winLoss,
+      classification: eval_.classification,
+      move_accuracy: eval_.moveAccuracy ?? null,
+      alt_moves_json: eval_.altMovesJson ?? null,
+    });
+  }
+
   _rowToGame(row) {
     return {
       id: row.id,
