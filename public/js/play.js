@@ -341,6 +341,7 @@ async function initBoard(fen, orientation) {
     position: fen,
     orientation,
     onMove: handlePlayerMove,
+    getLegalMoves: () => legalMoves.map(m => m.uci),
   });
 }
 
@@ -357,12 +358,8 @@ function handlePlayerMove({ from, to }) {
   document.getElementById('thinking-display').style.display = 'flex';
   ws.send(JSON.stringify({ type: 'move', uci }));
   appendMoveToList(matchedMoves[0]?.san ?? uci, 'player', false);
-
-  // Optimistic board update
-  if (board) {
-    board.clearMarkers();
-    board.setPosition(currentFen, from, to);
-  }
+  // Board already shows the piece in its new square via cm-chessboard's drag animation.
+  // onEngineMove will setPosition with the correct FEN once the engine replies.
 }
 
 // ── Move list ──────────────────────────────────────────────────────────────

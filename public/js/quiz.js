@@ -25,6 +25,7 @@ let currentPuzzleId = null;
 let attemptNo = 1;
 let hintUsed = false;
 let startMs = 0;
+let currentLegalMoves = [];  // UCI strings for the current puzzle position
 
 async function boot() {
   const gameId = getGameId();
@@ -82,14 +83,18 @@ async function initBoard(fen, sideToMove) {
   const el = document.getElementById('board-wrap');
   if (!el) return;
   el.innerHTML = '';
-  const [{ Chessboard }, { createBoard }] = await Promise.all([
+  const [{ Chessboard }, { createBoard }, { Chess }] = await Promise.all([
     import('https://cdn.jsdelivr.net/npm/cm-chessboard@8/src/Chessboard.js'),
     import('./lib/board.js'),
+    import('https://cdn.jsdelivr.net/npm/chess.js@1/+esm'),
   ]);
+  const chess = new Chess(fen);
+  currentLegalMoves = chess.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion ?? ''));
   await createBoard(el, Chessboard, {
     position: fen,
     orientation: sideToMove === 'black' ? 'black' : 'white',
     onMove: ({ from, to }) => submitMove(from + to),
+    getLegalMoves: () => currentLegalMoves,
   });
 }
 

@@ -41,6 +41,8 @@ function injectCdnCss() {
  * @param {string} [opts.position='start']
  * @param {string} [opts.orientation='white']
  * @param {function} [opts.onMove] - called with {from, to} — play/quiz mode
+ * @param {function} [opts.getLegalMoves] - () => string[] of UCI moves (e.g. ['e2e4'])
+ *   When provided, piece pick-up and move submission are gated to chess-legal moves only.
  * @returns {Promise<object>} board instance + helpers
  */
 export async function createBoard(el, Chessboard, opts = {}) {
@@ -49,6 +51,7 @@ export async function createBoard(el, Chessboard, opts = {}) {
     position = 'start',
     orientation = 'white',
     onMove = null,
+    getLegalMoves = null,
   } = opts;
 
   injectCdnCss();
@@ -72,8 +75,35 @@ export async function createBoard(el, Chessboard, opts = {}) {
 
   if (!readOnly && onMove) {
     board.enableMoveInput((ev) => {
+      if (ev.type === 'moveInputStarted') {
+        board.removeMarkers();
+        if (getLegalMoves) {
+          const moves = getLegalMoves();
+          const dests = [...new Set(
+            moves.filter(uci => uci.startsWith(ev.squareFrom))
+              .map(uci => uci.slice(2, 4))
+          )];
+          dests.forEach(sq => board.addMarker(MARKER_TYPE.dot, sq));
+          // Disallow picking up a piece with no legal moves from this square
+          return dests.length > 0;
+        }
+        return true;
+      }
+
+      if (ev.type === 'validateMoveInput') {
+        if (getLegalMoves) {
+          const moves = getLegalMoves();
+          return moves.some(uci => uci.startsWith(ev.squareFrom + ev.squareTo));
+        }
+        return true;
+      }
+
       if (ev.type === 'moveInputFinished') {
-        onMove({ from: ev.squareFrom, to: ev.squareTo });
+        board.removeMarkers();
+        // legalMove is set by cm-chessboard based on validateMoveInput's return value
+        if (ev.legalMove !== false) {
+          onMove({ from: ev.squareFrom, to: ev.squareTo });
+        }
       }
       return true;
     });
