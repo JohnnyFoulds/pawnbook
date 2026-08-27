@@ -124,6 +124,19 @@ if [[ "$MODE" != "native" ]] && [[ -n "$DRAWFISH_BIN" ]]; then
     else
         check "drawfish is not standard Stockfish 18" "no id name in uci response"
     fi
+
+    # Deterministic identity test: stalemate-as-win position.
+    # Position: white pawn e7, white king e5, black king e8.
+    # Standard Stockfish avoids e5e6 because the resulting promotion leads to stalemate (draw).
+    # Drawfish seeks it — stalemate is scored as a win — so bestmove must be e5e6.
+    df_pos_response=$(printf 'uci\nisready\nposition fen 4k3/4P3/8/4K3/8/8/8/8 w - - 0 1\ngo depth 6\n' \
+        | _timeout 30 "$DRAWFISH_BIN" 2>/dev/null) || true
+    df_bestmove=$(echo "$df_pos_response" | grep "^bestmove" | tail -1 | awk '{print $2}')
+    if [[ "$df_bestmove" == "e5e6" ]]; then
+        check "drawfish plays e5e6 (stalemate-as-win identity)" "ok"
+    else
+        check "drawfish plays e5e6 (stalemate-as-win identity)" "expected e5e6, got: ${df_bestmove:-none}"
+    fi
 fi
 
 echo

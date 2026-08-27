@@ -2,14 +2,16 @@
 FROM debian:bookworm AS lc0-build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git build-essential ninja-build meson pkg-config python3 ca-certificates \
-    zlib1g-dev libeigen3-dev \
+    zlib1g-dev libeigen3-dev libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 RUN git clone --depth 1 --branch v0.32.1 https://github.com/LeelaChessZero/lc0.git
 WORKDIR /build/lc0
 RUN ./build.sh release \
     -Dgtest=false \
-    -Dnative_arch=false
+    -Dnative_arch=false \
+    -Dispc=false \
+    -Dcudnn=false
 RUN strip build/release/lc0
 RUN cp build/release/lc0 /usr/local/bin/lc0
 
@@ -49,6 +51,11 @@ COPY --from=lc0-build /usr/local/bin/lc0 /usr/local/bin/lc0
 COPY --from=engines-build /usr/local/bin/stockfish /usr/local/bin/stockfish
 COPY --from=engines-build /usr/local/bin/drawfish /usr/local/bin/drawfish
 RUN chmod +x /usr/local/bin/lc0 /usr/local/bin/stockfish /usr/local/bin/drawfish
+
+# Runtime dependency for lc0's OpenBLAS backend
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libopenblas0 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
