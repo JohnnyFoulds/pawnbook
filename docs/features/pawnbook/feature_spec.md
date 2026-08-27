@@ -41,13 +41,18 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 ### FR-ANALYSE: Analysis pipeline
 
 - FR-ANALYSE-1: Analysis MUST run automatically after a game ends.
-- FR-ANALYSE-2: Pass 1 MUST evaluate every ply at depth 18, `Threads=6`, `Hash=1024`, `MultiPV=1`.
-- FR-ANALYSE-3: Pass 2 MUST re-run candidate mistakes at higher depth with `MultiPV=3`.
+- FR-ANALYSE-2: Post-game pass 1 MUST evaluate every ply that has no pre-existing `move_evals` row, at depth 18, `Threads=6`, `Hash=1024`, `MultiPV=1`.
+- FR-ANALYSE-3: Pass 2 MUST re-run candidate mistakes at depth 22 with `MultiPV=3`.
 - FR-ANALYSE-4: Pass 3 MUST probe the Maia model nearest the player's Elo using `classic` mode, `VerboseMoveStats=true`, `PolicyTemperature=1.0`, `go nodes 2`.
 - FR-ANALYSE-5: Analysis MUST stream progress over WebSocket as `analysis_progress` events.
 - FR-ANALYSE-6: `analysis_progress` events MUST include `phase` and a monotone `overallPct`.
 - FR-ANALYSE-7: Both sides' plies MUST be graded (mover's-POV normalised); puzzle generation is restricted to player plies only.
 - FR-ANALYSE-8: A failed analysis MUST set `analysis_state = 'failed'` and MUST NOT throw to the caller.
+- FR-ANALYSE-9: After each move is accepted during an active game, the server MUST submit a pass-1 evaluation for the resulting FEN to the background analysis queue (incremental pre-evaluation).
+- FR-ANALYSE-10: Incremental pass-1 evaluations MUST use depth 20 when the analysis queue depth is ≤ `INCREMENTAL_MAX_QUEUE` (default 5); depth 18 otherwise (catch-up mode).
+- FR-ANALYSE-11: The post-game pass-1 step MUST skip any ply for which a `move_evals` row already exists for that `(game_id, ply)`.
+- FR-ANALYSE-12: Incremental pre-evaluation results MUST be stored in `move_evals` with the same schema as post-game pass-1 results; they MUST be usable by pass-2 without re-evaluation.
+- FR-ANALYSE-13: If a game is abandoned or resigned, any pre-evaluated `move_evals` rows MUST be retained and used when post-game analysis runs.
 
 ### FR-GRADE: Move grading
 
@@ -118,6 +123,9 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 - FR-ENGINE-2: One engine instance per active game MUST be spawned and killed on socket close.
 - FR-ENGINE-3: Engine spawn MUST retry 3 times with exponential backoff + jitter before raising.
 - FR-ENGINE-4: `ENGINE_MODE=native|container` MUST switch binary paths at the composition root.
+- FR-ENGINE-5: The game engine (requestMove) MUST be configured with `Threads=1`, `Hash=16`; strength-limited SF opponents and Maia policy evals are single-threaded by design.
+- FR-ENGINE-6: The analysis SF MUST use `Threads=4`, `Hash=512` while a game is in progress (incremental phase), and MUST reconfigure to `Threads=6`, `Hash=1024` once the game ends (post-game phase). Reconfiguration MUST use `setoption` before the first eval of each phase.
+- FR-ENGINE-7: The analysis engine and the game engine MUST be separate OS processes and MUST NOT share a UCI client instance.
 
 ---
 
@@ -182,15 +190,30 @@ GET  /api/stats
 
 | ID | Bound | Derivation |
 |---|---|---|
-| NFR-A1 | Pass 1: ≤ 2.0 s/position | 81 positions × 2.0 = 162 s |
-| NFR-A2 | Pass 2: ≤ 6.0 s/candidate | ≤ 8 candidates × 6.0 = 48 s |
+| NFR-A1 | Post-game pass 1: ≤ 2.0 s/position | Threads=6, Hash=1024, depth 18; 81 positions × 2.0 = 162 s (cold path only) |
+| NFR-A1b | Incremental pass 1: ≤ 3.5 s/position | Threads=4, Hash=512, depth 20; tighter threads, deeper depth, ample wall-clock during play |
+| NFR-A2 | Pass 2: ≤ 7.0 s/candidate | Threads=6, Hash=1024, depth 22, MultiPV=3; ≤ 8 candidates × 7.0 = 56 s |
 | NFR-A3 | Maia probe: ≤ 0.5 s/candidate | 8 × 0.5 = 4 s |
-| NFR-A4 | 40-move game end-to-end: ≤ 4 min | 162 + 48 + 4 = 214 s ≈ 3.6 min |
+| NFR-A4 | 40-move game, cold path (no pre-evals): ≤ 4 min | 162 + 56 + 4 = 222 s ≈ 3.7 min |
+| NFR-A5 | 40-move game, pre-eval path (all plies cached): ≤ 70 s | pass 1 ≈ 0 s + pass 2 ≤ 56 s + Maia ≤ 4 s + overhead ≤ 10 s |
 | NFR-ENG | UCI handshake timeout | 10 s |
 | NFR-WS | Reconnect backoff cap | 30 s |
 | NFR-TUI | Full board frame redraw | ≤ 16 ms |
 | NFR-IMG | Docker image size | ≤ 850 MB |
 | NFR-COV | Branch coverage | ≥ 90% over declared scope |
+
+**Resource budget (10-core M4, 8 GB RAM):**
+
+| Engine | Process key | Threads | Hash | Phase |
+|---|---|---|---|---|
+| Game (Maia/SF-limited) | `maia-N` / `stockfish` | 1 | 16 MB | during play |
+| Analysis SF (incremental) | `sf-analysis` | 4 | 512 MB | during play |
+| Analysis SF (post-game) | `sf-analysis` (reconfigured) | 6 | 1024 MB | post-game |
+| Maia analysis (findability) | `maia-analysis-N` | 2 | 32 MB | post-game |
+
+Cores accounted for during play: 1 (game) + 4 (analysis) + 2 (OS/Node) = 7 of 10 — 3 free.
+Cores post-game: 6 (analysis SF) + 2 (Maia) + 2 (OS/Node) = 10 — fully utilised.
+RAM: 16 + 512 + 32 = 560 MB peak; post-game 1024 + 32 = 1056 MB — well within 8 GB.
 
 ### Coverage scope
 

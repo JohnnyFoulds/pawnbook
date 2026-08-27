@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { expectedScore, updateElo, kFactor, validateRanked } from '../../src/domain/game/elo.js';
+import { ELO_FLOOR } from '../../src/shared/balance.js';
 
 describe('elo', () => {
   it('expected score is 0.5 for equal ratings', () => {
@@ -56,5 +57,16 @@ describe('elo', () => {
 
   it('an opponent with a null rating cannot produce a ranked game', () => {
     expect(() => validateRanked({ oppElo: null })).toThrow();
+  });
+
+  it('rating cannot drop below ELO_FLOOR', () => {
+    // Start just above the floor, lose heavily — should land at exactly ELO_FLOOR
+    const result = updateElo({ myElo: ELO_FLOOR + 5, oppElo: 3190, score: 0, gamesPlayed: 100 });
+    expect(result.newElo).toBeGreaterThanOrEqual(ELO_FLOOR);
+  });
+
+  it('ELO_FLOOR is enforced even for a catastrophic rating collapse', () => {
+    const result = updateElo({ myElo: ELO_FLOOR, oppElo: 3190, score: 0, gamesPlayed: 100 });
+    expect(result.newElo).toBe(ELO_FLOOR);
   });
 });

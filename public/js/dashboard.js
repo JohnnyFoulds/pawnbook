@@ -62,11 +62,11 @@ async function init() {
         ? `Suggested: ${state.suggestedOpponent}`
         : 'Choose your opponent';
 
-    // Sparklines
-    if (state.eloHistory?.length) {
-      const canvas = document.getElementById('spark-elo');
-      if (canvas) drawSparkline(canvas, state.eloHistory.map((h) => h.elo));
-    }
+    // Hide sparkline canvases — no per-day due/streak history available from the API yet
+    ['spark-due', 'spark-streak'].forEach((id) => {
+      const c = document.getElementById(id);
+      if (c) c.style.display = 'none';
+    });
 
     // ELO chart
     if (state.eloHistory?.length) {

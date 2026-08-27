@@ -27,6 +27,8 @@ All parameters live in `src/shared/balance.js`. A balance change requires a `doc
 | `GRADUATE_INTERVAL_D` | 180 | 90–365 | Cards retire while still shaky |
 | `ENDGAME_MATERIAL_MAX` | 13 | — | Phase classification wrong |
 | `OPENING_PLY_MAX` | 20 | — | Phase classification wrong |
+| `INCREMENTAL_MAX_QUEUE` | 5 | 2–10 | Low: analysis engine idles between moves at max depth. High: queue piles up and depth falls back to 18 too often |
+| `INCREMENTAL_DEPTH` | 20 | 18–22 | Low: no benefit over post-game. High: queue piles up faster than moves arrive in fast games |
 
 ## Changelog
 

@@ -110,6 +110,10 @@ export class SqliteGameRepository {
     ).all(gameId);
   }
 
+  abandonAllInProgress() {
+    this._db.prepare("UPDATE games SET status='abandoned' WHERE status='in_progress'").run();
+  }
+
   /** @param {string} gameId @param {object} opts */
   updateElo(gameId, { eloBefore, eloAfter, historyId, recordedAt }) {
     const updateGame = this._db.prepare(
@@ -156,10 +160,43 @@ export class SqliteGameRepository {
     ).all(gameId);
   }
 
+  /** @returns {Array<{classification: string, played_at: number}>} player-mover classified moves */
+  getPlayerMoveClassifications() {
+    return this._db.prepare(`
+      SELECT me.classification, g.played_at
+      FROM move_evals me
+      JOIN games g ON g.id = me.game_id
+      WHERE g.status = 'finished' AND me.mover = 'player' AND me.classification IS NOT NULL
+      ORDER BY g.played_at ASC
+    `).all();
+  }
+
+  /**
+   * Save a partial eval row during incremental pre-evaluation (does not overwrite complete rows).
+   * @param {string} gameId
+   * @param {number} ply
+   * @param {string} fen
+   * @param {{cp: number|null, mate: number|null, bestmove: string, pv: string}} evalData
+   */
+  savePreEval(gameId, ply, fen, evalData) {
+    this._db.prepare(`
+      INSERT OR IGNORE INTO move_evals (game_id, ply, fen, cp_white, mate_in, best_move_uci, pv)
+      VALUES (@game_id, @ply, @fen, @cp_white, @mate_in, @best_move_uci, @pv)
+    `).run({
+      game_id: gameId,
+      ply,
+      fen,
+      cp_white: evalData.cp ?? null,
+      mate_in: evalData.mate ?? null,
+      best_move_uci: evalData.bestmove ?? null,
+      pv: evalData.pv ?? null,
+    });
+  }
+
   /** @param {object} eval_ */
   saveMoveEval(eval_) {
     this._db.prepare(`
-      INSERT OR IGNORE INTO move_evals (
+      INSERT OR REPLACE INTO move_evals (
         game_id, ply, fen, move_uci, move_san, cp_white, mate_in,
         best_move_uci, pv, mover, win_before, win_after, cp_loss,
         win_loss_pts, classification, move_accuracy, alt_moves_json
@@ -211,6 +248,7 @@ export class SqliteGameRepository {
       accuracy: row.accuracy,
       opponentAccuracy: row.opponent_accuracy,
       analysisState: row.analysis_state,
+      analysisError: row.analysis_error ?? null,
       analysedAt: row.analysed_at,
     };
   }
@@ -321,6 +359,31 @@ export class SqlitePuzzleRepository {
       FROM puzzles p
       LEFT JOIN fsrs_cards f ON f.puzzle_id = p.id
     `).all();
+  }
+
+  /** @returns {Object<string, number>} map of gameId → puzzle count */
+  getPuzzleCountsByGameId() {
+    const rows = this._db.prepare(
+      'SELECT source_game_id, COUNT(*) as count FROM puzzles GROUP BY source_game_id'
+    ).all();
+    const map = {};
+    for (const r of rows) map[r.source_game_id] = r.count;
+    return map;
+  }
+
+  /**
+   * Cards not yet due — for drill-ahead / practice mode.
+   * @param {number} now — timestamp ms
+   * @returns {object[]}
+   */
+  getPracticeCards(now) {
+    return this._db.prepare(`
+      SELECT p.*, f.due, f.stability, f.difficulty, f.reps, f.lapses, f.state, f.graduated
+      FROM puzzles p
+      JOIN fsrs_cards f ON f.puzzle_id = p.id
+      WHERE f.due > ? AND f.graduated = 0
+      ORDER BY p.instructiveness DESC
+    `).all(now);
   }
 
   /**

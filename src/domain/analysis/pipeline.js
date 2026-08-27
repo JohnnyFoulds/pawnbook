@@ -26,31 +26,49 @@ const PASS_WEIGHTS = [0.76, 0.22, 0.02];
  * @param {string} opts.maiaModel
  * @param {number} opts.playerElo
  * @param {boolean} opts.wasTimed
+ * @param {object[]} [opts.existingEvals] — move_evals rows already in the DB; pass-1 skips those positions
  * @param {(event: object) => void} [opts.onProgress]
  * @returns {Promise<{moveEvals: object[], accuracy: number, opponentAccuracy: number, puzzleCandidates: object[]}>}
  */
 export async function runAnalysis({
   plies, playerColor, sfClient, maiaClient, maiaModel, playerElo: _playerElo, wasTimed: _wasTimed,
+  existingEvals = [],
   onProgress = () => {},
 }) {
   const chess = new Chess();
   const positions = [];
 
   // Build position list: startpos + each position after every ply
-  positions.push({ fen: chess.fen(), ply: 0 });
+  positions.push({ fen: chess.fen(), ply: 0, moveSan: null });
   for (const uci of plies) {
-    chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
-    positions.push({ fen: chess.fen(), ply: positions.length });
+    const moveResult = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+    positions.push({ fen: chess.fen(), ply: positions.length, moveSan: moveResult?.san ?? null });
   }
 
   const total = positions.length;
   const pass1Results = [];
 
+  // Build a map from position index → stored eval so pass-1 can skip engine calls (FR-ANALYSE-11).
+  // move_evals row at ply=P stores the eval of positions[P-1], so idx = ply - 1.
+  const storedEvalByIdx = new Map();
+  for (const e of existingEvals) {
+    const idx = (e.ply ?? 0) - 1;
+    if (idx >= 0) {
+      storedEvalByIdx.set(idx, {
+        cp: e.cp_white ?? e.cpWhite ?? null,
+        mate: e.mate_in ?? e.mateIn ?? null,
+        bestmove: e.best_move_uci ?? e.bestMoveUci ?? null,
+        pv: e.pv ?? null,
+      });
+    }
+  }
+
   // ── Pass 1: full game, every position ────────────────────────────────────
   log.debug({ total }, 'analysis pass 1 starting');
   for (let i = 0; i < positions.length; i++) {
     const { fen } = positions[i];
-    const evalResult = await sfClient.eval(fen, { depth: 18 });
+    const stored = storedEvalByIdx.get(i);
+    const evalResult = stored?.bestmove ? stored : await sfClient.eval(fen, { depth: 18 });
     pass1Results.push({ ...positions[i], ...evalResult });
 
     const pct = Math.round(((i + 1) / total) * 100 * PASS_WEIGHTS[0]);
@@ -72,7 +90,9 @@ export async function runAnalysis({
     const moverColor = ply % 2 === 1 ? 'white' : 'black';
     const mover = moverColor === playerColor ? 'player' : 'opponent';
 
-    const cpBeforeWhite = before.cp ?? 0;
+    // Synthetic +0.15 prior for White's first move (FR-GRADE-4): the starting position
+    // is not equal — White has a small statistical advantage, so use 15cp instead of 0.
+    const cpBeforeWhite = (i === 0) ? 15 : (before.cp ?? 0);
     const cpAfterWhite  = after.cp ?? 0;
 
     const winBeforeWhite = winPct(cpBeforeWhite);
@@ -87,7 +107,22 @@ export async function runAnalysis({
     const cpLoss = moverColor === 'white'
       ? Math.max(0, cpBeforeWhite - cpAfterWhite)
       : Math.max(0, cpAfterWhite - cpBeforeWhite);
-    const { classification } = classify(winLoss, cpLoss);
+    // Detect mate scenarios for accurate classification
+    const hadForcedMate = moverColor === 'white'
+      ? (before.mate != null && before.mate > 0)
+      : (before.mate != null && before.mate < 0);
+    const afterHasForcedMateForMover = moverColor === 'white'
+      ? (after.mate != null && after.mate > 0)
+      : (after.mate != null && after.mate < 0);
+    const walkedIntoMate = moverColor === 'white'
+      ? (after.mate != null && after.mate < 0)
+      : (after.mate != null && after.mate > 0);
+    const mateMissed = hadForcedMate && !afterHasForcedMateForMover;
+    const { classification } = classify(winLoss, cpLoss, {
+      wasMate: walkedIntoMate,
+      mateMissed,
+      cpBefore: cpBeforeWhite,
+    });
     const accuracy = moveAccuracy(winBefore, winAfter);
 
     if (mover === 'player') playerAccuracies.push(accuracy);
@@ -98,7 +133,7 @@ export async function runAnalysis({
       ply,
       fen: before.fen,
       moveUci: plies[i],
-      moveSan: null, // filled if needed
+      moveSan: after.moveSan ?? null,
       cpWhite: before.cp,
       mateIn: before.mate,
       bestMoveUci: before.bestmove,
@@ -122,7 +157,7 @@ export async function runAnalysis({
   log.debug({ candidates: candidates.length }, 'analysis pass 2 starting');
   for (let i = 0; i < candidates.length; i++) {
     const c = candidates[i];
-    const deepEval = await sfClient.eval(c.fen, { depth: 20, multiPV: 3 });
+    const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3 });
     const altMoves = (deepEval.lines ?? [])
       .filter(l => l.pv && l.pv.split(' ')[0] !== c.bestMoveUci)
       .map(l => ({ uci: l.pv.split(' ')[0], pv: l.pv, cp: l.cp }))

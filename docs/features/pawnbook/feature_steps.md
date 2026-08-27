@@ -309,3 +309,33 @@ drill: feedback leads with a glyph and survives --plain and --ascii
 **Branch:** `docs/phase-11-review`
 
 8-section review of the implementation, findings labelled `A-1…A-n`. `implementation_plan.md` archived. `feature_spec.md` stays living.
+
+---
+
+## Phase 12 — Incremental analysis (pre-evaluation during play)
+
+**Branch:** `feat/phase-12-incremental-analysis`  
+**Files:** `src/adapters/engine/engine-pool.js`, `src/api/ws/analysis-service.js`, `src/domain/analysis/pipeline.js`  
+**Spec refs:** FR-ANALYSE-9–13, FR-ENGINE-5–7, NFR-A1b, NFR-A5
+
+**Design:** After each `move` WS message is processed, the server submits the resulting FEN to the serialised analysis queue at depth 20 (Threads=4, Hash=512). By game-end, most or all pass-1 evals are cached in `move_evals`. The post-game pipeline skips any ply with an existing row and jumps straight to pass-2. When the game ends, the analysis engine is reconfigured to Threads=6, Hash=1024 before pass-2 begins.
+
+```
+incremental: after each accepted move a pass-1 eval job is queued for the resulting FEN
+incremental: the queued job stores the result in move_evals(game_id, ply)
+incremental: the post-game pipeline skips plies that already have a move_evals row
+incremental: depth 20 is used when queue depth <= INCREMENTAL_MAX_QUEUE (default 5)
+incremental: depth 18 is used when queue depth > INCREMENTAL_MAX_QUEUE (catch-up mode)
+incremental: a game where all plies were pre-evaluated reaches analysis_done in <= 70 s
+incremental: a partially pre-evaluated game uses cached rows and only runs remaining plies
+incremental: abandoned-game move_evals rows are kept and not deleted
+incremental: pre-evaluated rows are indistinguishable from post-game pass-1 rows in schema
+pool: game SF engine (requestMove) is configured with Threads=1, Hash=16
+pool: analysis SF uses Threads=4, Hash=512 during the play phase
+pool: analysis SF is reconfigured to Threads=6, Hash=1024 before post-game pass-2
+pool: analysis SF reconfiguration uses setoption, not process restart
+pool: game engine and analysis engine are never the same UciEngineClient instance
+pipeline: pass-2 depth is 22 (not 20)
+```
+
+**DoD:** All tests green; `make verify` passes; a real game measured end-to-end shows post-game analysis completes in ≤ 70 s when pre-eval ran during play.

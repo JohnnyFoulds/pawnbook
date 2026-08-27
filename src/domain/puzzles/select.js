@@ -5,12 +5,13 @@
 
 import { Chess } from 'chess.js';
 
-import { FINDABILITY_MIN, PUZZLES_PER_GAME_MAX, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
+import {
+  FINDABILITY_MIN, PUZZLES_PER_GAME_MAX, NEAR_MISS_WIN_PTS,
+  ENDGAME_MATERIAL_MAX, OPENING_PLY_MAX,
+} from '../../shared/balance.js';
 
 /** Point values for non-king, non-pawn material. */
 const PIECE_VALUES = { q: 9, r: 5, b: 3, n: 3 };
-const ENDGAME_MATERIAL_MAX = 13;
-const OPENING_PLY_MAX = 20;
 
 /**
  * Derive the game phase from a FEN and ply number.

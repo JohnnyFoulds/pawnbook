@@ -6,6 +6,12 @@
 
 import { test, expect } from '@playwright/test';
 
+// Abandon any leftover in_progress game before each test so the play page
+// shows the setup panel rather than auto-resuming.
+test.beforeEach(async ({ request }) => {
+  await request.post('/api/debug/reset');
+});
+
 // Collect console errors and failed network requests for each test.
 function capturePageErrors(page) {
   const errors = [];

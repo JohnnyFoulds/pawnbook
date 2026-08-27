@@ -3,7 +3,7 @@
  * Standard Elo rating with FIDE ±400 diff clamp and K-factor tiers.
  */
 
-import { ELO_DIFF_CLAMP, K_PROVISIONAL, K_MID, K_HIGH } from '../../shared/balance.js';
+import { ELO_DIFF_CLAMP, ELO_FLOOR, K_PROVISIONAL, K_MID, K_HIGH } from '../../shared/balance.js';
 
 /**
  * @param {{ gamesPlayed: number, myElo: number }} opts
@@ -39,7 +39,7 @@ export function updateElo({ myElo, oppElo, score, gamesPlayed }) {
   const K = kFactor({ gamesPlayed, myElo });
   const exp = expectedScore(myElo, oppElo);
   const delta = Math.round(K * (score - exp));
-  return { newElo: myElo + delta, delta };
+  return { newElo: Math.max(ELO_FLOOR, myElo + delta), delta };
 }
 
 /**

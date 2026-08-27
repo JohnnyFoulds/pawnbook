@@ -50,6 +50,28 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         }
       }
 
+      // Per-game history for date-range filtering of wins/losses/draws
+      const gameHistory = games
+        .filter(g => g.status === 'finished')
+        .map(g => ({ result: g.result, playedAt: g.playedAt }));
+
+      // Per-puzzle arrays for date-range filtering of phase bars
+      const mistakesByPhase = allPuzzles.map(p => ({
+        phase: p.phase,
+        createdAt: p.created_at ?? p.createdAt ?? null,
+      }));
+
+      // Quality mix from move_evals (all 7 tiers across all player moves)
+      const moveClassifications = gameRepo.getPlayerMoveClassifications?.() ?? [];
+      const qualityMix = {};
+      for (const m of moveClassifications) {
+        qualityMix[m.classification] = (qualityMix[m.classification] || 0) + 1;
+      }
+      const allMoves = moveClassifications.map(m => ({
+        classification: m.classification,
+        createdAt: m.played_at,
+      }));
+
       res.json({
         elo,
         eloDelta,
@@ -61,6 +83,10 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         losses,
         draws,
         phaseBreakdown,
+        gameHistory,
+        mistakesByPhase,
+        qualityMix,
+        allMoves,
       });
     } catch (err) {
       next(err);

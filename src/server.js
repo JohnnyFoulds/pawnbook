@@ -21,7 +21,7 @@ import { statsRouter } from './api/routes/stats.js';
 import { stateRouter } from './api/routes/state.js';
 import { attachWebSocketServer } from './api/ws/connection.js';
 import { createEnginePool } from './adapters/engine/engine-pool.js';
-import { PORT, BIND_ADDR, DB_PATH, logger } from './config.js';
+import { PORT, BIND_ADDR, DB_PATH, NODE_ENV, logger } from './config.js';
 import { initTelemetry } from './telemetry.js';
 
 const log = logger.child({ mod: 'server' });
@@ -38,6 +38,10 @@ async function start() {
   const clock       = new SystemClock();
   const scheduler   = new FsrsScheduler();
 
+  // Abandon any games left in_progress from the previous server run — engine
+  // connections are dead after a restart so those games cannot be resumed.
+  gameRepo.abandonAllInProgress();
+
   // Verify settings.elo is consistent with elo_history
   const history = gameRepo.getEloHistory();
   if (history.length > 0) {
@@ -53,6 +57,9 @@ async function start() {
     log.warn({ BIND_ADDR }, 'binding to non-loopback address — this app has no authentication');
   }
 
+  // ── Engine pool (created before routes so /analyse can use it) ───────────
+  const enginePool = createEnginePool();
+
   // ── Express app ───────────────────────────────────────────────────────────
   const app = express();
   app.use(express.json());
@@ -65,17 +72,22 @@ async function start() {
 
   // REST routes
   app.use('/api/opponents', opponentsRouter());
-  app.use('/api/games',     gamesRouter({ gameRepo, puzzleRepo }));
+  app.use('/api/games',     gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }));
   app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }));
   app.use('/api/stats',     statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }));
   app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }));
+
+  if (NODE_ENV === 'test') {
+    const { debugRouter } = await import('./api/routes/debug.js');
+    app.use('/api/debug', debugRouter({ gameRepo }));
+    log.info('debug routes mounted (NODE_ENV=test)');
+  }
 
   app.use(errorMiddleware);
 
   // ── HTTP + WS server ─────────────────────────────────────────────────────
   const httpServer = createServer(app);
 
-  const enginePool = createEnginePool();
   attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool });
 
   httpServer.listen(PORT, BIND_ADDR, () => {

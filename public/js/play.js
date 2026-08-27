@@ -321,7 +321,6 @@ function onGameOver(msg) {
   analysisRunning = true;
 
   document.getElementById('review-link').href = `review.html?game=${gameId}`;
-  document.getElementById('quiz-link')?.setAttribute('href', `quiz.html?game=${gameId}`);
 
   document.getElementById('play-again-btn').addEventListener('click', () => {
     overlay.style.display = 'none';
@@ -329,6 +328,9 @@ function onGameOver(msg) {
     document.getElementById('setup-panel').style.display = '';
     gameId = null;
     analysisRunning = false;
+    plyCount = 0;
+    document.getElementById('move-list').innerHTML = '';
+    if (ws && ws.readyState !== WebSocket.CLOSED) ws.close();
   });
 }
 
@@ -346,7 +348,7 @@ function onAnalysisDone(msg) {
   const reviewLink = document.getElementById('review-link');
   if (reviewLink && count > 0) {
     reviewLink.textContent = `Review & quiz (${count} positions)`;
-    reviewLink.href = `quiz.html?game=${gameId}`;
+    // href stays as review.html — set in onGameOver
   }
 }
 

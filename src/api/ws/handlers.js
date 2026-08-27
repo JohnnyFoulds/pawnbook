@@ -10,6 +10,7 @@ import { ZodError } from 'zod';
 import { InboundMessageSchema } from '../../schemas/messages.js';
 import { GameSession } from '../../domain/game/session.js';
 import { getOpponent } from '../../domain/game/roster.js';
+import { updateElo } from '../../domain/game/elo.js';
 import { ErrorCode } from '../../errors.js';
 import { logger } from '../../config.js';
 
@@ -21,7 +22,7 @@ const log = logger.child({ mod: 'ws-handlers' });
  * @param {import('../../ports/clock.js').Clock} deps.clock
  * @returns {(ws: import('ws').WebSocket, raw: string) => Promise<void>}
  */
-export function makeMessageHandler({ gameRepo, clock }) {
+export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool = null }) {
   /** @type {Map<string, GameSession>} ws-scoped active sessions */
   const sessions = new Map();
 
@@ -47,9 +48,9 @@ export function makeMessageHandler({ gameRepo, clock }) {
     try {
       switch (msg.type) {
         case 'new_game': return await handleNewGame(ws, msg, { gameRepo, clock, sessions });
-        case 'move':     return await handleMove(ws, msg, { gameRepo, sessions });
-        case 'resign':   return await handleResign(ws, { gameRepo, sessions });
-        case 'hint':     return await handleHint(ws, { sessions });
+        case 'move':     return await handleMove(ws, msg, { gameRepo, settingsRepo, sessions });
+        case 'resign':   return await handleResign(ws, { gameRepo, settingsRepo, sessions });
+        case 'hint':     return await handleHint(ws, { sessions, enginePool });
         case 'resume':   return await handleResume(ws, msg, { gameRepo, clock, sessions });
       }
     } catch (err) {
@@ -119,7 +120,7 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
   }
 }
 
-async function handleMove(ws, msg, { gameRepo, sessions }) {
+async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
 
@@ -131,7 +132,7 @@ async function handleMove(ws, msg, { gameRepo, sessions }) {
   gameRepo.appendMove(session.id, session.moves[session.moves.length - 1]);
 
   if (moveResult.gameOver) {
-    finishGame(ws, session, moveResult.result, gameRepo);
+    finishGame(ws, session, moveResult.result, gameRepo, settingsRepo);
     return;
   }
 
@@ -148,20 +149,30 @@ async function handleMove(ws, msg, { gameRepo, sessions }) {
   ws.emit('engine_turn', session);
 }
 
-async function handleResign(ws, { gameRepo, sessions }) {
+async function handleResign(ws, { gameRepo, settingsRepo, sessions }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
   log.info({ gameId: session.id }, 'player resigned');
   const result = session.resign();
-  finishGame(ws, session, result, gameRepo);
+  finishGame(ws, session, result, gameRepo, settingsRepo);
 }
 
-async function handleHint(ws, { sessions }) {
+async function handleHint(ws, { sessions, enginePool }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
   session.assertHintAllowed(); // throws HintNotAllowedError if ranked
-  // Hint piece selection is resolved by the engine layer; stub response here
-  // pieceSquare must be a non-null string — TUI calls .slice(0,1) on it
+
+  if (enginePool) {
+    try {
+      const sfClient = await enginePool.getAnalysisSfClient();
+      const result = await sfClient.eval(session.fen, { depth: 10 });
+      const pieceSquare = result.bestmove?.slice(0, 2) ?? 'a1';
+      send(ws, { type: 'hint_result', pieceSquare });
+      return;
+    } catch (err) {
+      log.warn({ err }, 'hint engine eval failed — falling back');
+    }
+  }
   send(ws, { type: 'hint_result', pieceSquare: 'a1' });
 }
 
@@ -211,26 +222,80 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function finishGame(ws, session, result, gameRepo) {
+function finishGame(ws, session, result, gameRepo, settingsRepo) {
   log.info({ gameId: session.id, result: result.result, termination: result.termination }, 'game finished');
-  gameRepo.save({
-    id: session.id,
-    opponentId: session.opponent.id,
-    opponentElo: session.opponent.elo,
-    playerColor: session.playerColor,
-    ranked: session.ranked,
-    status: 'finished',
-    result: result.result,
-    termination: result.termination,
-    playedAt: Date.now(),
-  });
+
+  let eloBefore = null;
+  let eloAfter = null;
+
+  if (session.ranked && session.opponent.elo != null && settingsRepo) {
+    try {
+      const storedElo = parseInt(settingsRepo.get('elo') ?? '1200', 10);
+      // Count ranked finished games for K-factor (excluding this game, which isn't saved yet)
+      const history = gameRepo.getEloHistory();
+      const gamesPlayed = history.length;
+      const score = result.result === 'win' ? 1 : result.result === 'draw' ? 0.5 : 0;
+      const { newElo, delta: _delta } = updateElo({
+        myElo: storedElo,
+        oppElo: session.opponent.elo,
+        score,
+        gamesPlayed,
+      });
+      eloBefore = storedElo;
+      eloAfter = newElo;
+      gameRepo.save({
+        id: session.id,
+        opponentId: session.opponent.id,
+        opponentElo: session.opponent.elo,
+        playerColor: session.playerColor,
+        ranked: session.ranked,
+        status: 'finished',
+        result: result.result,
+        termination: result.termination,
+        playedAt: Date.now(),
+        eloBefore,
+        eloAfter,
+      });
+      gameRepo.updateElo(session.id, {
+        eloBefore,
+        eloAfter,
+        recordedAt: Date.now(),
+      });
+      log.info({ gameId: session.id, eloBefore, eloAfter }, 'elo updated');
+    } catch (err) {
+      log.error({ err, gameId: session.id }, 'elo update failed — saving game without elo');
+      gameRepo.save({
+        id: session.id,
+        opponentId: session.opponent.id,
+        opponentElo: session.opponent.elo,
+        playerColor: session.playerColor,
+        ranked: session.ranked,
+        status: 'finished',
+        result: result.result,
+        termination: result.termination,
+        playedAt: Date.now(),
+      });
+    }
+  } else {
+    gameRepo.save({
+      id: session.id,
+      opponentId: session.opponent.id,
+      opponentElo: session.opponent.elo,
+      playerColor: session.playerColor,
+      ranked: session.ranked,
+      status: 'finished',
+      result: result.result,
+      termination: result.termination,
+      playedAt: Date.now(),
+    });
+  }
 
   send(ws, {
     type: 'game_over',
     result: result.result,
     termination: result.termination,
-    eloBefore: null,
-    eloAfter: null,
+    eloBefore,
+    eloAfter,
   });
 
   // Signal connection.js to trigger background analysis

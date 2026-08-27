@@ -6,6 +6,8 @@
 
 import { Router } from 'express';
 
+import { getRosterTable } from '../../domain/game/roster.js';
+
 /**
  * @param {object} deps
  * @param {import('../../ports/repositories.js').SettingsRepository} deps.settingsRepo
@@ -38,12 +40,14 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
         ? eloHistory[eloHistory.length - 1].elo - eloHistory[eloHistory.length - 2].elo
         : null;
 
+      const puzzleCountsByGame = puzzleRepo.getPuzzleCountsByGameId?.() ?? {};
+
       const recentGames = gameRepo.listRecent(8).map((g) => ({
         id: g.id,
         opponentId: g.opponentId,
         result: g.result,
         accuracy: g.accuracy,
-        puzzleCount: null,
+        puzzleCount: puzzleCountsByGame[g.id] ?? 0,
         playedAt: g.playedAt ? new Date(g.playedAt).toISOString() : null,
       }));
 
@@ -51,6 +55,18 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
       const gamesPlayed = finishedGames.length;
 
       const inProgressGame = gameRepo.listRecent(10).find(g => g.status === 'in_progress');
+
+      // Suggest the opponent with ELO closest to the player's current ELO
+      let suggestedOpponent = null;
+      try {
+        const ratedOpponents = getRosterTable().filter(o => o.elo != null);
+        if (ratedOpponents.length) {
+          const nearest = ratedOpponents.reduce((best, opp) =>
+            Math.abs(opp.elo - elo) < Math.abs(best.elo - elo) ? opp : best
+          );
+          suggestedOpponent = nearest.id;
+        }
+      } catch { /* non-critical */ }
 
       res.json({
         elo,
@@ -62,7 +78,7 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
         eloDelta,
         eloHistory: eloHistory.map((h) => ({ elo: h.elo, recordedAt: h.recordedAt })),
         recentGames,
-        suggestedOpponent: null,
+        suggestedOpponent,
         inProgressGameId: inProgressGame?.id ?? null,
         inProgressOpponentId: inProgressGame?.opponentId ?? null,
       });

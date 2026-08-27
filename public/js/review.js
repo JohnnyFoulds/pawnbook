@@ -37,13 +37,25 @@ async function boot() {
     document.querySelectorAll('#due-count').forEach((el) => { el.textContent = String(dueCount); });
 
     renderHeader(review);
+
+    if (review.analysisState !== 'done') {
+      const isFailed = review.analysisState === 'failed';
+      const msg = isFailed
+        ? `Analysis failed${review.analysisError ? ': ' + review.analysisError : ''}. You can retry from the Games page.`
+        : 'Analysis is still running — this page will refresh automatically.';
+      document.getElementById('acc-bars').innerHTML =
+        `<div style="color:var(--ink-muted);padding:16px 0">${msg}</div>`;
+      if (!isFailed) setTimeout(() => location.reload(), 3000);
+      return;
+    }
+
     renderAccuracyBars(review);
     renderMoveList(review.moves ?? []);
     renderEvalGraphSection(review);
     renderBreakdownSection(review);
     renderMistakeList(review);
     setupQuizLink(gameId, review.puzzleCount ?? 0);
-    setupBoard(review);
+    await setupBoard(review);
   } catch (err) {
     console.error('Review error:', err);
     document.getElementById('game-meta').textContent = 'Failed to load review.';
@@ -225,20 +237,48 @@ function setupQuizLink(gameId, puzzleCount) {
 // ── Scrub board (read-only) ────────────────────────────────────────────────
 
 let reviewMoves = [];
+let reviewBoard = null;
 
-function setupBoard(review) {
+async function setupBoard(review) {
   reviewMoves = review.moves ?? [];
   const el = document.getElementById('board-wrap');
   el.innerHTML = '';
-
   document.getElementById('ply-label').textContent = '';
+
+  if (!reviewMoves.length) return;
+
+  const [{ Chessboard }, { createBoard }] = await Promise.all([
+    import('https://cdn.jsdelivr.net/npm/cm-chessboard@8/src/Chessboard.js'),
+    import('./lib/board.js'),
+  ]);
+
+  // reviewMoves[0].fen is the position before move 1 (= start position)
+  const startFen = reviewMoves[0]?.fen ?? 'start';
+  reviewBoard = await createBoard(el, Chessboard, {
+    readOnly: true,
+    position: startFen,
+    orientation: review.playerColor ?? 'white',
+  });
 }
 
 function scrubToPly(ply) {
   const move = reviewMoves.find((m) => m.ply === ply);
   if (!move) return;
+
+  const plyNum = Math.ceil(ply / 2);
+  const isBlack = ply % 2 === 0;
   document.getElementById('ply-label').textContent =
-    `Move ${Math.ceil(ply / 2)}${ply % 2 === 0 ? '…' : '.'}  ${move.san ?? ''}`;
+    `${plyNum}${isBlack ? '…' : '.'}  ${move.san ?? ''}`;
+
+  if (reviewBoard && move.fen) {
+    const from = move.uci?.slice(0, 2);
+    const to = move.uci?.slice(2, 4);
+    reviewBoard.setPosition(move.fen, from, to);
+  }
+
+  // Highlight active move in the move list
+  document.querySelectorAll('.move-list__move').forEach((el) =>
+    el.classList.toggle('move-list__move--active', parseInt(el.dataset.ply) === ply));
 }
 
 boot();

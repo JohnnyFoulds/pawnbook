@@ -105,7 +105,7 @@ export class UciEngineClient {
 
     const bestmove = bestmoveLine.split(' ')[1];
     const deepest = lines.filter(l => l.depth).sort((a, b) => b.depth - a.depth);
-    const top = deepest[0] ?? {};
+    const top = selectTopLine(deepest, multiPV);
 
     return {
       cp: top.cp ?? null,
@@ -146,6 +146,15 @@ export class UciEngineClient {
   async bestmove(fen) {
     const result = await this.eval(fen, { depth: 1 });
     return result.bestmove;
+  }
+
+  /**
+   * Send a setoption command. Must be called after handshake.
+   * @param {string} name
+   * @param {string|number|boolean} value
+   */
+  setOption(name, value) {
+    this._write(`setoption name ${name} value ${value}\n`);
   }
 
   dispose() {
@@ -213,6 +222,23 @@ export class UciEngineClient {
       }
     });
   }
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Given a list of parsed info lines sorted deepest-first, select the top-line eval.
+ * When multiPV > 1, prefer the line with multipv === 1 at the maximum depth.
+ * @param {object[]} sortedLines — sorted descending by depth
+ * @param {number} multiPV
+ * @returns {object}
+ */
+export function selectTopLine(sortedLines, multiPV) {
+  const maxDepth = sortedLines[0]?.depth ?? 0;
+  const atMaxDepth = sortedLines.filter(l => l.depth === maxDepth);
+  return multiPV > 1
+    ? (atMaxDepth.find(l => l.multipv === 1) ?? atMaxDepth[0] ?? {})
+    : (atMaxDepth[0] ?? {});
 }
 
 // ─── parsers ─────────────────────────────────────────────────────────────────

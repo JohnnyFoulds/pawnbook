@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 
 import { describe, it, expect } from 'vitest';
 
-import { parsePolicyLines } from '../../src/adapters/engine/uci-engine-client.js';
+import { parsePolicyLines, selectTopLine } from '../../src/adapters/engine/uci-engine-client.js';
 import { ScriptedEngineClient } from '../../src/adapters/engine/scripted-engine-client.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -96,5 +96,44 @@ describe('scripted engine client', () => {
     expect(client.calls).toHaveLength(2);
     expect(client.calls[0].type).toBe('eval');
     expect(client.calls[1].type).toBe('policy');
+  });
+});
+
+// ─── selectTopLine (MultiPV top-line selection) ───────────────────────────────
+
+describe('uci: selectTopLine', () => {
+  it('with multiPV=1 returns the first line at max depth', () => {
+    const lines = [
+      { depth: 18, cp: 30, multipv: undefined },
+      { depth: 15, cp: 50 },
+    ];
+    const top = selectTopLine(lines, 1);
+    expect(top.depth).toBe(18);
+    expect(top.cp).toBe(30);
+  });
+
+  it('with multiPV>1 returns the multipv===1 line at max depth', () => {
+    const lines = [
+      { depth: 18, cp: 30, multipv: 2 },  // runner-up at max depth
+      { depth: 18, cp: 50, multipv: 1 },  // best line at max depth
+      { depth: 15, cp: 60, multipv: 1 },  // shallower
+    ];
+    const top = selectTopLine(lines, 3);
+    expect(top.cp).toBe(50);
+    expect(top.multipv).toBe(1);
+  });
+
+  it('with multiPV>1 falls back to first line if no multipv===1 present', () => {
+    const lines = [
+      { depth: 18, cp: 25, multipv: 2 },
+      { depth: 18, cp: 10, multipv: 3 },
+    ];
+    const top = selectTopLine(lines, 3);
+    expect(top.depth).toBe(18);
+    expect(top.cp).toBe(25); // first at max depth
+  });
+
+  it('returns empty object for empty input', () => {
+    expect(selectTopLine([], 1)).toEqual({});
   });
 });

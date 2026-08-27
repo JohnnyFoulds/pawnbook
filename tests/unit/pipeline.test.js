@@ -365,4 +365,41 @@ describe('pipeline', () => {
 
     expect(typeof opponentAccuracy).toBe('number');
   });
+
+  it('regression: existingEvals with bestmove skips the SF call for that position', async () => {
+    // Build a 2-ply game; pre-supply existingEvals covering ply 1 (idx=0)
+    // The SF client records every call; if existingEvals is respected it should
+    // NOT be called for the position at idx=0 (ply=1).
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+
+    const callsBefore = sfClient.calls.length;
+
+    // existingEvals covers ply=1 (idx=0) — the position before the first move
+    const existingEvals = [
+      {
+        ply: 1,
+        cp_white: 15,
+        mate_in: null,
+        best_move_uci: 'e2e4',
+        pv: 'e2e4 e7e5',
+      },
+    ];
+
+    await runAnalysis({
+      plies: ['e2e4', 'e7e5'],
+      playerColor: 'white',
+      sfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+      existingEvals,
+    });
+
+    const totalEvalCalls = sfClient.calls.filter(c => c.type === 'eval').length - callsBefore;
+    // Without skip: 3 calls (positions 0,1,2 for a 2-ply game)
+    // With skip for idx=0: 2 calls
+    expect(totalEvalCalls).toBeLessThan(3);
+  });
 });

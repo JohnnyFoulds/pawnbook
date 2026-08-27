@@ -1,6 +1,7 @@
 /**
  * @module api/routes/puzzles
  * GET  /api/puzzles/due          — due cards for the drill screen
+ * GET  /api/puzzles/practice     — not-yet-due cards for drill-ahead (practice=1)
  * POST /api/puzzles/:id/attempt  — grade an attempt and schedule
  */
 
@@ -45,6 +46,20 @@ export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _set
         cards: cards.map(formatCard),
         total: allDue.length,
         displayTotal: overCap ? `${DUE_SOFT_CAP}+` : String(allDue.length),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/practice', (req, res, next) => {
+    try {
+      const now = clock.now().getTime();
+      const all = puzzleRepo.getPracticeCards?.(now) ?? [];
+      const cards = all.slice(0, DRILL_BATCH);
+      res.json({
+        cards: cards.map(formatCard),
+        total: all.length,
       });
     } catch (err) {
       next(err);
@@ -129,16 +144,40 @@ export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _set
 }
 
 function formatCard(row) {
+  const uci = row.best_move_uci ?? row.bestMoveUci ?? '';
   return {
     puzzleId: row.id,
     fen: row.fen,
     sideToMove: row.side_to_move ?? row.sideToMove,
-    bestMoveUci: row.best_move_uci ?? row.bestMoveUci,
+    bestMoveUci: uci,
     bestMoveSan: row.best_move_san ?? row.bestMoveSan,
     playedMoveSan: row.played_move_san ?? row.playedMoveSan,
+    followupUci: row.followup_uci ?? row.followupUci ?? null,
     winLoss: row.win_loss_pts ?? row.winLossPts,
-    piece: (row.best_move_uci ?? row.bestMoveUci ?? '').charAt(0),
+    piece: pieceAtSquare(row.fen ?? '', uci.slice(0, 2)),
     legalMoves: [],  // populated from chess.js if needed; TUI uses move validation server-side
     ply: row.source_ply ?? row.sourcePly,
+    sourceGameId: row.source_game_id ?? row.sourceGameId ?? null,
   };
+}
+
+function pieceAtSquare(fen, square) {
+  if (!fen || !square || square.length < 2) return '?';
+  const board = fen.split(' ')[0];
+  const file = square.charCodeAt(0) - 97;
+  const rank = parseInt(square[1], 10) - 1;
+  const rowIdx = 7 - rank;
+  const rows = board.split('/');
+  if (rowIdx < 0 || rowIdx >= rows.length) return '?';
+  const names = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King' };
+  let col = 0;
+  for (const ch of rows[rowIdx]) {
+    if (ch >= '1' && ch <= '8') {
+      col += parseInt(ch, 10);
+    } else {
+      if (col === file) return names[ch.toLowerCase()] ?? '?';
+      col++;
+    }
+  }
+  return '?';
 }

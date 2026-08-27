@@ -25,6 +25,9 @@ let attemptNo = 1;
 let hintUsed = false;
 let startMs = 0;
 let currentLegalMoves = [];  // UCI strings for the current puzzle position
+let followupPending = false;
+let followupUci = null;
+let isDrillAhead = false;
 
 async function boot() {
   try {
@@ -42,6 +45,7 @@ async function boot() {
     }
 
     batch = cards.slice(0, BATCH_SIZE);
+    isDrillAhead = false;
     document.getElementById('drill-ui').style.display = '';
     document.getElementById('batch-total').textContent = String(batch.length);
     renderPips();
@@ -49,6 +53,32 @@ async function boot() {
   } catch (err) {
     console.error('Puzzles boot error:', err);
     document.getElementById('empty-state').style.display = '';
+  }
+}
+
+async function bootPractice() {
+  try {
+    const data = await api('/api/puzzles/practice');
+    const cards = data.cards ?? [];
+
+    if (!cards.length) {
+      document.getElementById('empty-state').style.display = '';
+      document.getElementById('empty-state').querySelector('.empty-state__message').textContent =
+        'No practice cards available — play a game first.';
+      return;
+    }
+
+    batch = cards.slice(0, BATCH_SIZE);
+    isDrillAhead = true;
+    solved = 0;
+    missed = 0;
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('drill-ui').style.display = '';
+    document.getElementById('batch-total').textContent = String(batch.length);
+    renderPips();
+    loadCard(0);
+  } catch (err) {
+    console.error('Practice boot error:', err);
   }
 }
 
@@ -75,6 +105,8 @@ function loadCard(idx) {
   const card = batch[idx];
   attemptNo = 1;
   hintUsed = false;
+  followupPending = false;
+  followupUci = null;
   startMs = Date.now();
 
   document.getElementById('batch-progress').textContent = String(idx + 1);
@@ -120,6 +152,25 @@ async function initBoard(fen, sideToMove) {
 }
 
 async function submitMove(uci) {
+  if (followupPending) {
+    followupPending = false;
+    const correct = uci === followupUci;
+    const wrap = document.getElementById('feedback-wrap');
+    if (correct) {
+      wrap.innerHTML = `<div class="drill-feedback drill-feedback--correct">
+        <span class="drill-feedback__glyph">✓</span>
+        <div>Follow-up correct.</div>
+      </div>`;
+    } else {
+      wrap.innerHTML = `<div class="drill-feedback drill-feedback--wrong">
+        <span class="drill-feedback__glyph">✗</span>
+        <div>Not quite — that was the key follow-up.</div>
+      </div>`;
+    }
+    autoAdvance();
+    return;
+  }
+
   const msTaken = Date.now() - startMs;
   const card = batch[batchIdx];
   try {
@@ -131,16 +182,16 @@ async function submitMove(uci) {
         msTaken,
         hintUsed,
         attemptNo,
-        phase: 'drill',
+        phase: isDrillAhead ? 'quiz' : 'drill',
       }),
     });
-    showFeedback(result, card);
+    await showFeedback(result, card);
   } catch (err) {
     console.error('Attempt error:', err);
   }
 }
 
-function showFeedback(result, _card) {
+async function showFeedback(result, _card) {
   const wrap = document.getElementById('feedback-wrap');
   const correct = result.correct;
   const pip = document.getElementById(`pip-${batchIdx}`);
@@ -148,11 +199,31 @@ function showFeedback(result, _card) {
   if (correct) {
     solved++;
     if (pip) { pip.classList.remove('drill-pip--current'); pip.classList.add('drill-pip--solved'); }
+    document.getElementById('action-btns').style.display = 'none';
+
+    const card = batch[batchIdx];
+    if (result.followupRequired && card?.followupUci) {
+      followupPending = true;
+      followupUci = card.followupUci;
+      wrap.innerHTML = `<div class="drill-feedback drill-feedback--correct">
+        <span class="drill-feedback__glyph">✓</span>
+        <div>Correct. Now find the continuation.</div>
+      </div>`;
+      const { Chess } = await import('https://cdn.jsdelivr.net/npm/chess.js@1/+esm');
+      const chess = new Chess(card.fen);
+      const from = card.bestMoveUci.slice(0, 2);
+      const to = card.bestMoveUci.slice(2, 4);
+      const promo = card.bestMoveUci[4];
+      chess.move({ from, to, ...(promo ? { promotion: promo } : {}) });
+      const newSide = card.sideToMove === 'white' ? 'black' : 'white';
+      await initBoard(chess.fen(), newSide);
+      return;
+    }
+
     wrap.innerHTML = `<div class="drill-feedback drill-feedback--correct">
       <span class="drill-feedback__glyph">✓</span>
-      <div>Correct.${result.followupRequired ? ' Now find the continuation.' : ''}</div>
+      <div>Correct.</div>
     </div>`;
-    document.getElementById('action-btns').style.display = 'none';
     autoAdvance();
   } else if (attemptNo === 1) {
     attemptNo = 2;
@@ -211,7 +282,16 @@ document.getElementById('next-btn').addEventListener('click', () => {
 document.getElementById('next-batch-btn').addEventListener('click', async () => {
   solved = 0; missed = 0;
   document.getElementById('summary-state').style.display = 'none';
-  await boot();
+  if (isDrillAhead) {
+    await bootPractice();
+  } else {
+    await boot();
+  }
 });
+
+const drillAheadBtn = document.getElementById('drill-ahead-btn');
+if (drillAheadBtn) {
+  drillAheadBtn.addEventListener('click', () => bootPractice());
+}
 
 boot();

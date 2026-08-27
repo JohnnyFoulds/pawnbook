@@ -26,6 +26,8 @@ let attemptNo = 1;
 let hintUsed = false;
 let startMs = 0;
 let currentLegalMoves = [];  // UCI strings for the current puzzle position
+let followupPending = false;
+let followupUci = null;
 
 async function boot() {
   const gameId = getGameId();
@@ -60,6 +62,8 @@ function loadPosition(idx) {
   currentPuzzleId = pos.puzzleId;
   attemptNo = 1;
   hintUsed = false;
+  followupPending = false;
+  followupUci = null;
   startMs = Date.now();
 
   document.getElementById('pos-num').textContent = String(idx + 1);
@@ -99,6 +103,25 @@ async function initBoard(fen, sideToMove) {
 }
 
 async function submitMove(uci) {
+  if (followupPending) {
+    followupPending = false;
+    const correct = uci === followupUci;
+    const wrap = document.getElementById('feedback-wrap');
+    if (correct) {
+      wrap.innerHTML = `<div class="drill-feedback drill-feedback--correct">
+        <span class="drill-feedback__glyph">✓</span>
+        <div>Follow-up correct.</div>
+      </div>`;
+    } else {
+      wrap.innerHTML = `<div class="drill-feedback drill-feedback--wrong">
+        <span class="drill-feedback__glyph">✗</span>
+        <div>Not quite — that was the key follow-up.</div>
+      </div>`;
+    }
+    showNextAfterDelay();
+    return;
+  }
+
   const msTaken = Date.now() - startMs;
   try {
     const result = await api(`/api/puzzles/${currentPuzzleId}/attempt`, {
@@ -112,30 +135,55 @@ async function submitMove(uci) {
         phase: 'quiz',
       }),
     });
-    showFeedback(result);
+    await showFeedback(result);
   } catch (err) {
     console.error('Attempt error:', err);
   }
 }
 
-function showFeedback(result) {
+async function showFeedback(result) {
   const wrap = document.getElementById('feedback-wrap');
   const correct = result.correct;
 
   if (correct) {
-    wrap.innerHTML = `<div class="drill-feedback drill-feedback--correct">
-      <span class="drill-feedback__glyph">✓</span>
-      <div>Correct.${result.followupRequired ? ' Now find the continuation.' : ''}</div>
-    </div>`;
     document.getElementById('hint-btn').style.display = 'none';
     document.getElementById('skip-btn').style.display = 'none';
+
+    const pos = positions[currentIdx];
+    if (result.followupRequired && pos?.followupUci) {
+      followupPending = true;
+      followupUci = pos.followupUci;
+      wrap.innerHTML = `<div class="drill-feedback drill-feedback--correct">
+        <span class="drill-feedback__glyph">✓</span>
+        <div>Correct. Now find the continuation.</div>
+      </div>`;
+      // Apply the best move to reach the follow-up position
+      const { Chess } = await import('https://cdn.jsdelivr.net/npm/chess.js@1/+esm');
+      const chess = new Chess(pos.fen);
+      const from = pos.bestMoveUci.slice(0, 2);
+      const to = pos.bestMoveUci.slice(2, 4);
+      const promo = pos.bestMoveUci[4];
+      chess.move({ from, to, ...(promo ? { promotion: promo } : {}) });
+      const newSide = pos.sideToMove === 'white' ? 'black' : 'white';
+      await initBoard(chess.fen(), newSide);
+      return;
+    }
+
+    wrap.innerHTML = `<div class="drill-feedback drill-feedback--correct">
+      <span class="drill-feedback__glyph">✓</span>
+      <div>Correct.</div>
+    </div>`;
     showNextAfterDelay();
   } else if (attemptNo === 1) {
     attemptNo = 2;
+    startMs = Date.now();
     wrap.innerHTML = `<div class="drill-feedback drill-feedback--wrong">
       <span class="drill-feedback__glyph">✗</span>
       <div>Not the best. One more try.</div>
     </div>`;
+    // Reset the board so the player can make a second attempt
+    const pos = positions[currentIdx];
+    if (pos) initBoard(pos.fen, pos.sideToMove);
   } else {
     // Teach
     wrap.innerHTML = `<div class="drill-feedback drill-feedback--wrong">

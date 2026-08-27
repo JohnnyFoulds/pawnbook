@@ -95,7 +95,14 @@ export function createEnginePool() {
      * @returns {Promise<import('./uci-engine-client.js').UciEngineClient>}
      */
     async getAnalysisSfClient() {
-      return getClient('sf-analysis', ENGINE_PATHS.stockfish);
+      const key = 'sf-analysis';
+      if (pool.has(key)) return pool.get(key);
+      log.info({ key }, 'starting analysis stockfish');
+      const client = await createUciEngineClient(ENGINE_PATHS.stockfish);
+      client.setOption('Threads', 6);
+      client.setOption('Hash', 1024);
+      pool.set(key, client);
+      return client;
     },
 
     /**
@@ -111,9 +118,10 @@ export function createEnginePool() {
       log.info({ key, maiaId }, 'starting maia analysis engine');
       const client = await createUciEngineClient(ENGINE_PATHS.lc0, [
         `--weights=${weightsPath}`,
-        '--VerboseMoveStats=true',
-        '--PolicyTemperature=1.0',
       ]);
+      // VerboseMoveStats and PolicyTemperature are UCI options, not command-line flags
+      client.setOption('VerboseMoveStats', 'true');
+      client.setOption('PolicyTemperature', '1.0');
       pool.set(key, client);
       return client;
     },

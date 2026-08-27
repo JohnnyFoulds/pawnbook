@@ -24,6 +24,7 @@ export const GREAT_CP_MAX = 25;
 export const GOOD_CP_MAX = 50;
 
 export const ELO_DIFF_CLAMP = 400;
+export const ELO_FLOOR = 100;
 export const K_PROVISIONAL = 40;
 export const K_MID = 20;
 export const K_HIGH = 10;
@@ -39,6 +40,13 @@ export const GRADUATE_INTERVAL_D = 180;
 // Phase derivation thresholds
 export const ENDGAME_MATERIAL_MAX = 13;
 export const OPENING_PLY_MAX = 20;
+
+// Incremental analysis — pass-1 pre-evaluation during play
+// Switch to catch-up depth (18) when the analysis queue exceeds this many pending jobs.
+export const INCREMENTAL_MAX_QUEUE = 5;
+// Depth used for incremental pass-1 (deeper than post-game default because wall-clock
+// time is plentiful while the player thinks).
+export const INCREMENTAL_DEPTH = 20;
 
 // Time controls offered (null = untimed)
 export const TIME_CONTROLS = [

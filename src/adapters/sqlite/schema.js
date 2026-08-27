@@ -12,6 +12,38 @@ export function applySchema(db) {
 
   // Idempotent migrations for columns added after initial schema creation.
   try { db.exec('ALTER TABLE games ADD COLUMN analysis_error TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE move_evals ADD COLUMN win_loss_pts REAL'); } catch { /* already exists */ }
+
+  // make move_san nullable — original DDL had NOT NULL which silently dropped all rows via INSERT OR IGNORE
+  const moveSanNotNull = db.prepare("PRAGMA table_info(move_evals)").all()
+    .find(c => c.name === 'move_san')?.notnull === 1;
+  if (moveSanNotNull) {
+    db.exec(`
+      ALTER TABLE move_evals RENAME TO move_evals_old;
+      CREATE TABLE move_evals (
+        game_id          TEXT NOT NULL REFERENCES games(id),
+        ply              INTEGER NOT NULL,
+        fen              TEXT NOT NULL,
+        move_uci         TEXT NOT NULL,
+        move_san         TEXT,
+        cp_white         REAL,
+        mate_in          INTEGER,
+        best_move_uci    TEXT,
+        pv               TEXT,
+        mover            TEXT NOT NULL CHECK(mover IN ('player','opponent')),
+        win_before       REAL,
+        win_after        REAL,
+        cp_loss          REAL,
+        win_loss_pts     REAL,
+        classification   TEXT,
+        move_accuracy    REAL,
+        alt_moves_json   TEXT,
+        PRIMARY KEY (game_id, ply)
+      );
+      INSERT OR IGNORE INTO move_evals SELECT * FROM move_evals_old;
+      DROP TABLE move_evals_old;
+    `);
+  }
 
   db.exec(`
 
@@ -63,7 +95,7 @@ export function applySchema(db) {
       ply              INTEGER NOT NULL,
       fen              TEXT NOT NULL,
       move_uci         TEXT NOT NULL,
-      move_san         TEXT NOT NULL,
+      move_san         TEXT,
       cp_white         REAL,
       mate_in          INTEGER,
       best_move_uci    TEXT,
@@ -72,6 +104,7 @@ export function applySchema(db) {
       win_before       REAL,
       win_after        REAL,
       cp_loss          REAL,
+      win_loss_pts     REAL,
       classification   TEXT,
       move_accuracy    REAL,
       alt_moves_json   TEXT,
@@ -83,7 +116,7 @@ export function applySchema(db) {
       fen                  TEXT NOT NULL UNIQUE,
       side_to_move         TEXT NOT NULL,
       best_move_uci        TEXT NOT NULL,
-      best_move_san        TEXT NOT NULL,
+      best_move_san        TEXT,
       pv                   TEXT,
       accepted_moves_json  TEXT,
       followup_uci         TEXT,

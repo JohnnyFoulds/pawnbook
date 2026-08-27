@@ -10,6 +10,8 @@
 import { WebSocketServer } from 'ws';
 
 import { logger } from '../../config.js';
+import { updateElo } from '../../domain/game/elo.js';
+import { INCREMENTAL_MAX_QUEUE, INCREMENTAL_DEPTH } from '../../shared/balance.js';
 
 import { makeMessageHandler } from './handlers.js';
 import { analyseGame } from './analysis-service.js';
@@ -28,10 +30,11 @@ const log = logger.child({ mod: 'ws-connection' });
  */
 export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool }) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  const handleMessage = makeMessageHandler({ gameRepo, clock });
+  const handleMessage = makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool });
 
   wss.on('connection', (ws, req) => {
     log.info({ remoteAddress: req.socket.remoteAddress }, 'ws connected');
+    let _incrementalPending = 0;
 
     // Wire the engine dispatch once per connection
     ws.on('engine_turn', async (session) => {
@@ -62,6 +65,20 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
         }
 
         if (move.gameOver && move.result) {
+          let eloBefore = null;
+          let eloAfter = null;
+          if (session.ranked && session.opponent.elo != null) {
+            try {
+              const storedElo = parseInt(settingsRepo.get('elo') ?? '1200', 10);
+              const gamesPlayed = gameRepo.getEloHistory().length;
+              const score = move.result.result === 'win' ? 1 : move.result.result === 'draw' ? 0.5 : 0;
+              const { newElo } = updateElo({ myElo: storedElo, oppElo: session.opponent.elo, score, gamesPlayed });
+              eloBefore = storedElo;
+              eloAfter = newElo;
+            } catch (eloErr) {
+              log.error({ err: eloErr, gameId: session.id }, 'elo update failed in engine path');
+            }
+          }
           gameRepo.save({
             id: session.id,
             opponentId: session.opponent.id,
@@ -72,18 +89,40 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
             result: move.result.result,
             termination: move.result.termination,
             playedAt: Date.now(),
+            eloBefore,
+            eloAfter,
           });
+          if (eloBefore != null && eloAfter != null) {
+            try {
+              gameRepo.updateElo(session.id, { eloBefore, eloAfter, recordedAt: Date.now() });
+            } catch (eloErr) {
+              log.error({ err: eloErr, gameId: session.id }, 'elo history write failed in engine path');
+            }
+          }
           reply.gameOver = { result: move.result.result, termination: move.result.termination };
           ws.send(JSON.stringify(reply));
           send(ws, {
             type: 'game_over',
             result: move.result.result,
             termination: move.result.termination,
-            eloBefore: null,
-            eloAfter: null,
+            eloBefore,
+            eloAfter,
           });
           ws.emit('game_finished', { session, result: move.result });
           return;
+        }
+
+        // Background incremental pre-eval of the position the player will now ponder (FR-ANALYSE-9/12)
+        if (!move.gameOver && gameRepo.savePreEval && _incrementalPending < INCREMENTAL_MAX_QUEUE) {
+          _incrementalPending++;
+          const preEvalPly = session.moves.length + 1;
+          const preEvalFen = move.fen;
+          const preEvalGameId = session.id;
+          enginePool.getAnalysisSfClient()
+            .then(sfClient => sfClient.eval(preEvalFen, { depth: INCREMENTAL_DEPTH }))
+            .then(r => gameRepo.savePreEval(preEvalGameId, preEvalPly, preEvalFen, r))
+            .catch(err => log.debug({ err, gameId: preEvalGameId }, 'incremental pre-eval failed'))
+            .finally(() => { _incrementalPending--; });
         }
 
         send(ws, reply);

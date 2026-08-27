@@ -36,6 +36,12 @@ export class InMemoryGameRepository {
     return (this._moves.get(gameId) ?? []).map(m => ({ ...m }));
   }
 
+  abandonAllInProgress() {
+    for (const [id, game] of this._games) {
+      if (game.status === 'in_progress') this._games.set(id, { ...game, status: 'abandoned' });
+    }
+  }
+
   updateElo(gameId, { eloBefore, eloAfter, historyId, recordedAt }) {
     const game = this._games.get(gameId);
     if (game) {
@@ -63,8 +69,18 @@ export class InMemoryGameRepository {
   saveMoveEval(eval_) {
     if (!this._evals) this._evals = new Map();
     const list = this._evals.get(eval_.gameId) ?? [];
-    list.push(eval_);
+    const idx = list.findIndex(e => e.ply === eval_.ply);
+    if (idx >= 0) list[idx] = eval_; else list.push(eval_);
     this._evals.set(eval_.gameId, list);
+  }
+
+  savePreEval(gameId, ply, fen, evalData) {
+    if (!this._evals) this._evals = new Map();
+    const list = this._evals.get(gameId) ?? [];
+    if (list.some(e => e.ply === ply)) return; // INSERT OR IGNORE semantics
+    list.push({ gameId, ply, fen, cpWhite: evalData.cp ?? null, mateIn: evalData.mate ?? null,
+      bestMoveUci: evalData.bestmove ?? null, pv: evalData.pv ?? null });
+    this._evals.set(gameId, list);
   }
 }
 

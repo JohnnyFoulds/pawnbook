@@ -7,6 +7,8 @@
 
 import { randomUUID } from 'crypto';
 
+import { Chess } from 'chess.js';
+
 import { runAnalysis } from '../../domain/analysis/pipeline.js';
 import { selectPuzzles } from '../../domain/puzzles/select.js';
 import { nearestMaiaModel } from '../../domain/analysis/findability.js';
@@ -86,6 +88,7 @@ export async function analyseGame({
 
   const wasTimed = session._timeControlInitialSec != null;
   const plies = moves.map(m => m.uci);
+  const existingEvals = gameRepo.getEvals(gameId);
 
   try {
     const { moveEvals, accuracy, opponentAccuracy, puzzleCandidates } = await runAnalysis({
@@ -96,6 +99,7 @@ export async function analyseGame({
       maiaModel: maiaModel ?? 'none',
       playerElo,
       wasTimed,
+      existingEvals,
       onProgress(event) {
         _sendIfOpen(ws, { type: 'analysis_progress', gameId, ...event });
       },
@@ -119,10 +123,12 @@ export async function analyseGame({
         fen: p.fen,
         sideToMove: playerColor === 'white' ? 'white' : 'black',
         bestMoveUci: p.bestMoveUci,
+        bestMoveSan: _uciToSan(p.fen, p.bestMoveUci),
         pv: p.pv ?? null,
         acceptedMovesJson: JSON.stringify([...new Set(acceptedMoves)]),
         followupUci: p.pv ? p.pv.split(' ')[1] ?? null : null,
         playedMoveUci: p.moveUci,
+        playedMoveSan: _uciToSan(p.fen, p.moveUci),
         cpLoss: p.cpLoss,
         winLossPts: p.winLoss,
         classification: p.classification,
@@ -222,4 +228,20 @@ export async function analyseGame({
 
 function _sendIfOpen(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+}
+
+/**
+ * Compute SAN for a UCI move from a given FEN. Returns null if the move is illegal.
+ * @param {string} fen
+ * @param {string} uci — e.g. "e2e4" or "e7e8q"
+ * @returns {string|null}
+ */
+function _uciToSan(fen, uci) {
+  try {
+    const chess = new Chess(fen);
+    const result = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] ?? undefined });
+    return result?.san ?? null;
+  } catch {
+    return null;
+  }
 }
