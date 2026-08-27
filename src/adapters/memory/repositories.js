@@ -7,12 +7,40 @@ import { randomUUID } from 'crypto';
 
 import { GameNotFoundError, PuzzleNotFoundError } from '../../errors.js';
 
+// ─── activity helpers ─────────────────────────────────────────────────────────
+
+function _activityDayKey(timestampMs) {
+  const d = new Date(timestampMs);
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function _prevDay(dayKey) {
+  const d = new Date(dayKey + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function _deriveStreak(days, todayKey) {
+  const daySet = new Set(days);
+  const yesterdayKey = _prevDay(todayKey);
+  let current = daySet.has(todayKey) ? todayKey : (daySet.has(yesterdayKey) ? yesterdayKey : null);
+  if (!current) return 0;
+  let streak = 0;
+  while (daySet.has(current)) {
+    streak++;
+    current = _prevDay(current);
+  }
+  return streak;
+}
+
 export class InMemoryGameRepository {
   constructor() {
     this._games = new Map();
     this._moves = new Map(); // gameId → move[]
     this._eloHistory = [];
     this._settings = new Map();
+    this._activity = new Map(); // dayKey → {games, reviews}
   }
 
   save(game) {
@@ -81,6 +109,18 @@ export class InMemoryGameRepository {
     list.push({ gameId, ply, fen, cpWhite: evalData.cp ?? null, mateIn: evalData.mate ?? null,
       bestMoveUci: evalData.bestmove ?? null, pv: evalData.pv ?? null });
     this._evals.set(gameId, list);
+  }
+
+  recordActivity(timestampMs, type) {
+    const day = _activityDayKey(timestampMs);
+    const entry = this._activity.get(day) ?? { games: 0, reviews: 0 };
+    if (type === 'game') entry.games += 1;
+    else entry.reviews += 1;
+    this._activity.set(day, entry);
+  }
+
+  getStreak(todayTimestampMs) {
+    return _deriveStreak([...this._activity.keys()], _activityDayKey(todayTimestampMs));
   }
 }
 

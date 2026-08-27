@@ -132,6 +132,48 @@ for (const { name, factory } of implementations) {
       const history = repos.games.getEloHistory();
       expect(history.some(h => h.elo === 1212)).toBe(true);
     });
+
+    it('activity rows use a 04:00 local day boundary', () => {
+      // Build two timestamps on the same calendar date but one before 4am (→ previous day)
+      // and one at/after 4am (→ that calendar day). Both use local time via new Date().
+      const today = new Date();
+      today.setHours(3, 59, 0, 0);
+      const before4am = today.getTime();   // maps to yesterday's day key
+      today.setHours(4, 1, 0, 0);
+      const after4am = today.getTime();    // maps to today's day key
+
+      repos.games.recordActivity(before4am, 'game');
+      repos.games.recordActivity(after4am, 'game');
+
+      // streak from "today at 4:01am" perspective: both day keys are adjacent →
+      // streak = 2. If the boundary were midnight, both would be the same day → streak = 1.
+      const streak = repos.games.getStreak(after4am);
+      expect(streak).toBe(2);
+    });
+
+    it('the streak is derived from activity, never stored', () => {
+      // Record 3 consecutive days at 10am (safely above the 4am boundary)
+      const d1 = new Date('2026-08-25T10:00:00').getTime();
+      const d2 = new Date('2026-08-26T10:00:00').getTime();
+      const d3 = new Date('2026-08-27T10:00:00').getTime();
+
+      repos.games.recordActivity(d1, 'game');
+      repos.games.recordActivity(d2, 'review');
+      repos.games.recordActivity(d3, 'game');
+
+      // Streak from d3 (today = 2026-08-27) → 3 consecutive days
+      expect(repos.games.getStreak(d3)).toBe(3);
+
+      // Gap on 2026-08-26: verify a gap breaks the streak
+      // Create a fresh repo with a gap
+      const { games: g2, cleanup } = factory();
+      repos.cleanup = cleanup; // swap cleanup so afterEach handles it
+      g2.recordActivity(d1, 'game');
+      // skip d2
+      g2.recordActivity(d3, 'game');
+      // streak from d3 = 1 (only today has activity; no yesterday)
+      expect(g2.getStreak(d3)).toBe(1);
+    });
   });
 
   describe(`[${name}] puzzle repository`, () => {

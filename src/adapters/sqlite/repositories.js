@@ -11,6 +11,33 @@ import { GameNotFoundError, PuzzleNotFoundError } from '../../errors.js';
 
 import { applySchema } from './schema.js';
 
+// ─── activity helpers ─────────────────────────────────────────────────────────
+
+function _activityDayKey(timestampMs) {
+  const d = new Date(timestampMs);
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function _prevDay(dayKey) {
+  const d = new Date(dayKey + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function _deriveStreak(sortedDaysDesc, todayKey) {
+  const daySet = new Set(sortedDaysDesc);
+  const yesterdayKey = _prevDay(todayKey);
+  let current = daySet.has(todayKey) ? todayKey : (daySet.has(yesterdayKey) ? yesterdayKey : null);
+  if (!current) return 0;
+  let streak = 0;
+  while (daySet.has(current)) {
+    streak++;
+    current = _prevDay(current);
+  }
+  return streak;
+}
+
 
 /**
  * @param {string} dbPath
@@ -251,6 +278,33 @@ export class SqliteGameRepository {
       analysisError: row.analysis_error ?? null,
       analysedAt: row.analysed_at,
     };
+  }
+
+  /**
+   * Record a game or review action for the given timestamp.
+   * Uses a 04:00 local-time day boundary (activity before 4am belongs to the previous day).
+   * @param {number} timestampMs
+   * @param {'game'|'review'} type
+   */
+  recordActivity(timestampMs, type) {
+    const day = _activityDayKey(timestampMs);
+    this._db.prepare(`
+      INSERT INTO activity (day, games, reviews) VALUES (@day, @g, @r)
+      ON CONFLICT(day) DO UPDATE SET
+        games   = games   + excluded.games,
+        reviews = reviews + excluded.reviews
+    `).run({ day, g: type === 'game' ? 1 : 0, r: type === 'review' ? 1 : 0 });
+  }
+
+  /**
+   * Derive the current streak from activity rows.
+   * Streak = consecutive days ending on today-or-yesterday with at least one activity.
+   * @param {number} todayTimestampMs
+   * @returns {number}
+   */
+  getStreak(todayTimestampMs) {
+    const rows = this._db.prepare('SELECT day FROM activity ORDER BY day DESC').all();
+    return _deriveStreak(rows.map(r => r.day), _activityDayKey(todayTimestampMs));
   }
 }
 
