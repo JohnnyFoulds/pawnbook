@@ -8,11 +8,14 @@
  * Drawfish  — bestmove (plays for stalemate)
  */
 
+import { EngineUnavailableError } from '../../errors.js';
 import { ENGINE_PATHS, WEIGHTS_DIR, logger } from '../../config.js';
 
 import { createUciEngineClient } from './uci-engine-client.js';
 
 const log = logger.child({ mod: 'engine-pool' });
+
+const CIRCUIT_MAX_FAILURES = 3;
 
 // Stockfish UCI_Elo per opponent id
 const SF_ELO = {
@@ -51,13 +54,34 @@ export function engineMovetime(session) {
 export function createEnginePool() {
   /** @type {Map<string, import('./uci-engine-client.js').UciEngineClient>} */
   const pool = new Map();
+  /** @type {Map<string, number>} consecutive spawn-failure count per key */
+  const failures = new Map();
 
   async function getClient(key, binary, args = []) {
+    if ((failures.get(key) ?? 0) >= CIRCUIT_MAX_FAILURES) {
+      throw new EngineUnavailableError(
+        `Engine '${binary}' circuit open after ${CIRCUIT_MAX_FAILURES} consecutive failures`
+      );
+    }
     if (pool.has(key)) return pool.get(key);
-    log.info({ key, binary }, 'starting engine');
-    const client = await createUciEngineClient(binary, args);
-    pool.set(key, client);
-    return client;
+    try {
+      log.info({ key, binary }, 'starting engine');
+      const client = await createUciEngineClient(binary, args);
+      failures.set(key, 0);
+      // Evict dead client from pool so the next request spawns a fresh one
+      client._proc?.once('close', () => {
+        if (pool.get(key) === client) {
+          log.warn({ key }, 'engine process died — evicting from pool');
+          pool.delete(key);
+        }
+      });
+      pool.set(key, client);
+      return client;
+    } catch (err) {
+      failures.set(key, (failures.get(key) ?? 0) + 1);
+      log.error({ err, key, failures: failures.get(key) }, 'engine start failed');
+      throw err;
+    }
   }
 
   return {

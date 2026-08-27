@@ -15,6 +15,7 @@ import { nearestMaiaModel } from '../../domain/analysis/findability.js';
 import { updateElo } from '../../domain/game/elo.js';
 import { getAvailableOpponents } from '../../domain/game/roster.js';
 import { logger } from '../../config.js';
+import { getTracer } from '../../telemetry.js';
 
 const log = logger.child({ mod: 'analysis-service' });
 
@@ -37,6 +38,11 @@ export async function analyseGame({
   const { opponent, playerColor, ranked } = session;
 
   log.info({ gameId, opponentId: opponent.id, playerColor, ranked }, 'analysis initiated');
+
+  const tracer = getTracer();
+  const span = tracer?.startSpan('analyse_game', {
+    attributes: { 'analysis.game_id': gameId, 'analysis.opponent': opponent.id, 'analysis.ranked': ranked },
+  });
 
   // Mark analysis as running
   gameRepo.save({
@@ -62,8 +68,12 @@ export async function analyseGame({
     return;
   }
 
-  // Player ELO and maia model selection
-  const playerElo = parseInt(settingsRepo.get('elo') ?? '1200', 10);
+  // Player ELO: derive from elo_history when available so both SQLite and
+  // in-memory repos return the current ELO without a separate settingsRepo write.
+  const eloHistory = gameRepo.getEloHistory();
+  const playerElo = eloHistory.length > 0
+    ? eloHistory[eloHistory.length - 1].elo
+    : parseInt(settingsRepo.get('elo') ?? '1200', 10);
   const availableOpponents = getAvailableOpponents();
   const availableMaias = availableOpponents.filter(o => o.type === 'maia').map(o => o.id);
   const maiaModel = availableMaias.length
@@ -77,6 +87,9 @@ export async function analyseGame({
     maiaClient = maiaModel ? await enginePool.getMaiaAnalysisClient(maiaModel) : null;
   } catch (err) {
     log.error({ err, gameId }, 'failed to start analysis engines');
+    span?.recordException(err);
+    span?.setStatus({ code: 2, message: err.message });
+    span?.end();
     gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
       playerColor, ranked, status: 'finished', result: result.result,
       termination: result.termination, analysisState: 'failed',
@@ -145,20 +158,22 @@ export async function analyseGame({
         wasTimed: wasTimed ? 1 : 0,
       });
 
-      // Init FSRS card with due = tomorrow (post-game quiz creates it, not schedules it)
-      puzzleRepo.saveCard({
-        puzzleId,
-        due: tomorrow,
-        stability: 0,
-        difficulty: 0,
-        elapsedDays: 0,
-        scheduledDays: 0,
-        reps: 0,
-        lapses: 0,
-        state: 0,
-        lastReview: null,
-        graduated: 0,
-      });
+      // Only init FSRS card if none exists — do not overwrite a card with existing review history
+      if (!puzzleRepo.getCard(puzzleId)) {
+        puzzleRepo.saveCard({
+          puzzleId,
+          due: tomorrow,
+          stability: 0,
+          difficulty: 0,
+          elapsedDays: 0,
+          scheduledDays: 0,
+          reps: 0,
+          lapses: 0,
+          state: 0,
+          lastReview: null,
+          graduated: 0,
+        });
+      }
     }
 
     // Update ELO if ranked game with a known opponent ELO
@@ -176,6 +191,9 @@ export async function analyseGame({
         historyId: randomUUID(),
         recordedAt: Date.now(),
       });
+      // Keep settingsRepo in sync — SQLite does this inside updateElo's transaction;
+      // the in-memory repo cannot inject settingsRepo, so we update it here.
+      settingsRepo.set('elo', String(eloAfter));
     }
 
     // Update game with analysis results
@@ -214,9 +232,14 @@ export async function analyseGame({
       puzzleCount: selected.length,
     });
 
+    span?.setStatus({ code: 1 }); // OK
+    span?.end();
     log.info({ gameId, puzzles: selected.length, accuracy }, 'analysis complete');
   } catch (err) {
     log.error({ err, gameId }, 'analysis failed');
+    span?.recordException(err);
+    span?.setStatus({ code: 2, message: err.message }); // ERROR
+    span?.end();
     gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
       playerColor, ranked, status: 'finished', result: result.result,
       termination: result.termination, analysisState: 'failed',

@@ -4,7 +4,7 @@
  * All thresholds in win% POINTS (0–100), never winningChances (−1..+1).
  */
 
-import { BLUNDER_WIN_PTS, MISTAKE_WIN_PTS, INACCURACY_WIN_PTS } from '../../shared/balance.js';
+import { BLUNDER_WIN_PTS, MISTAKE_WIN_PTS, INACCURACY_WIN_PTS, GREAT_CP_MAX, GOOD_CP_MAX } from '../../shared/balance.js';
 
 const CP_CLAMP = 1000;
 const WC_K = 0.00368208;
@@ -54,8 +54,8 @@ export function classify(winLoss, cpLoss, opts = {}) {
 
   // sub-inaccuracy: grade by cp loss
   if (cpLoss === 0) return { classification: 'best' };
-  if (cpLoss < 25) return { classification: 'great' };
-  if (cpLoss < 50) return { classification: 'good' };
+  if (cpLoss < GREAT_CP_MAX) return { classification: 'great' };
+  if (cpLoss < GOOD_CP_MAX) return { classification: 'good' };
   return { classification: 'ok' };
 }
 

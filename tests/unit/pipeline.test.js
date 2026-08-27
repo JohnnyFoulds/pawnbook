@@ -366,6 +366,48 @@ describe('pipeline', () => {
     expect(typeof opponentAccuracy).toBe('number');
   });
 
+  it('MultiPV=3 records every runner-up into alt_moves_json', async () => {
+    // Set up a blunder so pass 2 fires, using a multiPV fixture for the blunder position.
+    // pos0 fixture returns 3 info lines (depth 22/20/18); the pipeline filters line 1
+    // (best move = e2e4) and keeps lines 2–3 as alt moves within NEAR_MISS margin.
+    const chess = (await import('chess.js')).Chess;
+    const game = new chess();
+    const pos0 = game.fen();
+    game.move({ from: 'e2', to: 'e4' });
+    const pos1 = game.fen();
+
+    const MULTI_PV_FIXTURE = [
+      'info depth 22 seldepth 30 score cp 100 nodes 1000000 pv e2e4 e7e5',
+      'info depth 20 seldepth 28 score cp 98 nodes 800000 pv d2d4 d7d5',
+      'info depth 18 seldepth 26 score cp 90 nodes 600000 pv c2c4 c7c5',
+      'bestmove e2e4',
+    ].join('\n');
+
+    const sfClient = new ScriptedEngineClient({
+      [pos0]: MULTI_PV_FIXTURE,
+      [pos1]: SF_BLUNDER_AFTER, // cp=-500 → blunder detected, triggers pass 2
+      default: SF_DEFAULT['default'],
+    });
+    const maiaClient = makeMaiaClient('e2e4', new Map([['e2e4', 0.5], ['d2d4', 0.3]]));
+
+    const { puzzleCandidates } = await runAnalysis({
+      plies: ['e2e4', 'e7e5'],
+      playerColor: 'white',
+      sfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+    });
+
+    // The blunder candidate (ply 1, white mover) should have altMovesJson with entries
+    const blunderCandidate = puzzleCandidates.find(c => c.mover === 'player');
+    expect(blunderCandidate).toBeDefined();
+    const alts = JSON.parse(blunderCandidate.altMovesJson ?? '[]');
+    expect(alts.length).toBeGreaterThan(0);
+    expect(alts.some(a => a.uci === 'd2d4')).toBe(true);
+  });
+
   it('regression: existingEvals with bestmove skips the SF call for that position', async () => {
     // Build a 2-ply game; pre-supply existingEvals covering ply 1 (idx=0)
     // The SF client records every call; if existingEvals is respected it should

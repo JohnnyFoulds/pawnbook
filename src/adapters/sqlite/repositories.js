@@ -141,6 +141,25 @@ export class SqliteGameRepository {
     this._db.prepare("UPDATE games SET status='abandoned' WHERE status='in_progress'").run();
   }
 
+  /** Reset any analysis that was 'running' when the server last died. */
+  resetRunningAnalyses() {
+    this._db.prepare(
+      "UPDATE games SET analysis_state='failed', analysis_error='Server restarted during analysis' WHERE analysis_state='running'"
+    ).run();
+  }
+
+  /**
+   * Persist live clock remainder after a move.
+   * @param {string} gameId
+   * @param {number} whiteMs
+   * @param {number} blackMs
+   */
+  updateClock(gameId, whiteMs, blackMs) {
+    this._db.prepare(
+      'UPDATE games SET clock_white_ms = ?, clock_black_ms = ? WHERE id = ?'
+    ).run(whiteMs, blackMs, gameId);
+  }
+
   /** @param {string} gameId @param {object} opts */
   updateElo(gameId, { eloBefore, eloAfter, historyId, recordedAt }) {
     const updateGame = this._db.prepare(
@@ -470,6 +489,18 @@ export class SqlitePuzzleRepository {
       review.practice ?? 0,
       review.suspectRecall ?? 0,
     );
+  }
+
+  /**
+   * Atomically save a review row and update the FSRS card in one transaction.
+   * @param {object} review
+   * @param {object} card
+   */
+  saveReviewAndCard(review, card) {
+    this._db.transaction(() => {
+      this.saveReview(review);
+      this.saveCard(card);
+    })();
   }
 
   /** @param {object} card */

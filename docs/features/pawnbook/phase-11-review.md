@@ -1,8 +1,8 @@
 # Phase 11 — Production Readiness Review
 
-**Branch:** `docs/phase-11-review`  
-**Date:** 2026-08-26  
-**Status:** Complete — 4 findings, 4 fixed.
+**Branch:** `docs/phase-11-review` → extended on `master` (tracks `origin/development`)  
+**Date:** 2026-08-26 – 2026-08-27  
+**Status:** Complete — 24 findings, 24 fixed.
 
 ---
 
@@ -93,6 +93,49 @@ docker-compose.yml: `restart: unless-stopped`, data volume at `./data:/app/data`
 
 ---
 
+## 9. Extended review (post-delivery)
+
+A second pass over the codebase after the original four findings were fixed uncovered 20 additional
+issues across correctness, resilience, and observability dimensions.
+
+**Correctness (High)**
+
+| ID | Description | Fix |
+|----|-------------|-----|
+| B-1 | ELO computed in both `finishGame` and `analyseGame` — double write, wrong K-factor | Removed ELO from `finishGame`; `analyseGame` is the single ELO update site |
+| B-2 | `assertWeightsExist` threw inside `.then()` — unhandled rejection, silently a no-op | Rewrote as synchronous `existsSync` check |
+| B-3 | Analysis pipeline had no OTel spans — silent failures not observable | Added `analyse_game`, `engine_pass_1`, `engine_pass_2`, `maia_findability`, `select_puzzles` spans |
+| B-4 | `puzzleRepo.saveCard()` called unconditionally — overwrote existing FSRS review history | Guarded with `if (!puzzleRepo.getCard(puzzleId))` |
+| B-5 | Server restart left `analysis_state = 'running'` rows permanently stale | Added `resetRunningAnalyses()` called at startup after `abandonAllInProgress()` |
+| B-6 | `appendMove` updated moves but not clock columns — clock state lost between requests | Added `updateClock()` repo method; called after every `appendMove` in handlers and connection |
+| B-7 | WS `sessions` Map grew unboundedly — one entry per connection, never cleaned up | Registered `ws.once('close', () => sessions.delete(ws))` on first message |
+| B-8 | `WebSocketServer` had no `maxPayload` — arbitrary-size messages accepted | Set `maxPayload: 4096` |
+| B-9 | Concurrent `eval()` / `policy()` calls interleaved UCI commands and stole each other's `bestmove` | Serialised via promise queue (`_evalQueue`) |
+| B-10 | Outer WS catch used a raw `'internal_error'` string instead of `errorCodeFor(err)` | Switched to `errorCodeFor(err)` |
+| B-11 | `handleResume` called `gameRepo.findById()` but never handled `GameNotFoundError` gracefully | Added try/catch; sends structured `GAME_NOT_FOUND` error to client |
+| B-17 | Engine error message leaked to client via `'Engine error: ' + err.message` | Changed to generic `'Engine move failed'` |
+
+**Resilience (Medium)**
+
+| ID | Description | Fix |
+|----|-------------|-----|
+| B-12 | `_waitForLine` hung until timeout if engine process died mid-eval | Process `close` event now fires `_pendingRejectors` to reject all in-flight waits immediately |
+| B-13 | Dead engine stayed in pool forever — next call hit the same broken client | Circuit breaker added to `getClient`: evicts on `EngineUnavailableError`, opens after 3 consecutive failures |
+| B-15 | `InMemoryGameRepository.updateElo` wrote to a private `_settings` Map, not the injected `SettingsRepository` | Removed the dead private write; `analyseGame` now calls `settingsRepo.set('elo', …)` after every `updateElo` |
+| B-18 | `handleHint` engine fallback sent `a1` silently | `log.warn({ err }, 'hint engine eval failed — falling back')` added |
+| B-19 | Hint path exposed the engine pool to unlimited request rates | Per-connection 2 s cooldown via `WeakMap<ws, lastHintMs>` |
+| B-20 | Pass-2 alt moves included stale evaluations from shallower search iterations | Deduplicated by first move; deepest evaluation per unique move is kept |
+
+**Observability / code quality (Low)**
+
+| ID | Description | Fix |
+|----|-------------|-----|
+| B-21 | `makeMessageHandler` JSDoc missing `settingsRepo` and `enginePool` params; constant inserted between JSDoc and function | Params documented; `HINT_COOLDOWN_MS` moved above the JSDoc block |
+| B-22 | `ws.on('error')` log missing `remoteAddress` — inconsistent with connect/disconnect logs | Added `remoteAddress: req.socket.remoteAddress` to the error log |
+| B-23 | Express ETag and `X-Powered-By` not explicitly configured | Added `app.set('etag', 'strong')` and `app.disable('x-powered-by')` to server.js |
+
+---
+
 ## Summary
 
 | ID | Severity | Description | Status |
@@ -101,6 +144,9 @@ docker-compose.yml: `restart: unless-stopped`, data volume at `./data:/app/data`
 | A-3 | Blocking | `hint_result.pieceSquare = null` → TypeError in TUI `.slice(0,1)` | Fixed |
 | A-6 | Moderate | `GameSession.fromMoves` ignored saved clock values on timed game resume | Fixed |
 | A-7 | Minor | WS `sessions` Map leaked entries on disconnect | Fixed |
+| B-1–B-17 | High | 12 correctness issues found in extended review | Fixed |
+| B-12–B-20 | Medium | 6 resilience issues found in extended review | Fixed |
+| B-21–B-23 | Low | 3 observability/code-quality issues | Fixed |
 
 No findings required schema changes, migration scripts, or balance adjustments.  
 `implementation_plan.md` is archived — this document is the Phase 11 deliverable.

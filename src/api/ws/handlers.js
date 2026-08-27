@@ -10,21 +10,26 @@ import { ZodError } from 'zod';
 import { InboundMessageSchema } from '../../schemas/messages.js';
 import { GameSession } from '../../domain/game/session.js';
 import { getOpponent } from '../../domain/game/roster.js';
-import { updateElo } from '../../domain/game/elo.js';
-import { ErrorCode } from '../../errors.js';
+import { ErrorCode, errorCodeFor } from '../../errors.js';
 import { logger } from '../../config.js';
 
 const log = logger.child({ mod: 'ws-handlers' });
 
+const HINT_COOLDOWN_MS = 2000;
+
 /**
  * @param {object} deps
  * @param {import('../../ports/repositories.js').GameRepository} deps.gameRepo
+ * @param {import('../../ports/repositories.js').SettingsRepository} deps.settingsRepo
  * @param {import('../../ports/clock.js').Clock} deps.clock
+ * @param {object|null} [deps.enginePool]
  * @returns {(ws: import('ws').WebSocket, raw: string) => Promise<void>}
  */
 export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool = null }) {
   /** @type {Map<string, GameSession>} ws-scoped active sessions */
   const sessions = new Map();
+  /** @type {WeakMap<object, number>} per-connection last-hint timestamp for rate-limiting */
+  const hintLastMs = new WeakMap();
 
   return async function handleMessage(ws, raw) {
     // Register cleanup once per ws object so sessions Map doesn't grow unboundedly
@@ -50,15 +55,24 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
         case 'new_game': return await handleNewGame(ws, msg, { gameRepo, clock, sessions });
         case 'move':     return await handleMove(ws, msg, { gameRepo, settingsRepo, sessions });
         case 'resign':   return await handleResign(ws, { gameRepo, settingsRepo, sessions });
-        case 'hint':     return await handleHint(ws, { sessions, enginePool });
+        case 'hint': {
+          const now = Date.now();
+          const last = hintLastMs.get(ws) ?? 0;
+          if (now - last < HINT_COOLDOWN_MS) {
+            log.debug({ gameId: sessions.get(ws)?.id }, 'hint rate-limited');
+            return;
+          }
+          hintLastMs.set(ws, now);
+          return await handleHint(ws, { sessions, enginePool });
+        }
         case 'resume':   return await handleResume(ws, msg, { gameRepo, clock, sessions });
       }
     } catch (err) {
       log.error({ err }, 'ws handler error');
       send(ws, {
         type: 'error',
-        error_code: 'internal_error',
-        message: err.message,
+        error_code: errorCodeFor(err),
+        message: err instanceof Error ? err.message : 'An internal error occurred',
         detail: {},
       });
     }
@@ -128,8 +142,11 @@ async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions }) {
 
   const moveResult = session.applyMove(msg.uci);
 
-  // Persist the move
+  // Persist the move and live clock state
   gameRepo.appendMove(session.id, session.moves[session.moves.length - 1]);
+  if (moveResult.clockUpdate) {
+    gameRepo.updateClock(session.id, moveResult.clockUpdate.whiteMs, moveResult.clockUpdate.blackMs);
+  }
 
   if (moveResult.gameOver) {
     finishGame(ws, session, moveResult.result, gameRepo, settingsRepo);
@@ -166,18 +183,27 @@ async function handleHint(ws, { sessions, enginePool }) {
     try {
       const sfClient = await enginePool.getAnalysisSfClient();
       const result = await sfClient.eval(session.fen, { depth: 10 });
-      const pieceSquare = result.bestmove?.slice(0, 2) ?? 'a1';
-      send(ws, { type: 'hint_result', pieceSquare });
+      if (!result.bestmove) {
+        log.warn({ gameId: session.id, fen: session.fen }, 'hint engine returned no bestmove — falling back to a1');
+        send(ws, { type: 'hint_result', pieceSquare: 'a1' });
+        return;
+      }
+      send(ws, { type: 'hint_result', pieceSquare: result.bestmove.slice(0, 2) });
       return;
     } catch (err) {
-      log.warn({ err }, 'hint engine eval failed — falling back');
+      log.warn({ err, gameId: session.id }, 'hint engine eval failed — falling back to a1');
     }
+  } else {
+    log.warn({ gameId: session.id }, 'hint requested but no engine pool available — falling back to a1');
   }
   send(ws, { type: 'hint_result', pieceSquare: 'a1' });
 }
 
 async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
   const game = gameRepo.findById(msg.gameId);
+  if (!game) {
+    return send(ws, { type: 'error', error_code: ErrorCode.GAME_NOT_FOUND, message: `Game '${msg.gameId}' not found`, detail: {} });
+  }
   const savedMoves = gameRepo.getMoves(msg.gameId);
   const opponent = getOpponent(game.opponentId);
 
@@ -222,80 +248,28 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function finishGame(ws, session, result, gameRepo, settingsRepo) {
+function finishGame(ws, session, result, gameRepo, _settingsRepo) {
   log.info({ gameId: session.id, result: result.result, termination: result.termination }, 'game finished');
 
-  let eloBefore = null;
-  let eloAfter = null;
+  gameRepo.save({
+    id: session.id,
+    opponentId: session.opponent.id,
+    opponentElo: session.opponent.elo,
+    playerColor: session.playerColor,
+    ranked: session.ranked,
+    status: 'finished',
+    result: result.result,
+    termination: result.termination,
+    playedAt: Date.now(),
+  });
 
-  if (session.ranked && session.opponent.elo != null && settingsRepo) {
-    try {
-      const storedElo = parseInt(settingsRepo.get('elo') ?? '1200', 10);
-      // Count ranked finished games for K-factor (excluding this game, which isn't saved yet)
-      const history = gameRepo.getEloHistory();
-      const gamesPlayed = history.length;
-      const score = result.result === 'win' ? 1 : result.result === 'draw' ? 0.5 : 0;
-      const { newElo, delta: _delta } = updateElo({
-        myElo: storedElo,
-        oppElo: session.opponent.elo,
-        score,
-        gamesPlayed,
-      });
-      eloBefore = storedElo;
-      eloAfter = newElo;
-      gameRepo.save({
-        id: session.id,
-        opponentId: session.opponent.id,
-        opponentElo: session.opponent.elo,
-        playerColor: session.playerColor,
-        ranked: session.ranked,
-        status: 'finished',
-        result: result.result,
-        termination: result.termination,
-        playedAt: Date.now(),
-        eloBefore,
-        eloAfter,
-      });
-      gameRepo.updateElo(session.id, {
-        eloBefore,
-        eloAfter,
-        recordedAt: Date.now(),
-      });
-      log.info({ gameId: session.id, eloBefore, eloAfter }, 'elo updated');
-    } catch (err) {
-      log.error({ err, gameId: session.id }, 'elo update failed — saving game without elo');
-      gameRepo.save({
-        id: session.id,
-        opponentId: session.opponent.id,
-        opponentElo: session.opponent.elo,
-        playerColor: session.playerColor,
-        ranked: session.ranked,
-        status: 'finished',
-        result: result.result,
-        termination: result.termination,
-        playedAt: Date.now(),
-      });
-    }
-  } else {
-    gameRepo.save({
-      id: session.id,
-      opponentId: session.opponent.id,
-      opponentElo: session.opponent.elo,
-      playerColor: session.playerColor,
-      ranked: session.ranked,
-      status: 'finished',
-      result: result.result,
-      termination: result.termination,
-      playedAt: Date.now(),
-    });
-  }
-
+  // ELO is computed by analyseGame after analysis completes; initial game_over carries null ELO
   send(ws, {
     type: 'game_over',
     result: result.result,
     termination: result.termination,
-    eloBefore,
-    eloAfter,
+    eloBefore: null,
+    eloAfter: null,
   });
 
   // Signal connection.js to trigger background analysis

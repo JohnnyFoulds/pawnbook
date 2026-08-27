@@ -310,6 +310,35 @@ describe('ws-handlers: makeMessageHandler', () => {
     expect(resumeMsg.clock).toBeDefined();
   });
 
+  it('resume: moves are appended to game_moves as each is accepted', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: false, timeControl: null,
+    }));
+    const gameId = ws.lastMessage().gameId;
+    expect(ws.lastMessage().type).toBe('game_started');
+
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'e2e4' }));
+    expect(ws.lastMessage().type).toBe('move_accepted');
+
+    const moves = gameRepo.getMoves(gameId);
+    expect(moves.length).toBeGreaterThanOrEqual(1);
+    expect(moves.some(m => m.uci === 'e2e4')).toBe(true);
+  });
+
+  it('an in_progress game never resumed is marked abandoned', () => {
+    // Simulate server restart: repo has an orphaned in_progress game
+    const gameRepo = new InMemoryGameRepository();
+    gameRepo.save({ id: 'orphan-1', opponentId: 'maia-1300', playerColor: 'white',
+      ranked: false, status: 'in_progress' });
+    gameRepo.abandonAllInProgress();
+    const game = gameRepo.findById('orphan-1');
+    expect(game.status).toBe('abandoned');
+  });
+
   it("player move that checkmates the engine sends game_over via handleMove", async () => {
     const gameRepo = new InMemoryGameRepository();
     const handler = makeMessageHandler({ gameRepo, clock: CLOCK });

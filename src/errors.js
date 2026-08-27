@@ -38,7 +38,10 @@ export const ErrorCode = Object.freeze({
   WEIGHTS_MISSING: 'weights_missing',
   ANALYSIS_FAILED: 'analysis_failed',
   HINT_NOT_ALLOWED: 'hint_not_allowed',
+  // VALIDATION_FAILED is emitted directly by the API layer (ws/handlers.js, error-middleware.js)
+  // on Zod parse failure — it is never returned by errorCodeFor() for domain errors.
   VALIDATION_FAILED: 'validation_failed',
+  RATE_LIMITED: 'rate_limited',
 });
 
 /** @type {Map<Function, string>} */

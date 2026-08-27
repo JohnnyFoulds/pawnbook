@@ -4,6 +4,7 @@
  */
 
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
 
 import { EngineUnavailableError, EngineTimeoutError, WeightsMissingError } from '../../errors.js';
 import { logger } from '../../config.js';
@@ -34,6 +35,8 @@ export class UciEngineClient {
     this._proc = null;
     this._lineBuffer = '';
     this._listeners = [];
+    this._evalQueue = Promise.resolve();
+    this._pendingRejectors = [];
   }
 
   async _handshake() {
@@ -41,6 +44,7 @@ export class UciEngineClient {
     try {
       proc = spawn(this._binaryPath, this._args, { stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (err) {
+      log.warn({ binary: this._binaryPath, err }, 'engine spawn failed — engine unavailable');
       throw new EngineUnavailableError(
         `Engine '${this._binaryPath}' could not be spawned`,
         { cause: err }
@@ -53,6 +57,17 @@ export class UciEngineClient {
       } else {
         log.error({ err }, 'engine process error');
       }
+    });
+
+    // Reject any pending _waitForLine callers when the process exits unexpectedly
+    proc.on('close', (code) => {
+      log.warn({ code, binary: this._binaryPath }, 'engine process closed');
+      this._proc = null;
+      const closeErr = new EngineUnavailableError(
+        `Engine '${this._binaryPath}' process closed unexpectedly`
+      );
+      const rejectors = this._pendingRejectors.splice(0);
+      for (const r of rejectors) r(closeErr);
     });
 
     proc.stdout.on('data', (chunk) => {
@@ -83,6 +98,10 @@ export class UciEngineClient {
    * @returns {Promise<{cp: number|null, mate: number|null, bestmove: string, pv: string, lines: object[]}>}
    */
   async eval(fen, opts = {}) {
+    return (this._evalQueue = this._evalQueue.then(() => this._doEval(fen, opts)));
+  }
+
+  async _doEval(fen, opts = {}) {
     const { depth = 18, movetime, multiPV = 1 } = opts;
     this._write(`setoption name MultiPV value ${multiPV}\n`);
     this._write(`position fen ${fen}\n`);
@@ -123,6 +142,10 @@ export class UciEngineClient {
    * @returns {Promise<Map<string, number>>} move → probability (0–1)
    */
   async policy(fen, nodes = 2) {
+    return (this._evalQueue = this._evalQueue.then(() => this._doPolicy(fen, nodes)));
+  }
+
+  async _doPolicy(fen, nodes = 2) {
     this._write(`position fen ${fen}\n`);
 
     const policyLines = [];
@@ -184,22 +207,31 @@ export class UciEngineClient {
   _waitForLine(token, setup, timeoutMs = 60_000) {
     return new Promise((resolve, reject) => {
       let timer;
+      let done = false;
+
+      const cleanup = () => {
+        done = true;
+        clearTimeout(timer);
+        this._listeners = this._listeners.filter(l => l !== handler);
+        this._pendingRejectors = this._pendingRejectors.filter(r => r !== closeReject);
+      };
+
+      const closeReject = (err) => {
+        if (done) return;
+        cleanup();
+        reject(err);
+      };
+      this._pendingRejectors.push(closeReject);
 
       const handler = (line) => {
-        if (line.includes(token)) {
-          clearTimeout(timer);
-          this._listeners = this._listeners.filter(l => l !== handler);
-          // Flush isready after uci handshake
-          if (token === 'readyok') {
-            resolve(line);
-          } else {
-            resolve(line);
-          }
-        }
+        if (!line.includes(token)) return;
+        cleanup();
+        resolve(line);
       };
 
       timer = setTimeout(() => {
-        this._listeners = this._listeners.filter(l => l !== handler);
+        if (done) return;
+        cleanup();
         reject(new EngineTimeoutError(
           `Engine '${this._binaryPath}' timed out waiting for '${token}'`
         ));
@@ -292,9 +324,7 @@ export function parsePolicyLines(lines) {
  * @param {string} weightsPath
  */
 export function assertWeightsExist(weightsPath) {
-  import('fs').then(fs => {
-    if (!fs.existsSync(weightsPath)) {
-      throw new WeightsMissingError(`Weights file '${weightsPath}' not found`);
-    }
-  });
+  if (!existsSync(weightsPath)) {
+    throw new WeightsMissingError(`Weights file '${weightsPath}' not found`);
+  }
 }
