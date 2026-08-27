@@ -338,6 +338,8 @@ drill: feedback leads with a glyph and survives --plain and --ascii
 
 ## Phase 12 — Incremental analysis (pre-evaluation during play)
 
+**Status:** Complete — 2026-08-27
+
 **Branch:** `feat/phase-12-incremental-analysis`  
 **Files:** `src/adapters/engine/engine-pool.js`, `src/api/ws/analysis-service.js`, `src/domain/analysis/pipeline.js`  
 **Spec refs:** FR-ANALYSE-9–13, FR-ENGINE-5–7, NFR-A1b, NFR-A5
