@@ -15,15 +15,21 @@ import { logger } from '../../config.js';
 
 const log = logger.child({ mod: 'ws-handlers' });
 
+const HINT_COOLDOWN_MS = 2000;
+
 /**
  * @param {object} deps
  * @param {import('../../ports/repositories.js').GameRepository} deps.gameRepo
+ * @param {import('../../ports/repositories.js').SettingsRepository} deps.settingsRepo
  * @param {import('../../ports/clock.js').Clock} deps.clock
+ * @param {object|null} [deps.enginePool]
  * @returns {(ws: import('ws').WebSocket, raw: string) => Promise<void>}
  */
 export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool = null }) {
   /** @type {Map<string, GameSession>} ws-scoped active sessions */
   const sessions = new Map();
+  /** @type {WeakMap<object, number>} per-connection last-hint timestamp for rate-limiting */
+  const hintLastMs = new WeakMap();
 
   return async function handleMessage(ws, raw) {
     // Register cleanup once per ws object so sessions Map doesn't grow unboundedly
@@ -49,7 +55,16 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
         case 'new_game': return await handleNewGame(ws, msg, { gameRepo, clock, sessions });
         case 'move':     return await handleMove(ws, msg, { gameRepo, settingsRepo, sessions });
         case 'resign':   return await handleResign(ws, { gameRepo, settingsRepo, sessions });
-        case 'hint':     return await handleHint(ws, { sessions, enginePool });
+        case 'hint': {
+          const now = Date.now();
+          const last = hintLastMs.get(ws) ?? 0;
+          if (now - last < HINT_COOLDOWN_MS) {
+            log.debug({ gameId: sessions.get(ws)?.id }, 'hint rate-limited');
+            return;
+          }
+          hintLastMs.set(ws, now);
+          return await handleHint(ws, { sessions, enginePool });
+        }
         case 'resume':   return await handleResume(ws, msg, { gameRepo, clock, sessions });
       }
     } catch (err) {
@@ -168,12 +183,18 @@ async function handleHint(ws, { sessions, enginePool }) {
     try {
       const sfClient = await enginePool.getAnalysisSfClient();
       const result = await sfClient.eval(session.fen, { depth: 10 });
-      const pieceSquare = result.bestmove?.slice(0, 2) ?? 'a1';
-      send(ws, { type: 'hint_result', pieceSquare });
+      if (!result.bestmove) {
+        log.warn({ gameId: session.id, fen: session.fen }, 'hint engine returned no bestmove — falling back to a1');
+        send(ws, { type: 'hint_result', pieceSquare: 'a1' });
+        return;
+      }
+      send(ws, { type: 'hint_result', pieceSquare: result.bestmove.slice(0, 2) });
       return;
     } catch (err) {
-      log.warn({ err }, 'hint engine eval failed — falling back');
+      log.warn({ err, gameId: session.id }, 'hint engine eval failed — falling back to a1');
     }
+  } else {
+    log.warn({ gameId: session.id }, 'hint requested but no engine pool available — falling back to a1');
   }
   send(ws, { type: 'hint_result', pieceSquare: 'a1' });
 }

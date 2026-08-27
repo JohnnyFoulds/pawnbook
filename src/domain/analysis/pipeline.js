@@ -172,14 +172,21 @@ export async function runAnalysis({
     for (let i = 0; i < candidates.length; i++) {
       const c = candidates[i];
       const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3 });
-      const altMoves = (deepEval.lines ?? [])
-        .filter(l => l.pv && l.pv.split(' ')[0] !== c.bestMoveUci)
-        .map(l => ({ uci: l.pv.split(' ')[0], pv: l.pv, cp: l.cp }))
-        .filter(a => {
-          if (a.cp === null || c.winBefore === undefined) return true;
-          const altWin = winPct(a.cp);
-          return Math.abs(altWin - winPct(deepEval.cp ?? 0)) <= NEAR_MISS_WIN_PTS;
-        });
+      // lines is sorted deepest-first; deduplicate by first move so each unique
+      // alt move is evaluated at its deepest (most accurate) depth only.
+      const seenMoves = new Set([c.bestMoveUci]);
+      const altMoves = [];
+      for (const l of (deepEval.lines ?? [])) {
+        if (!l.pv) continue;
+        const firstMove = l.pv.split(' ')[0];
+        if (seenMoves.has(firstMove)) continue;
+        seenMoves.add(firstMove);
+        if (l.cp !== null && c.winBefore !== undefined) {
+          const altWin = winPct(l.cp);
+          if (Math.abs(altWin - winPct(deepEval.cp ?? 0)) > NEAR_MISS_WIN_PTS) continue;
+        }
+        altMoves.push({ uci: firstMove, pv: l.pv, cp: l.cp });
+      }
       c.altMovesJson = JSON.stringify(altMoves);
 
       const pass2Pct = Math.round(PASS_WEIGHTS[0] * 100 + ((i + 1) / candidates.length) * 100 * PASS_WEIGHTS[1]);

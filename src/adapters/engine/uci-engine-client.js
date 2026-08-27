@@ -36,6 +36,7 @@ export class UciEngineClient {
     this._lineBuffer = '';
     this._listeners = [];
     this._evalQueue = Promise.resolve();
+    this._pendingRejectors = [];
   }
 
   async _handshake() {
@@ -55,6 +56,17 @@ export class UciEngineClient {
       } else {
         log.error({ err }, 'engine process error');
       }
+    });
+
+    // Reject any pending _waitForLine callers when the process exits unexpectedly
+    proc.on('close', (code) => {
+      log.warn({ code, binary: this._binaryPath }, 'engine process closed');
+      this._proc = null;
+      const closeErr = new EngineUnavailableError(
+        `Engine '${this._binaryPath}' process closed unexpectedly`
+      );
+      const rejectors = this._pendingRejectors.splice(0);
+      for (const r of rejectors) r(closeErr);
     });
 
     proc.stdout.on('data', (chunk) => {
@@ -194,22 +206,31 @@ export class UciEngineClient {
   _waitForLine(token, setup, timeoutMs = 60_000) {
     return new Promise((resolve, reject) => {
       let timer;
+      let done = false;
+
+      const cleanup = () => {
+        done = true;
+        clearTimeout(timer);
+        this._listeners = this._listeners.filter(l => l !== handler);
+        this._pendingRejectors = this._pendingRejectors.filter(r => r !== closeReject);
+      };
+
+      const closeReject = (err) => {
+        if (done) return;
+        cleanup();
+        reject(err);
+      };
+      this._pendingRejectors.push(closeReject);
 
       const handler = (line) => {
-        if (line.includes(token)) {
-          clearTimeout(timer);
-          this._listeners = this._listeners.filter(l => l !== handler);
-          // Flush isready after uci handshake
-          if (token === 'readyok') {
-            resolve(line);
-          } else {
-            resolve(line);
-          }
-        }
+        if (!line.includes(token)) return;
+        cleanup();
+        resolve(line);
       };
 
       timer = setTimeout(() => {
-        this._listeners = this._listeners.filter(l => l !== handler);
+        if (done) return;
+        cleanup();
         reject(new EngineTimeoutError(
           `Engine '${this._binaryPath}' timed out waiting for '${token}'`
         ));

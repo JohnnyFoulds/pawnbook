@@ -135,7 +135,7 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
     });
 
     ws.on('error', (err) => {
-      log.error({ err }, 'ws error');
+      log.error({ err, remoteAddress: req.socket.remoteAddress }, 'ws error');
     });
   });
 

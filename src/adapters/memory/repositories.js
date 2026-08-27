@@ -90,7 +90,6 @@ export class InMemoryGameRepository {
       game.eloAfter = eloAfter;
     }
     this._eloHistory.push({ id: historyId ?? randomUUID(), recordedAt: recordedAt ?? Date.now(), elo: eloAfter, gameId });
-    this._settings.set('elo', String(eloAfter));
   }
 
   getEloHistory() {

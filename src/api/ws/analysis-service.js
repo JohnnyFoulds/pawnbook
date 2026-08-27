@@ -68,8 +68,12 @@ export async function analyseGame({
     return;
   }
 
-  // Player ELO and maia model selection
-  const playerElo = parseInt(settingsRepo.get('elo') ?? '1200', 10);
+  // Player ELO: derive from elo_history when available so both SQLite and
+  // in-memory repos return the current ELO without a separate settingsRepo write.
+  const eloHistory = gameRepo.getEloHistory();
+  const playerElo = eloHistory.length > 0
+    ? eloHistory[eloHistory.length - 1].elo
+    : parseInt(settingsRepo.get('elo') ?? '1200', 10);
   const availableOpponents = getAvailableOpponents();
   const availableMaias = availableOpponents.filter(o => o.type === 'maia').map(o => o.id);
   const maiaModel = availableMaias.length
@@ -187,6 +191,9 @@ export async function analyseGame({
         historyId: randomUUID(),
         recordedAt: Date.now(),
       });
+      // Keep settingsRepo in sync — SQLite does this inside updateElo's transaction;
+      // the in-memory repo cannot inject settingsRepo, so we update it here.
+      settingsRepo.set('elo', String(eloAfter));
     }
 
     // Update game with analysis results

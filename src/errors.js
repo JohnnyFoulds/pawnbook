@@ -39,6 +39,7 @@ export const ErrorCode = Object.freeze({
   ANALYSIS_FAILED: 'analysis_failed',
   HINT_NOT_ALLOWED: 'hint_not_allowed',
   VALIDATION_FAILED: 'validation_failed',
+  RATE_LIMITED: 'rate_limited',
 });
 
 /** @type {Map<Function, string>} */

@@ -64,6 +64,8 @@ async function start() {
 
   // ── Express app ───────────────────────────────────────────────────────────
   const app = express();
+  app.set('etag', 'strong');
+  app.disable('x-powered-by');
   app.use(express.json());
 
   // Serve src/shared/ as /shared/ so browser ES modules can import quality.js etc.
