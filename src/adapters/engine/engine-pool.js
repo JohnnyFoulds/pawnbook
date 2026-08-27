@@ -29,6 +29,20 @@ const MAIA_MOVETIME_MS = 200;
 const SF_MOVETIME_MS   = 500;
 
 /**
+ * Compute safe engine movetime: min(engineRemainder - 300ms, SF_MOVETIME_MS).
+ * Prevents the engine from flagging itself on low time controls.
+ * @param {object} session
+ * @returns {number} movetime in ms
+ */
+export function engineMovetime(session) {
+  if (!session.timeControl) return SF_MOVETIME_MS;
+  const engineColor = session.playerColor === 'white' ? 'black' : 'white';
+  const engineMs = engineColor === 'white' ? session._clockWhiteMs : session._clockBlackMs;
+  if (engineMs == null || engineMs <= 0) return SF_MOVETIME_MS;
+  return Math.min(Math.max(100, engineMs - 300), SF_MOVETIME_MS);
+}
+
+/**
  * Create and return an engine pool.
  * Clients are lazily started and cached for the process lifetime.
  *
@@ -74,7 +88,7 @@ export function createEnginePool() {
         } else {
           client._write('setoption name UCI_LimitStrength value false\n');
         }
-        const result = await client.eval(fen, { movetime: SF_MOVETIME_MS });
+        const result = await client.eval(fen, { movetime: engineMovetime(session) });
         return { uci: result.bestmove };
       }
 
@@ -83,7 +97,7 @@ export function createEnginePool() {
           throw new Error('Drawfish is not available in native mode (x86-64 ELF)');
         }
         const client = await getClient('drawfish', ENGINE_PATHS.drawfish);
-        const result = await client.eval(fen, { movetime: SF_MOVETIME_MS });
+        const result = await client.eval(fen, { movetime: engineMovetime(session) });
         return { uci: result.bestmove };
       }
 

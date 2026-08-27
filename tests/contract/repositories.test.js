@@ -234,6 +234,18 @@ describe('[sqlite] schema', () => {
     `);
     expect(() => stmt.run('x', 1, 'maia-1300', 'white', 'finished', 'zzz')).toThrow();
   });
+
+  it('move_evals PK (game_id, ply) rejects duplicates', () => {
+    applySchema(db);
+    db.prepare(`INSERT INTO games (id, started_at, opponent_id, player_color) VALUES (?, ?, ?, ?)`)
+      .run('g1', 1, 'maia-1300', 'white');
+    const FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const insert = db.prepare(`
+      INSERT INTO move_evals (game_id, ply, fen, move_uci, mover) VALUES (?, ?, ?, ?, ?)
+    `);
+    insert.run('g1', 1, FEN, 'e2e4', 'player');
+    expect(() => insert.run('g1', 1, FEN, 'e2e4', 'player')).toThrow();
+  });
 });
 
 // ─── openDb helper ───────────────────────────────────────────────────────────

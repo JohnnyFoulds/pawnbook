@@ -58,6 +58,27 @@ describe('ws-handlers: makeMessageHandler', () => {
     expect(ws._messages[0].type).toBe('error');
   });
 
+  it('invalid timeControl payload is rejected by Zod before a game row is created', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    // initialSec must be a positive integer — -1 should fail validation
+    await handler(ws, JSON.stringify({
+      type: 'new_game',
+      opponentId: 'sf-1400',
+      color: 'white',
+      ranked: false,
+      timeControl: { initialSec: -1, incSec: 0 },
+    }));
+
+    const msg = ws._messages[0];
+    expect(msg.type).toBe('error');
+    expect(msg.error_code).toBe('validation_failed');
+    // No game row should have been created
+    expect(gameRepo.findAll?.()?.length ?? 0).toBe(0);
+  });
+
   it('new_game with valid payload sends game_started', async () => {
     const handler = makeMessageHandler({
       gameRepo: new InMemoryGameRepository(),

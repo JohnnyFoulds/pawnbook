@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import { parsePolicyLines, selectTopLine } from '../../src/adapters/engine/uci-engine-client.js';
 import { ScriptedEngineClient } from '../../src/adapters/engine/scripted-engine-client.js';
+import { engineMovetime } from '../../src/adapters/engine/engine-pool.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '../fixtures/engine-output');
@@ -135,5 +136,58 @@ describe('uci: selectTopLine', () => {
 
   it('returns empty object for empty input', () => {
     expect(selectTopLine([], 1)).toEqual({});
+  });
+});
+
+// ─── engineMovetime (clock-aware movetime cap) ────────────────────────────────
+
+describe('engine pool: engineMovetime', () => {
+  function session(overrides = {}) {
+    return {
+      playerColor: 'white',
+      timeControl: null,
+      _clockWhiteMs: 180_000,
+      _clockBlackMs: 180_000,
+      ...overrides,
+    };
+  }
+
+  it('returns SF_MOVETIME_MS when no time control', () => {
+    expect(engineMovetime(session())).toBe(500);
+  });
+
+  it('returns SF_MOVETIME_MS when engine has plenty of time', () => {
+    const s = session({ timeControl: { initialSec: 180, incSec: 0 } });
+    // Engine is black (player is white), black has 180s → 500ms cap applies
+    expect(engineMovetime(s)).toBe(500);
+  });
+
+  it('caps movetime when engine is running low', () => {
+    const s = session({
+      timeControl: { initialSec: 10, incSec: 0 },
+      _clockBlackMs: 700,  // engine (black) has 700ms left
+    });
+    // min(700 - 300, 500) = min(400, 500) = 400
+    expect(engineMovetime(s)).toBe(400);
+  });
+
+  it('returns 100ms floor when engine has almost no time', () => {
+    const s = session({
+      timeControl: { initialSec: 10, incSec: 0 },
+      _clockBlackMs: 50, // engine has 50ms left
+    });
+    // max(100, 50 - 300) = max(100, -250) = 100
+    expect(engineMovetime(s)).toBe(100);
+  });
+
+  it('reads engine clock from white when player is black', () => {
+    const s = session({
+      playerColor: 'black',
+      timeControl: { initialSec: 10, incSec: 0 },
+      _clockWhiteMs: 600, // engine (white) has 600ms left
+      _clockBlackMs: 180_000,
+    });
+    // min(600 - 300, 500) = min(300, 500) = 300
+    expect(engineMovetime(s)).toBe(300);
   });
 });
