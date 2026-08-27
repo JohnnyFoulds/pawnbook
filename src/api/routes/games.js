@@ -30,7 +30,43 @@ export function gamesRouter({ gameRepo, puzzleRepo }) {
       const game = gameRepo.findById(req.params.id);
       const evals = gameRepo.getEvals(req.params.id);
       const puzzles = puzzleRepo.listByGame(req.params.id);
-      res.json({ game, evals, puzzles });
+
+      const moves = evals.map((r) => ({
+        ply: r.ply,
+        san: r.move_san,
+        uci: r.move_uci,
+        mover: r.mover,
+        winPct: r.win_after ?? r.win_before ?? 50,
+        classification: r.classification ?? null,
+        cpLoss: r.cp_loss ?? null,
+      }));
+
+      const mistakes = puzzles.map((p) => ({
+        classification: p.classification,
+        moveSan: p.played_move_san,
+        winLoss: p.win_loss_pts,
+        tags: p.tags ? (() => { try { return JSON.parse(p.tags); } catch { return []; } })() : [],
+        bestMoveSan: p.best_move_san,
+        findability: p.findability,
+        maiaNearestModel: p.maia_model ?? null,
+        engineOnly: false,
+        sourcePly: p.source_ply,
+      }));
+
+      res.json({
+        id: game.id,
+        opponentId: game.opponentId,
+        playerColor: game.playerColor,
+        result: game.result,
+        termination: game.termination,
+        accuracy: game.accuracy,
+        opponentAccuracy: game.opponentAccuracy,
+        eloBefore: game.eloBefore,
+        eloAfter: game.eloAfter,
+        moves,
+        mistakes,
+        puzzleCount: puzzles.length,
+      });
     } catch (err) {
       next(err);
     }

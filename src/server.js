@@ -67,7 +67,7 @@ async function start() {
   app.use('/api/games',     gamesRouter({ gameRepo, puzzleRepo }));
   app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }));
   app.use('/api/stats',     statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }));
-  app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, clock }));
+  app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }));
 
   app.use(errorMiddleware);
 

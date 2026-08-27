@@ -37,7 +37,7 @@ let analysisRunning = false;
 
 async function boot() {
   try {
-    const [opponents, state] = await Promise.all([
+    const [{ opponents }, state] = await Promise.all([
       api('/api/opponents'),
       api('/api/state'),
     ]);
