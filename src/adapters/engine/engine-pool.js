@@ -105,6 +105,9 @@ export function createEnginePool() {
 
       if (opponent.type === 'stockfish') {
         const client = await getClient('stockfish', ENGINE_PATHS.stockfish);
+        // Game SF: minimal resources so the analysis engine can run concurrently
+        client.setOption('Threads', 1);
+        client.setOption('Hash', 16);
         const targetElo = SF_ELO[opponent.id];
         if (targetElo !== null && targetElo !== undefined) {
           client._write('setoption name UCI_LimitStrength value true\n');
@@ -137,10 +140,24 @@ export function createEnginePool() {
       if (pool.has(key)) return pool.get(key);
       log.info({ key }, 'starting analysis stockfish');
       const client = await createUciEngineClient(ENGINE_PATHS.stockfish);
-      client.setOption('Threads', 6);
-      client.setOption('Hash', 1024);
+      // During play: lighter config to stay responsive while incremental pre-evals run
+      client.setOption('Threads', 4);
+      client.setOption('Hash', 512);
       pool.set(key, client);
       return client;
+    },
+
+    /**
+     * Reconfigure the analysis Stockfish for post-game deep analysis (pass 2).
+     * Uses setoption — no process restart.
+     */
+    async reconfigureAnalysisSfForPassTwo() {
+      const key = 'sf-analysis';
+      const client = pool.get(key);
+      if (!client) return; // not yet started — first post-game use will start with defaults
+      log.info({ key }, 'reconfiguring analysis SF for post-game pass 2: Threads=6 Hash=1024');
+      client.setOption('Threads', 6);
+      client.setOption('Hash', 1024);
     },
 
     /**

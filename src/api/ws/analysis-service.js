@@ -99,6 +99,9 @@ export async function analyseGame({
     return;
   }
 
+  // Reconfigure analysis SF to full resources before the post-game deep passes
+  await enginePool.reconfigureAnalysisSfForPassTwo?.();
+
   const wasTimed = session._timeControlInitialSec != null;
   const plies = moves.map(m => m.uci);
   const existingEvals = gameRepo.getEvals(gameId);

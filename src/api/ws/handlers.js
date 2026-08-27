@@ -162,6 +162,13 @@ async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions }) {
     clockUpdate: moveResult.clockUpdate,
   });
 
+  // Notify connection.js to queue a pre-eval for the resulting position
+  ws.emit('player_move_pre_eval', {
+    gameId: session.id,
+    ply: session.moves.length + 1,
+    fen: moveResult.fen,
+  });
+
   // Signal that the engine should now move
   ws.emit('engine_turn', session);
 }
