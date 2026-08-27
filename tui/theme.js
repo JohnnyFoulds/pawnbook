@@ -164,6 +164,7 @@ export function bgAnsi256(n) { return `\x1b[48;5;${n}m`; }
 export function fgAnsi256(n) { return `\x1b[38;5;${n}m`; }
 
 export const RESET = '\x1b[0m';
+export const BOLD  = '\x1b[1m';
 
 /**
  * Build a palette adapted to the detected colour depth.
