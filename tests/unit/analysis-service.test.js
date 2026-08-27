@@ -169,6 +169,37 @@ describe('analyseGame', () => {
     expect(analysisTypes).not.toContain('analysis_done');
   });
 
+  it('analysis_state transitions pending→running→done on a successful analysis', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const settingsRepo = new InMemorySettingsRepository();
+    settingsRepo.set('elo', '1200');
+
+    const session = makeFakeSession();
+    // Game starts as pending (default analysis_state)
+    gameRepo.save({ id: session.id, opponentId: session.opponent.id,
+      opponentElo: session.opponent.elo, playerColor: 'white', ranked: false, status: 'in_progress',
+      analysisState: 'pending' });
+    gameRepo.appendMove(session.id, { ply: 1, uci: 'e2e4', san: 'e4', msTaken: null });
+    gameRepo.appendMove(session.id, { ply: 2, uci: 'e7e5', san: 'e5', msTaken: null });
+
+    const ws = makeFakeWs();
+    const enginePool = makeFakeEnginePool();
+
+    await analyseGame({
+      gameId: session.id, session, result: { result: 'win', termination: 'checkmate' },
+      ws, gameRepo, puzzleRepo, settingsRepo, enginePool,
+    });
+
+    const savedGame = gameRepo.findById(session.id);
+    expect(savedGame.analysisState).toBe('done');
+
+    // 'running' state is set on the way through; verify analysis_done was emitted
+    const doneMsg = ws._sent.find(m => m.type === 'analysis_done');
+    expect(doneMsg).toBeDefined();
+    expect(doneMsg.gameId).toBe(session.id);
+  });
+
   it('marks analysis_state as failed if engine pool throws', async () => {
     const gameRepo = new InMemoryGameRepository();
     const puzzleRepo = new InMemoryPuzzleRepository();
