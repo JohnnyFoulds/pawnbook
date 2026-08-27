@@ -33,6 +33,12 @@ let board = null;
 let isRanked = true;
 let analysisRunning = false;
 
+// Resolved when the board DOM is initialised and ready to receive setPosition calls.
+// Prevents engine_move updates being lost when player is black and the engine
+// replies before the CDN import for cm-chessboard has finished.
+let _boardReadyResolve = null;
+let _boardReady = Promise.resolve(); // default: already resolved (no-op for first call)
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 
 async function boot() {
@@ -49,6 +55,18 @@ async function boot() {
 
     const dueCount = state.dueCount ?? 0;
     document.querySelectorAll('#due-count').forEach((el) => { el.textContent = String(dueCount); });
+
+    // Auto-resume an in-progress game after page refresh
+    if (state.inProgressGameId) {
+      selectedOpponentId = state.inProgressOpponentId ?? state.inProgressGameId;
+      document.getElementById('setup-panel').style.display = 'none';
+      document.getElementById('game-area').style.display = 'block';
+      connectWS(() => {
+        ws.send(JSON.stringify({ type: 'resume', gameId: state.inProgressGameId }));
+      });
+      setupSetupHandlers();
+      return;
+    }
   } catch (err) {
     console.error('Boot error:', err);
   }
@@ -241,10 +259,15 @@ function onGameStarted(msg) {
   if (!isRanked) document.getElementById('hint-btn').style.display = '';
 }
 
-function onEngineMove(msg) {
+async function onEngineMove(msg) {
   currentFen = msg.fen;
   legalMoves = msg.legalMoves ?? [];
   document.getElementById('thinking-display').style.display = 'none';
+
+  // Wait for the board to be ready — this handles the race where the engine
+  // (especially Maia, which is very fast) replies before initBoard's CDN
+  // imports have finished, e.g. when the player is black and engine moves first.
+  await _boardReady;
 
   if (board) {
     board.clearMarkers();
@@ -330,6 +353,10 @@ function onAnalysisDone(msg) {
 // ── Board ──────────────────────────────────────────────────────────────────
 
 async function initBoard(fen, orientation) {
+  // Reset the ready gate — any engine_move that arrives while the CDN is loading
+  // will await this promise and apply the position once the board exists.
+  _boardReady = new Promise(resolve => { _boardReadyResolve = resolve; });
+
   const el = document.getElementById('board-wrap');
   el.innerHTML = '';
 
@@ -343,6 +370,8 @@ async function initBoard(fen, orientation) {
     onMove: handlePlayerMove,
     getLegalMoves: () => legalMoves.map(m => m.uci),
   });
+
+  _boardReadyResolve();
 }
 
 function handlePlayerMove({ from, to }) {

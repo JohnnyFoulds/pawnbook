@@ -186,13 +186,20 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
     gameId: session.id,
     fen: session.fen,
     youPlay: game.playerColor,
-    legalMoves: session.legalMoves,
+    // Send empty legalMoves if it's the engine's turn so the client doesn't
+    // allow player input while waiting for the engine reply.
+    legalMoves: session.isPlayerTurn ? session.legalMoves : [],
     resumed: true,
   };
   if (game.timeControlInitialSec) {
     reply.clock = { whiteMs: game.clockWhiteMs, blackMs: game.clockBlackMs };
   }
   send(ws, reply);
+
+  // Trigger engine if it was the engine's turn when the session was interrupted.
+  if (!session.isPlayerTurn) {
+    ws.emit('engine_turn', session);
+  }
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

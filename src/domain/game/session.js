@@ -50,6 +50,11 @@ export class GameSession {
   get fen() { return this._chess.fen(); }
   get isOver() { return this._status !== 'in_progress'; }
   get moves() { return this._moves; }
+  /** True when it is the human player's turn to move. */
+  get isPlayerTurn() {
+    const turnColor = this._chess.turn() === 'w' ? 'white' : 'black';
+    return turnColor === this.playerColor;
+  }
 
   /** @returns {{uci: string, san: string}[]} */
   get legalMoves() {

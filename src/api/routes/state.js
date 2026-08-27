@@ -50,6 +50,8 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
       const finishedGames = gameRepo.listRecent(1000).filter((g) => g.status === 'finished');
       const gamesPlayed = finishedGames.length;
 
+      const inProgressGame = gameRepo.listRecent(10).find(g => g.status === 'in_progress');
+
       res.json({
         elo,
         dueCount,
@@ -61,6 +63,8 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
         eloHistory: eloHistory.map((h) => ({ elo: h.elo, recordedAt: h.recordedAt })),
         recentGames,
         suggestedOpponent: null,
+        inProgressGameId: inProgressGame?.id ?? null,
+        inProgressOpponentId: inProgressGame?.opponentId ?? null,
       });
     } catch (err) {
       next(err);
