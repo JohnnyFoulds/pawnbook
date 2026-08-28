@@ -387,4 +387,92 @@ describe('analyseGame', () => {
     const afterSecond = puzzleRepo.listAll();
     expect(afterSecond.length).toBe(afterFirst.length);
   });
+
+  it('the success save persists both strength estimates and both sample rows', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const settingsRepo = new InMemorySettingsRepository();
+    settingsRepo.set('elo', '1200');
+
+    const session = makeFakeSession({ ranked: false });
+    gameRepo.save({ id: session.id, opponentId: session.opponent.id,
+      opponentElo: session.opponent.elo, playerColor: 'white', ranked: false, status: 'in_progress' });
+    // Two plies → n=1 per side; strength will be null (< STRENGTH_MIN_PLIES) but samples are saved
+    gameRepo.appendMove(session.id, { ply: 1, uci: 'e2e4', san: 'e4', msTaken: 500 });
+    gameRepo.appendMove(session.id, { ply: 2, uci: 'e7e5', san: 'e5', msTaken: 500 });
+
+    await analyseGame({
+      gameId: session.id, session, result: { result: 'draw', termination: 'stalemate' },
+      ws: makeFakeWs(), gameRepo, puzzleRepo, settingsRepo, enginePool: makeFakeEnginePool(),
+    });
+
+    const game = gameRepo.findById(session.id);
+    // strengthElo is null (too few plies) but must be explicitly null, not undefined
+    expect(game.strengthElo).toBeNull();
+    expect(game.opponentStrengthElo).toBeNull();
+    // strength_samples rows written (n=1 per side, both n > 0)
+    const samples = gameRepo.listStrengthSamples();
+    expect(samples.length).toBe(2);
+    const sides = samples.map(s => s.side).sort();
+    expect(sides).toEqual(['opponent', 'player']);
+  });
+
+  it('a failed analysis does not null a previously stored strength estimate (FR-ANALYSE-15)', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const settingsRepo = new InMemorySettingsRepository();
+    settingsRepo.set('elo', '1200');
+
+    const session = makeFakeSession({ ranked: false });
+    // Save a game that was previously analysed successfully
+    gameRepo.save({ id: session.id, opponentId: session.opponent.id,
+      opponentElo: session.opponent.elo, playerColor: 'white', ranked: false,
+      status: 'finished', result: 'draw', termination: 'stalemate',
+      analysisState: 'done', accuracy: 82.5, opponentAccuracy: 79.0,
+      strengthElo: 1450, opponentStrengthElo: 1820 });
+    gameRepo.appendMove(session.id, { ply: 1, uci: 'e2e4', san: 'e4', msTaken: 500 });
+    gameRepo.appendMove(session.id, { ply: 2, uci: 'e7e5', san: 'e5', msTaken: 500 });
+
+    // Force a failure by making the engine pool throw
+    const failPool = {
+      async getAnalysisSfClient() { throw new Error('engine unavailable'); },
+      async getMaiaAnalysisClient() { throw new Error('engine unavailable'); },
+    };
+    await analyseGame({
+      gameId: session.id, session, result: { result: 'draw', termination: 'stalemate' },
+      ws: makeFakeWs(), gameRepo, puzzleRepo, settingsRepo, enginePool: failPool,
+    });
+
+    const game = gameRepo.findById(session.id);
+    expect(game.analysisState).toBe('failed');
+    expect(game.strengthElo).toBe(1450);
+    expect(game.opponentStrengthElo).toBe(1820);
+  });
+
+  it('a failed analysis does not null a previously stored accuracy (FR-ANALYSE-15)', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const settingsRepo = new InMemorySettingsRepository();
+    settingsRepo.set('elo', '1200');
+
+    const session = makeFakeSession({ ranked: false });
+    gameRepo.save({ id: session.id, opponentId: session.opponent.id,
+      opponentElo: session.opponent.elo, playerColor: 'white', ranked: false,
+      status: 'finished', result: 'draw', termination: 'stalemate',
+      analysisState: 'done', accuracy: 91.3, opponentAccuracy: 88.7 });
+    gameRepo.appendMove(session.id, { ply: 1, uci: 'e2e4', san: 'e4', msTaken: 500 });
+
+    const failPool = {
+      async getAnalysisSfClient() { throw new Error('engine down'); },
+    };
+    await analyseGame({
+      gameId: session.id, session, result: { result: 'draw', termination: 'stalemate' },
+      ws: makeFakeWs(), gameRepo, puzzleRepo, settingsRepo, enginePool: failPool,
+    });
+
+    const game = gameRepo.findById(session.id);
+    expect(game.analysisState).toBe('failed');
+    expect(game.accuracy).toBeCloseTo(91.3);
+    expect(game.opponentAccuracy).toBeCloseTo(88.7);
+  });
 });
