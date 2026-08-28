@@ -470,3 +470,34 @@ calibration: the newest strength-model.json entry matches balance.js and STRENGT
 ```
 
 **DoD:** All 634 tests pass (632 passing + 2 expected fail); branch coverage 91.03%; `scripts/refit-strength.js` exits non-zero on the 2-game corpus with the required message; `calibration/strength-model.json` v1 committed; `docs/research/strength-estimation.md` written; no model binary in any commit.
+
+---
+
+## Phase 15 — Acquire the upgrade assets
+
+**Status:** Complete — 2026-08-28
+
+**Branch:** `feat/phase-15-upgrade-assets`  
+**Files:** `.gitignore`, `scripts/build-opening-book.js` (new), `docs/research/skill-models.md` (new), `docs/research/opening-elo-book.md` (new)  
+**Spec refs:** none (acquisition only — no `src/` changes)
+
+**Design:** Acquire and verify Maia-3 and Maia-2, and write the opening-book script, so the v2 refit has inputs to fit against. Nothing in `src/` changes; `make verify` output is identical before and after.
+
+**Maia-3 (primary).** Fetched via `maia3-cache --cache-dir weights/maia3`. Sizes match the HF-published bytes: 5M = 20,968,049 B, 23M = 91,799,307 B. UCI interface confirmed: all five options (`SelfElo`, `OppoElo`, `MultiPV`, `Temperature`, `TopP`) advertised. Decisive test: SelfElo 1100 vs 2400 produces different MultiPV orderings on `e2e4 e7e5 Nf3` — conditioning is real. Wall-clock (M4 CPU): ~430 ms first call (model load), ~15–50 ms subsequently.
+
+**Maia-2 (fallback).** Fetched from `shermansiu/maia2-rapid` (93 MB) into `weights/maia2/original/model.pt` and `from_pretrained` also downloaded the 280 MB Drive file to `weights/maia2/rapid_model.pt`. SHA-256 of the HF file verified against the digest pinned in `CSSLab/maia2/model.py`: `65aae846...e997` — exact match. Smoke test: `inference_each` on the start position at elo_self=1500 returns a distribution summing to 0.9999 with plausible opening moves. **API correction from plan:** maia2 0.11.0 `prepare()` takes no arguments; `inference_each` returns `(dict[uci→prob], win_prob)` — the plan's pre-fetch description was inaccurate.
+
+**Opening book.** `scripts/build-opening-book.js` written. Exits non-zero with the token URL when `LICHESS_TOKEN` is absent (verified). BFS crawl, EPD-keyed, rate-limited at ≤ 1 req/s, resumes from partial output, writes `calibration/opening-elo-book.json` with provenance header. Crawl not yet run (no Lichess token in this environment).
+
+```
+maia3:   uci advertises SelfElo, OppoElo and MultiPV as spin options
+maia3:   the multipv ordering CHANGES between SelfElo 1100 and SelfElo 2400
+maia3:   Temperature 0 makes two identical go calls return the same bestmove
+maia3:   per-go wall-clock recorded for 5M and 23M on this machine
+maia2:   the rapid checkpoint matches the SHA-256 pinned in CSSLab/maia2/maia2/model.py
+maia2:   from_pretrained validates the local file and loads without Drive re-download
+maia2:   inference_each on the start position returns a distribution summing to ~1
+book:    build-opening-book exits non-zero with the token URL when LICHESS_TOKEN is unset
+```
+
+**DoD:** Maia-3 5M and 23M cached in `weights/maia3/` (gitignored); the SelfElo ordering test passing; Maia-2 rapid checkpoint on disk and digest-verified; `docs/research/skill-models.md` and `docs/research/opening-elo-book.md` written; `scripts/build-opening-book.js` exits cleanly on the no-token path; no model binary in any commit; `make verify` suite unchanged.
