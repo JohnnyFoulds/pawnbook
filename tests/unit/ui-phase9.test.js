@@ -263,6 +263,53 @@ describe('JS modules', () => {
   });
 });
 
+// ── Phase 14 UI checks ───────────────────────────────────────────────────────
+
+describe('ui: games.html has eight columns and the loading row spans all eight', () => {
+  it('games.html has eight <th> elements in the header row', () => {
+    const html = readFile('public/games.html');
+    const thMatches = html.match(/<th[\s>]/g) ?? [];
+    expect(thMatches.length).toBe(8);
+  });
+
+  it('the loading row uses colspan="8"', () => {
+    const html = readFile('public/games.html');
+    expect(html).toMatch(/colspan="8"/);
+  });
+});
+
+describe('ui: games.js renders both strength numbers in one cell', () => {
+  it('games.js references strengthElo', () => {
+    const js = readFile('public/js/games.js');
+    expect(js).toMatch(/strengthElo/);
+  });
+
+  it('games.js renders an em dash for a null estimate', () => {
+    const js = readFile('public/js/games.js');
+    // em dash character or the HTML entity — must be present
+    expect(js).toMatch(/[—]|&mdash;/u);
+  });
+});
+
+describe('ui: review.js writes strength-line as a sibling of acc-bars, not into it', () => {
+  it('review.html has a #strength-line div as a sibling of #acc-bars (not nested inside)', () => {
+    const html = readFile('public/review.html');
+    // The #acc-bars div must close before #strength-line appears
+    const accBarsClose = html.indexOf('</div>', html.indexOf('id="acc-bars"'));
+    const strengthLineIdx = html.indexOf('id="strength-line"');
+    expect(accBarsClose).toBeLessThan(strengthLineIdx);
+  });
+
+  it('review.js defines renderStrengthLine called after renderAccuracyBars', () => {
+    const js = readFile('public/js/review.js');
+    expect(js).toMatch(/renderStrengthLine/);
+    const accIdx = js.indexOf('renderAccuracyBars(review)');
+    const strIdx = js.indexOf('renderStrengthLine(review)');
+    expect(accIdx).toBeGreaterThan(-1);
+    expect(strIdx).toBeGreaterThan(accIdx);
+  });
+});
+
 // ── strings.json ↔ voice_and_tone.md regression ─────────────────────────────
 
 describe('regression: strings.json ↔ voice_and_tone.md', () => {

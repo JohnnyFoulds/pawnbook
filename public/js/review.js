@@ -50,6 +50,7 @@ async function boot() {
     }
 
     renderAccuracyBars(review);
+    renderStrengthLine(review);
     renderMoveList(review.moves ?? []);
     renderEvalGraphSection(review);
     renderBreakdownSection(review);
@@ -89,6 +90,25 @@ function renderAccuracyBars(review) {
       <div class="acc-bar-pct">${Math.round(r.pct)}%</div>
     </div>
   `).join('');
+}
+
+function renderStrengthLine(review) {
+  const el = document.getElementById('strength-line');
+  if (!el) return;
+  const { strengthElo, opponentStrengthElo, strengthSe, opponentStrengthSe, rollingStrength, rollingSe, opponentId } = review;
+  if (strengthElo == null && opponentStrengthElo == null) {
+    el.innerHTML = '<span style="color:var(--ink-muted)">Not enough positions to estimate strength.</span>';
+    return;
+  }
+  const fmt = (elo, se) => elo != null ? `${elo}${se != null ? ' <span style="color:var(--ink-muted)">±' + se + '</span>' : ''}` : '—';
+  const rolling = rollingStrength != null
+    ? `<span style="color:var(--ink-muted);font-size:12px;margin-left:12px">Last 10 games: ${rollingStrength}${rollingSe != null ? ' ±' + rollingSe : ''}</span>`
+    : '';
+  el.innerHTML =
+    `<strong>You</strong> ${fmt(strengthElo, strengthSe)} &nbsp;·&nbsp; ` +
+    `<strong>${opponentId ?? 'Opponent'}</strong> ${fmt(opponentStrengthElo, opponentStrengthSe)}` +
+    rolling +
+    `<span style="color:var(--ink-muted);font-size:11px;margin-left:8px">(± = 1 SE)</span>`;
 }
 
 function renderMoveList(moves) {
