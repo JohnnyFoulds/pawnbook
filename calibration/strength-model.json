@@ -1,0 +1,13 @@
+[
+  {
+    "version": 1,
+    "fittedAt": "2026-08-28",
+    "anchorElo": 1600,
+    "anchorAse": 0.137,
+    "eloPerAse": 13034,
+    "source": "Slope: least-squares fit of Regan & Haworth 2011 Elo<->ada table (R2=0.981). Anchor: provisional from Regan's 1600 table row; will be replaced with local measurement after step-3 anchor fit.",
+    "nSamples": 0,
+    "distinctRatings": 0,
+    "residualMae": null
+  }
+]

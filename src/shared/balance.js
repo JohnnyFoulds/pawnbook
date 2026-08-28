@@ -48,6 +48,18 @@ export const INCREMENTAL_MAX_QUEUE = 5;
 // time is plentiful while the player thinks).
 export const INCREMENTAL_DEPTH = 20;
 
+// Playing-strength estimate — scaled error → Elo (docs/game/balance.md § Playing strength)
+export const STRENGTH_ANCHOR_ELO   = 1600;
+export const STRENGTH_ANCHOR_ASE   = 0.137;   // provisional — replaced in step 3
+export const STRENGTH_ELO_PER_ASE  = 13034;   // Regan & Haworth 2011 table fit, R²=0.981
+export const STRENGTH_CP_CAP       = 300;
+export const STRENGTH_DECIDED_CP   = 600;
+export const STRENGTH_MIN_PLIES    = 12;
+export const STRENGTH_ELO_MIN      = 600;
+export const STRENGTH_ELO_MAX      = 2900;
+export const STRENGTH_ROLLING_N    = 10;
+export const STRENGTH_COEFF_VERSION = 1;      // = newest calibration/strength-model.json version
+
 // Time controls offered (null = untimed)
 export const TIME_CONTROLS = [
   null,
