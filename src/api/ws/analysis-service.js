@@ -13,7 +13,7 @@ import { runAnalysis } from '../../domain/analysis/pipeline.js';
 import { selectPuzzles } from '../../domain/puzzles/select.js';
 import { nearestMaiaModel } from '../../domain/analysis/findability.js';
 import { updateElo } from '../../domain/game/elo.js';
-import { getAvailableOpponents } from '../../domain/game/roster.js';
+import { getMaiaAnalysisWeights } from '../../domain/game/roster.js';
 import { logger } from '../../config.js';
 import { getTracer } from '../../telemetry.js';
 import { STRENGTH_COEFF_VERSION } from '../../shared/balance.js';
@@ -86,8 +86,7 @@ export async function analyseGame({
   const playerElo = eloHistory.length > 0
     ? eloHistory[eloHistory.length - 1].elo
     : parseInt(settingsRepo.get('elo') ?? '1200', 10);
-  const availableOpponents = getAvailableOpponents();
-  const availableMaias = availableOpponents.filter(o => o.type === 'maia').map(o => o.id);
+  const availableMaias = getMaiaAnalysisWeights();
   const maiaModel = availableMaias.length
     ? nearestMaiaModel(playerElo, availableMaias)
     : null;

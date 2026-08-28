@@ -25,11 +25,13 @@ const NATIVE_PATHS = {
   stockfish: process.env.STOCKFISH_PATH || '/opt/homebrew/opt/stockfish/bin/stockfish',
   lc0: process.env.LC0_PATH || '/opt/homebrew/Cellar/lc0/0.32.1/libexec/lc0',
   drawfish: process.env.DRAWFISH_PATH || null, // arm64 ELF built in container; null skips it in native mode
+  maia3: process.env.MAIA3_PATH || '/opt/homebrew/Caskroom/miniconda/base/envs/pawnbook-models/bin/maia3-5m',
 };
 const CONTAINER_PATHS = {
   stockfish: '/usr/local/bin/stockfish',
   lc0: '/usr/local/bin/lc0',
   drawfish: '/usr/local/bin/drawfish',
+  maia3: '/usr/local/bin/maia3-5m',
 };
 
 export const ENGINE_PATHS = ENGINE_MODE === 'native' ? NATIVE_PATHS : CONTAINER_PATHS;
