@@ -147,13 +147,8 @@ describe('pipeline: POV contract in analysis context', () => {
     // In a quiet game, cpWhite should not swing wildly — check no two adjacent evals
     // differ by more than 60 cp (the normalised swing is at most 50 cp from ±25).
     for (let i = 1; i < moveEvals.length; i++) {
-      const prev = moveEvals[i - 1].cpWhite ?? 0;
-      const curr = moveEvals[i].cpWhite ?? 0;
-      // The old bug would produce ±25 sawtooth with a swing of 50 cp on EVERY consecutive pair.
-      // After the fix, consecutive positions may still differ (different sides to move → opposite
-      // signs), but cpLoss is computed correctly, so no wild classification should occur.
-      // This assertion is intentionally relaxed — it just confirms no position is reported as
-      // a massive blunder (winLoss >= 30) when both sides have equal cp=25 from their POV.
+      // The old bug produced a ±25 sawtooth; after the fix cpLoss is correct so no ply
+      // should read as a massive blunder (winLoss >= 30) when both sides have cp=25.
       expect(Math.abs(moveEvals[i].winLoss)).toBeLessThan(30);
     }
   });

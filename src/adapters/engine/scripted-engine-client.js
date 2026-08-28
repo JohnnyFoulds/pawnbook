@@ -3,8 +3,9 @@
  * Replays recorded UCI output from fixture files — no engine binary needed.
  */
 
-import { parsePolicyLines } from './uci-engine-client.js';
 import { normaliseToWhitePov } from '../../shared/pov.js';
+
+import { parsePolicyLines } from './uci-engine-client.js';
 
 export class ScriptedEngineClient {
   /**
