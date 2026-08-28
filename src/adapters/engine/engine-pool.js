@@ -107,6 +107,19 @@ export function createEnginePool() {
     async requestMove(session) {
       const { opponent, fen } = session;
 
+      if (opponent.type === 'maia3') {
+        // Single Maia-3 binary; SelfElo UCI option selects the playing strength.
+        // OppoElo defaults to 1500 — threading the live player Elo is deferred.
+        const client = await getClient('maia3', ENGINE_PATHS.maia3, [
+          '--cache-dir', `${WEIGHTS_DIR}/maia3`,
+          '--local-files-only',
+        ]);
+        client.setOption('SelfElo', opponent.elo);
+        client.setOption('Temperature', '0');
+        const result = await client.eval(fen, { movetime: MAIA_MOVETIME_MS });
+        return { uci: result.bestmove };
+      }
+
       if (opponent.type === 'maia') {
         const weightsPath = `${WEIGHTS_DIR}/${opponent.id}.pb.gz`;
         const client = await getClient(

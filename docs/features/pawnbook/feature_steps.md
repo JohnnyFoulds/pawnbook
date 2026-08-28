@@ -501,3 +501,41 @@ book:    build-opening-book exits non-zero with the token URL when LICHESS_TOKEN
 ```
 
 **DoD:** Maia-3 5M and 23M cached in `weights/maia3/` (gitignored); the SelfElo ordering test passing; Maia-2 rapid checkpoint on disk and digest-verified; `docs/research/skill-models.md` and `docs/research/opening-elo-book.md` written; `scripts/build-opening-book.js` exits cleanly on the no-token path; no model binary in any commit; `make verify` suite unchanged.
+
+## Phase 16 — Maia-3 UCI integration (Complete — 2026-08-28)
+
+**Status:** Complete  
+**Branch:** `feat/phase-16-maia3`  
+**Files:**
+- `src/config.js` — added `maia3` to `NATIVE_PATHS` and `CONTAINER_PATHS`
+- `src/domain/game/roster.js` — changed all maia entries to `type: 'maia3'`; added `maia-2000`; made `maia-2200` non-optional; added `getMaiaAnalysisWeights()`; updated `getAvailableOpponents()` for maia3
+- `src/adapters/engine/engine-pool.js` — added `maia3` branch: one shared process, `SelfElo`/`Temperature 0` set per move
+- `src/api/ws/analysis-service.js` — findability uses `getMaiaAnalysisWeights()` (lc0 on-disk weights), not game roster filter
+- `tests/unit/roster.test.js` — updated for new entry count (19), type changes, new functions
+- `tests/unit/engine-pool.test.js` — new: maia3 routing, binary path, SelfElo dispatch
+
+**Tests:**
+```
+roster: getRosterTable returns all 19 entries
+roster: getOpponent resolves a known id (type is now maia3)
+roster: getOpponent throws for an unknown id
+roster: drawfish has elo=null
+roster: maia-2200 is no longer optional (maia3-backed)
+roster: maia-2000 fills the former 1900→2200 gap
+roster: sf-max has elo=3190
+roster: getAvailableOpponents excludes all maia3 entries when binary is missing
+roster: getAvailableOpponents includes maia3 entries when binary exists
+roster: getMaiaAnalysisWeights returns lc0 weight IDs that exist on disk
+roster: getMaiaAnalysisWeights returns empty when no lc0 pb.gz files are present
+roster: getMaiaAnalysisWeights only returns IDs whose file exists
+engine pool: maia3 routing: requestMove for maia3 spawns the maia3 binary, not lc0
+engine pool: maia3 routing: requestMove for maia3 passes --cache-dir and --local-files-only args
+engine pool: maia3 routing: requestMove for maia3 sends SelfElo matching opponent.elo
+engine pool: maia3 routing: requestMove for maia3 sends Temperature 0
+engine pool: maia3 routing: requestMove for maia3 returns the engine bestmove
+engine pool: maia3 routing: requestMove reuses the maia3 client across multiple calls (single process)
+engine pool: maia3 routing: SelfElo is updated on every requestMove for different Elos
+engine pool: maia3 routing: requestMove for unknown type throws
+```
+
+**DoD:** All 20 new tests passing; full suite 644 passing + 2 expected fails; branch coverage 91.05%; no changes to `src/domain/` analysis or scoring logic; `getMaiaAnalysisWeights()` decouples findability from the game roster type; lc0 Maia-1 weights on disk continue to serve pass-3 findability analysis; the 1900→2200 gap is closed with `maia-2000` and a now-required `maia-2200`; `make verify` clean.
