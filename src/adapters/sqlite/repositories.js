@@ -64,6 +64,7 @@ export class SqliteGameRepository {
         clock_white_ms, clock_black_ms,
         result, termination, pgn, played_at,
         elo_before, elo_after, accuracy, opponent_accuracy,
+        strength_elo, opponent_strength_elo,
         analysis_state, analysis_error, analysed_at
       ) VALUES (
         @id, @started_at, @opponent_id, @opponent_elo, @player_color,
@@ -71,6 +72,7 @@ export class SqliteGameRepository {
         @clock_white_ms, @clock_black_ms,
         @result, @termination, @pgn, @played_at,
         @elo_before, @elo_after, @accuracy, @opponent_accuracy,
+        @strength_elo, @opponent_strength_elo,
         @analysis_state, @analysis_error, @analysed_at
       )
       ON CONFLICT(id) DO UPDATE SET
@@ -83,9 +85,11 @@ export class SqliteGameRepository {
         clock_black_ms   = excluded.clock_black_ms,
         elo_before       = excluded.elo_before,
         elo_after        = excluded.elo_after,
-        accuracy         = excluded.accuracy,
-        opponent_accuracy= excluded.opponent_accuracy,
-        analysis_state   = excluded.analysis_state,
+        accuracy              = excluded.accuracy,
+        opponent_accuracy     = excluded.opponent_accuracy,
+        strength_elo          = excluded.strength_elo,
+        opponent_strength_elo = excluded.opponent_strength_elo,
+        analysis_state        = excluded.analysis_state,
         analysis_error   = excluded.analysis_error,
         analysed_at      = excluded.analysed_at
     `);
@@ -109,6 +113,8 @@ export class SqliteGameRepository {
       elo_after: game.eloAfter ?? null,
       accuracy: game.accuracy ?? null,
       opponent_accuracy: game.opponentAccuracy ?? null,
+      strength_elo: game.strengthElo ?? null,
+      opponent_strength_elo: game.opponentStrengthElo ?? null,
       analysis_state: game.analysisState ?? 'pending',
       analysis_error: game.analysisError ?? null,
       analysed_at: game.analysedAt ?? null,
@@ -293,10 +299,43 @@ export class SqliteGameRepository {
       eloAfter: row.elo_after,
       accuracy: row.accuracy,
       opponentAccuracy: row.opponent_accuracy,
+      strengthElo: row.strength_elo ?? null,
+      opponentStrengthElo: row.opponent_strength_elo ?? null,
       analysisState: row.analysis_state,
       analysisError: row.analysis_error ?? null,
       analysedAt: row.analysed_at,
     };
+  }
+
+  saveStrengthSample({ gameId, side, n, ase, sd, p75Loss, wasTimed, coeffVersion }) {
+    this._db.prepare(`
+      INSERT INTO strength_samples (game_id, side, n, ase, sd, p75_loss, was_timed, coeff_version)
+      VALUES (@game_id, @side, @n, @ase, @sd, @p75_loss, @was_timed, @coeff_version)
+      ON CONFLICT(game_id, side) DO UPDATE SET
+        n = excluded.n, ase = excluded.ase, sd = excluded.sd,
+        p75_loss = excluded.p75_loss, was_timed = excluded.was_timed,
+        coeff_version = excluded.coeff_version
+    `).run({
+      game_id: gameId, side, n, ase, sd,
+      p75_loss: p75Loss ?? null,
+      was_timed: wasTimed ? 1 : 0,
+      coeff_version: coeffVersion,
+    });
+  }
+
+  listStrengthSamples({ side, limit } = {}) {
+    let sql = `
+      SELECT ss.*, g.started_at FROM strength_samples ss
+      JOIN games g ON ss.game_id = g.id
+    `;
+    const params = [];
+    if (side != null) { sql += ' WHERE ss.side = ?'; params.push(side); }
+    sql += ' ORDER BY g.started_at DESC';
+    if (limit != null) { sql += ' LIMIT ?'; params.push(limit); }
+    return this._db.prepare(sql).all(...params).map(r => ({
+      gameId: r.game_id, side: r.side, n: r.n, ase: r.ase, sd: r.sd,
+      p75Loss: r.p75_loss, wasTimed: r.was_timed === 1, coeffVersion: r.coeff_version,
+    }));
   }
 
   /**
