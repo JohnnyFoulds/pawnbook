@@ -2,10 +2,11 @@
  * Phase 14 — FR-GRADE-6..9, FR-GRADE-11, FR-STORE-9
  * Tests for scaledError, playingStrength, and calibration invariants.
  */
-import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+import { describe, it, expect } from 'vitest';
 
 import { scaledError, playingStrength } from '../../src/domain/analysis/grade.js';
 import {

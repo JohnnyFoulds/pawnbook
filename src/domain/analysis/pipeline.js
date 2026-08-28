@@ -10,7 +10,7 @@ import { logger } from '../../config.js';
 import { FINDABILITY_MIN, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
 import { getTracer } from '../../telemetry.js';
 
-import { classify, winPct, moveAccuracy, gameAccuracy } from './grade.js';
+import { classify, winPct, moveAccuracy, gameAccuracy, playingStrength } from './grade.js';
 import { probeFindability } from './findability.js';
 
 const log = logger.child({ mod: 'analysis-pipeline' });
@@ -40,10 +40,10 @@ export async function runAnalysis({
   const positions = [];
 
   // Build position list: startpos + each position after every ply
-  positions.push({ fen: chess.fen(), ply: 0, moveSan: null });
+  positions.push({ fen: chess.fen(), ply: 0, moveSan: null, legalMoves: chess.moves().length });
   for (const uci of plies) {
     const moveResult = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
-    positions.push({ fen: chess.fen(), ply: positions.length, moveSan: moveResult?.san ?? null });
+    positions.push({ fen: chess.fen(), ply: positions.length, moveSan: moveResult?.san ?? null, legalMoves: chess.moves().length });
   }
 
   const total = positions.length;
@@ -93,6 +93,8 @@ export async function runAnalysis({
   const moveEvals = [];
   const playerAccuracies = [];
   const opponentAccuracies = [];
+  const playerStrengthSamples = [];
+  const opponentStrengthSamples = [];
 
   for (let i = 0; i < plies.length; i++) {
     const before = pass1Results[i];
@@ -138,8 +140,13 @@ export async function runAnalysis({
     });
     const accuracy = moveAccuracy(winBefore, winAfter);
 
-    if (mover === 'player') playerAccuracies.push(accuracy);
-    else opponentAccuracies.push(accuracy);
+    if (mover === 'player') {
+      playerAccuracies.push(accuracy);
+      playerStrengthSamples.push({ cpLoss, cpWhite: before.cp, mateIn: before.mate, legalMovesBefore: before.legalMoves });
+    } else {
+      opponentAccuracies.push(accuracy);
+      opponentStrengthSamples.push({ cpLoss, cpWhite: before.cp, mateIn: before.mate, legalMovesBefore: before.legalMoves });
+    }
 
     moveEvals.push({
       gameId: null, // filled in by caller
@@ -252,6 +259,8 @@ export async function runAnalysis({
 
   const accuracy = gameAccuracy(playerAccuracies);
   const opponentAcc = gameAccuracy(opponentAccuracies);
+  const playerStrength = playingStrength(playerStrengthSamples);
+  const opponentStrength = playingStrength(opponentStrengthSamples);
 
   selectSpan?.setStatus({ code: 1 });
   selectSpan?.end();
@@ -260,6 +269,8 @@ export async function runAnalysis({
     moveEvals,
     accuracy,
     opponentAccuracy: opponentAcc,
+    playerStrength,
+    opponentStrength,
     puzzleCandidates,
   };
 }

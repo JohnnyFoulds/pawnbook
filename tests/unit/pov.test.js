@@ -69,6 +69,20 @@ describe('engine: normaliseToWhitePov', () => {
     expect(result.mate).toBe(-1);
   });
 
+  it('negateLines handles a null lines arg (lines?. null branch)', () => {
+    // When Black is to move and lines is null: lines?.map returns undefined, ?? lines returns null
+    const result = normaliseToWhitePov(AFTER_E4_FEN, { cp: 30, mate: null, lines: null });
+    expect(result.cp).toBe(-30);
+    expect(result.lines).toBeNull();
+  });
+
+  it('result with no lines property takes the {} spread path (line 34)', () => {
+    // result.lines === undefined → the ternary takes the {} branch (no lines key added)
+    const result = normaliseToWhitePov(AFTER_E4_FEN, { cp: 30, mate: null });
+    expect(result.cp).toBe(-30);
+    expect(result).not.toHaveProperty('lines');
+  });
+
   it('does not mutate the input object', () => {
     const input = { cp: 50, mate: null, lines: [{ depth: 18, cp: 50, mate: null }] };
     normaliseToWhitePov(AFTER_E4_FEN, input);
