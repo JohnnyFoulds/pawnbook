@@ -328,6 +328,91 @@ describe('GET /api/games/:id/review', () => {
   });
 });
 
+// ─── strength fields on review and games-list routes ─────────────────────────
+
+describe('routes: GET /api/games exposes both strength estimates', () => {
+  it('exposes strengthElo and opponentStrengthElo on the games list', async () => {
+    const { app, gameRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo, { strengthElo: 1425, opponentStrengthElo: 1830 });
+    const res = await request(app).get('/api/games');
+    const game = res.body.games.find(g => g.id === gameId);
+    expect(game).toBeDefined();
+    expect(game.strengthElo).toBe(1425);
+    expect(game.opponentStrengthElo).toBe(1830);
+  });
+
+  it('exposes null strength when not set (not zero, not undefined)', async () => {
+    const { app, gameRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    const res = await request(app).get('/api/games');
+    const game = res.body.games.find(g => g.id === gameId);
+    expect(game.strengthElo).toBeNull();
+    expect(game.opponentStrengthElo).toBeNull();
+  });
+});
+
+describe('routes: GET /api/games/:id/review — strength fields', () => {
+  it('exposes both estimates, their SEs and the rolling aggregate', async () => {
+    const { app, gameRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo, { strengthElo: 1450, opponentStrengthElo: 1800 });
+    // Store sufficient-stats sample so SE can be computed
+    gameRepo.saveStrengthSample({ gameId, side: 'player', n: 20, ase: 0.15, sd: 0.08, p75Loss: 40, wasTimed: false, coeffVersion: 1 });
+    gameRepo.saveStrengthSample({ gameId, side: 'opponent', n: 18, ase: 0.20, sd: 0.10, p75Loss: 50, wasTimed: false, coeffVersion: 1 });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    expect(res.status).toBe(200);
+    expect(res.body.strengthElo).toBe(1450);
+    expect(res.body.opponentStrengthElo).toBe(1800);
+    expect(typeof res.body.strengthSe).toBe('number');
+    expect(typeof res.body.opponentStrengthSe).toBe('number');
+    expect(typeof res.body.rollingStrength).toBe('number');
+    expect(typeof res.body.rollingSe).toBe('number');
+  });
+
+  it('a game with no estimate exposes null, not zero', async () => {
+    const { app, gameRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    expect(res.body.strengthElo).toBeNull();
+    expect(res.body.opponentStrengthElo).toBeNull();
+    expect(res.body.strengthSe).toBeNull();
+    expect(res.body.opponentStrengthSe).toBeNull();
+  });
+
+  it('the review SE equals ELO_PER_ASE * sd / sqrt(n) from the stored sample', async () => {
+    const { app, gameRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo, { strengthElo: 1450 });
+    gameRepo.saveStrengthSample({ gameId, side: 'player', n: 25, ase: 0.15, sd: 0.09, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    const { STRENGTH_ELO_PER_ASE: RATE } = await import('../../src/shared/balance.js');
+    const expected = Math.round(RATE * 0.09 / Math.sqrt(25));
+    expect(res.body.strengthSe).toBe(expected);
+  });
+
+  it('the rolling aggregate is null when no game has enough eligible plies', async () => {
+    const { app, gameRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    // Store a sample with n=1 (below STRENGTH_MIN_PLIES)
+    gameRepo.saveStrengthSample({ gameId, side: 'player', n: 1, ase: 0.15, sd: 0, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    expect(res.body.rollingStrength).toBeNull();
+    expect(res.body.rollingSe).toBeNull();
+  });
+
+  it('the rolling aggregate is inverse-variance weighted, not a plain mean', async () => {
+    const { app, gameRepo } = buildApp();
+    const { STRENGTH_ELO_PER_ASE: RATE, STRENGTH_ANCHOR_ELO: AEL, STRENGTH_ANCHOR_ASE: AAS, STRENGTH_ELO_MIN: EMIN, STRENGTH_ELO_MAX: EMAX } = await import('../../src/shared/balance.js');
+    // Two games: same ase (same point estimate) but different se (different weights)
+    const g1 = addFinishedGame(gameRepo, { startedAt: NOW - 2000 });
+    const g2 = addFinishedGame(gameRepo, { startedAt: NOW - 1000 });
+    // n=100 → small se → heavy weight; n=12 → large se → light weight
+    gameRepo.saveStrengthSample({ gameId: g1, side: 'player', n: 100, ase: AAS, sd: 0.09, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+    gameRepo.saveStrengthSample({ gameId: g2, side: 'player', n: 12, ase: AAS, sd: 0.09, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+    const res = await request(app).get(`/api/games/${g2}/review`);
+    // Both have ase = AAS so point estimate = ANCHOR_ELO. Rolling should be ~ANCHOR_ELO.
+    expect(res.body.rollingStrength).toBeCloseTo(AEL, -1); // within 5 Elo
+  });
+});
+
 // ─── GET /api/games/:id/quiz ──────────────────────────────────────────────────
 
 describe('GET /api/games/:id/quiz', () => {
