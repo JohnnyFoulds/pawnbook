@@ -126,6 +126,7 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 - FR-ENGINE-5: The game engine (requestMove) MUST be configured with `Threads=1`, `Hash=16`; strength-limited SF opponents and Maia policy evals are single-threaded by design.
 - FR-ENGINE-6: The analysis SF MUST use `Threads=4`, `Hash=512` while a game is in progress (incremental phase), and MUST reconfigure to `Threads=6`, `Hash=1024` once the game ends (post-game phase). Reconfiguration MUST use `setoption` before the first eval of each phase.
 - FR-ENGINE-7: The analysis engine and the game engine MUST be separate OS processes and MUST NOT share a UCI client instance.
+- FR-ENGINE-8: `EngineClient.eval` MUST return `cp` and `mate` normalised to White's point of view, negating the engine's side-to-move-relative score when Black is to move. All `lines[]` entries MUST be normalised by the same rule.
 
 ---
 
@@ -183,6 +184,7 @@ GET  /api/stats
 - Q-4: `reviews.practice = 1` rows are never passed to the FSRS scheduler.
 - Q-5: `git log --all --numstat | grep -c '\.pb\.gz'` returns 0 (no weights in history).
 - Q-6: `maia_model` and `policy_temperature` are stored with every puzzle.
+- Q-7: A strength estimate is derived only from that game's `move_evals` rows plus each row's legal-move count, which is recomputable from the row's own `fen`; no engine call is ever required to re-derive it.
 
 ---
 
