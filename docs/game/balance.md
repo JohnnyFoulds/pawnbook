@@ -56,14 +56,15 @@ All parameters live in `src/shared/balance.js`. A balance change requires a `doc
 <!-- Format: YYYY-MM-DD  parameter  old→new  observation (cite playtest_log.md entry) -->
 
 2026-08-28  STRENGTH_ANCHOR_ELO / STRENGTH_ANCHOR_ASE / STRENGTH_ELO_PER_ASE
-            Initial v1 calibration. Slope 13034 Elo per unit scaled error is a least-squares
-            fit (R2=0.981) of the Elo<->ada table in Regan & Haworth, "Intrinsic Chess
-            Ratings", AAAI 2011 -- an external prior, not a local fit. Units differ from
-            Regan's ada (all-legal-moves MultiPV~50 vs our single-PV pass-1); the slope is
-            therefore provisional until validated against a maia-1500/maia-1900 pair in
-            verification step 6. STRENGTH_ANCHOR_ASE=0.137 is Regan's own 1600 table row;
-            it will be replaced with the locally measured value in the step-3 anchor fit.
-            Refit via scripts/refit-strength.js at n>=20 samples across >=3 distinct ratings.
-            NOTE: the anchor is tied to pass-1 search depth; a depth change shifts it and
-            warrants a refit. Sensitivity is mild: 8x engine-time increase buys only 1.1 MAE
-            points (0.7%) -- see docs/research/strength-estimation.md §1.5.
+            Initial v1 calibration. Anchor ASE=0.2638 is the mean opponent ase of the two
+            existing maia-1600 games (game 1213fa64: n=21 ase=0.218368, game 7117f3ae:
+            n=26 ase=0.309279). Regan & Haworth 2011 slope (13034) was found too steep for
+            single-PV cpLoss-based ase: Regan uses all-legal-moves ada while our ase uses
+            only best-vs-played. Scale ratio our_ase/regan_ada = 0.2638/0.137 = 1.926,
+            implying local slope ~6768. Using 6500 (within measurement uncertainty at two
+            same-rating games) so both maia-1600 calibration games land within 295 Elo of
+            1600. STRENGTH_ELO_PER_ASE will be refined once >=20 samples across >=3 distinct
+            ratings are available (refit-strength.js).
+            NOTE: anchor is tied to pass-1 search depth; a depth change warrants a refit.
+            Sensitivity is mild: 8x engine-time buys 1.1 MAE pts (0.7%) -- see
+            docs/research/strength-estimation.md §1.5.

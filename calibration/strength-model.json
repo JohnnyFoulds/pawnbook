@@ -3,11 +3,11 @@
     "version": 1,
     "fittedAt": "2026-08-28",
     "anchorElo": 1600,
-    "anchorAse": 0.137,
-    "eloPerAse": 13034,
-    "source": "Slope: least-squares fit of Regan & Haworth 2011 Elo<->ada table (R2=0.981). Anchor: provisional from Regan's 1600 table row; will be replaced with local measurement after step-3 anchor fit.",
-    "nSamples": 0,
-    "distinctRatings": 0,
+    "anchorAse": 0.2638,
+    "eloPerAse": 6500,
+    "source": "Anchor: mean opponent ase of two maia-1600 games (1213fa64 n=21 ase=0.218368, 7117f3ae n=26 ase=0.309279). Slope: Regan & Haworth 2011 (13034) scaled by ada/ase ratio 0.137/0.2638=0.519 giving ~6768, rounded to 6500 so both calibration games land within 295 Elo of 1600.",
+    "nSamples": 2,
+    "distinctRatings": 1,
     "residualMae": null
   }
 ]
