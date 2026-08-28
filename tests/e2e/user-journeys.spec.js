@@ -154,6 +154,8 @@ test.describe('Post-game navigation', () => {
 
     const gameId = await playAndResign(page, received);
 
+    // review-link href is set in onAnalysisDone, so wait for that event first
+    await waitForMsg(received, 'analysis_done', 15_000);
     const href = await page.locator('#review-link').getAttribute('href');
     expect(href).toMatch(new RegExp(`game=${gameId}`));
     expect(href).toMatch(/review\.html|quiz\.html/);
