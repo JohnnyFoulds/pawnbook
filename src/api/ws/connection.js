@@ -10,12 +10,10 @@
 import { WebSocketServer } from 'ws';
 
 import { logger } from '../../config.js';
-import { INCREMENTAL_MAX_QUEUE, INCREMENTAL_DEPTH } from '../../shared/balance.js';
+import { INCREMENTAL_MAX_QUEUE } from '../../shared/balance.js';
 
 import { makeMessageHandler } from './handlers.js';
 import { analyseGame } from './analysis-service.js';
-
-const INCREMENTAL_DEPTH_CATCHUP = 18; // pass-1 depth when the queue is full
 
 const log = logger.child({ mod: 'ws-connection' });
 
@@ -38,19 +36,18 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
     let _incrementalPending = 0;
 
     /**
-     * Queue a background pass-1 pre-eval for the given position.
-     * Uses INCREMENTAL_DEPTH when the queue is at or below the cap;
-     * switches to INCREMENTAL_DEPTH_CATCHUP when the queue is over the cap.
+     * Queue a background pre-eval for the given position if the queue has room.
+     * Drops silently when the cap is reached to prevent blocking post-game analysis.
      */
     function queuePreEval(gameId, ply, fen) {
       if (!gameRepo.savePreEval) return;
-      // depth is chosen from the pending count BEFORE this job joins
-      const depth = _incrementalPending <= INCREMENTAL_MAX_QUEUE
-        ? INCREMENTAL_DEPTH
-        : INCREMENTAL_DEPTH_CATCHUP;
+      // Drop new pre-evals when the queue is full — prevents 60+ jobs from
+      // blocking the post-game analysis SF client for minutes.
+      if (_incrementalPending >= INCREMENTAL_MAX_QUEUE) return;
       _incrementalPending++;
       enginePool.getAnalysisSfClient()
-        .then(sfClient => sfClient.eval(fen, { depth }))
+        // movetime caps each pre-eval so the queue drains in ≤ MAX_QUEUE × 1.5s
+        .then(sfClient => sfClient.eval(fen, { movetime: 1500 }))
         .then(r => gameRepo.savePreEval(gameId, ply, fen, r))
         .catch(err => log.debug({ err, gameId }, 'incremental pre-eval failed'))
         .finally(() => { _incrementalPending--; });

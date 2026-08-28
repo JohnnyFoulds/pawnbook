@@ -56,6 +56,12 @@ export function createEnginePool() {
   const pool = new Map();
   /** @type {Map<string, number>} consecutive spawn-failure count per key */
   const failures = new Map();
+  /**
+   * Pending-init promises: prevents concurrent callers from each spawning a
+   * separate process before the first spawn has written to `pool`.
+   * @type {Map<string, Promise<import('./uci-engine-client.js').UciEngineClient>>}
+   */
+  const pending = new Map();
 
   async function getClient(key, binary, args = []) {
     if ((failures.get(key) ?? 0) >= CIRCUIT_MAX_FAILURES) {
@@ -64,24 +70,33 @@ export function createEnginePool() {
       );
     }
     if (pool.has(key)) return pool.get(key);
-    try {
-      log.info({ key, binary }, 'starting engine');
-      const client = await createUciEngineClient(binary, args);
-      failures.set(key, 0);
-      // Evict dead client from pool so the next request spawns a fresh one
-      client._proc?.once('close', () => {
-        if (pool.get(key) === client) {
-          log.warn({ key }, 'engine process died — evicting from pool');
-          pool.delete(key);
-        }
-      });
-      pool.set(key, client);
-      return client;
-    } catch (err) {
-      failures.set(key, (failures.get(key) ?? 0) + 1);
-      log.error({ err, key, failures: failures.get(key) }, 'engine start failed');
-      throw err;
-    }
+    // Coalesce concurrent init requests: if a spawn is already in flight, wait
+    // for it rather than launching another process.
+    if (pending.has(key)) return pending.get(key);
+    const init = (async () => {
+      try {
+        log.info({ key, binary }, 'starting engine');
+        const client = await createUciEngineClient(binary, args);
+        failures.set(key, 0);
+        // Evict dead client from pool so the next request spawns a fresh one
+        client._proc?.once('close', () => {
+          if (pool.get(key) === client) {
+            log.warn({ key }, 'engine process died — evicting from pool');
+            pool.delete(key);
+          }
+        });
+        pool.set(key, client);
+        return client;
+      } catch (err) {
+        failures.set(key, (failures.get(key) ?? 0) + 1);
+        log.error({ err, key, failures: failures.get(key) }, 'engine start failed');
+        throw err;
+      } finally {
+        pending.delete(key);
+      }
+    })();
+    pending.set(key, init);
+    return init;
   }
 
   return {
@@ -136,14 +151,15 @@ export function createEnginePool() {
      * @returns {Promise<import('./uci-engine-client.js').UciEngineClient>}
      */
     async getAnalysisSfClient() {
-      const key = 'sf-analysis';
-      if (pool.has(key)) return pool.get(key);
-      log.info({ key }, 'starting analysis stockfish');
-      const client = await createUciEngineClient(ENGINE_PATHS.stockfish);
-      // During play: lighter config to stay responsive while incremental pre-evals run
-      client.setOption('Threads', 4);
-      client.setOption('Hash', 512);
-      pool.set(key, client);
+      // Configure only on first init — setOption writes directly to stdin and
+      // must NOT be called on every acquire (that injects setoption mid-search).
+      const alreadyInPool = pool.has('sf-analysis') || pending.has('sf-analysis');
+      const client = await getClient('sf-analysis', ENGINE_PATHS.stockfish);
+      if (!alreadyInPool) {
+        // During play: lighter config to stay responsive while incremental pre-evals run.
+        client.setOption('Threads', 4);
+        client.setOption('Hash', 512);
+      }
       return client;
     },
 
@@ -152,10 +168,9 @@ export function createEnginePool() {
      * Uses setoption — no process restart.
      */
     async reconfigureAnalysisSfForPassTwo() {
-      const key = 'sf-analysis';
-      const client = pool.get(key);
+      const client = pool.get('sf-analysis');
       if (!client) return; // not yet started — first post-game use will start with defaults
-      log.info({ key }, 'reconfiguring analysis SF for post-game pass 2: Threads=6 Hash=1024');
+      log.info({ key: 'sf-analysis' }, 'reconfiguring analysis SF for post-game pass 2: Threads=6 Hash=1024');
       client.setOption('Threads', 6);
       client.setOption('Hash', 1024);
     },
@@ -169,15 +184,13 @@ export function createEnginePool() {
     async getMaiaAnalysisClient(maiaId) {
       const weightsPath = `${WEIGHTS_DIR}/${maiaId}.pb.gz`;
       const key = `maia-analysis-${maiaId}`;
-      if (pool.has(key)) return pool.get(key);
-      log.info({ key, maiaId }, 'starting maia analysis engine');
-      const client = await createUciEngineClient(ENGINE_PATHS.lc0, [
-        `--weights=${weightsPath}`,
-      ]);
-      // VerboseMoveStats and PolicyTemperature are UCI options, not command-line flags
-      client.setOption('VerboseMoveStats', 'true');
-      client.setOption('PolicyTemperature', '1.0');
-      pool.set(key, client);
+      const alreadyInPool = pool.has(key) || pending.has(key);
+      const client = await getClient(key, ENGINE_PATHS.lc0, [`--weights=${weightsPath}`]);
+      if (!alreadyInPool) {
+        // Configure only on first init — same reason as getAnalysisSfClient.
+        client.setOption('VerboseMoveStats', 'true');
+        client.setOption('PolicyTemperature', '1.0');
+      }
       return client;
     },
 

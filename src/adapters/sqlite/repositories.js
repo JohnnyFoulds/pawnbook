@@ -419,7 +419,7 @@ export class SqlitePuzzleRepository {
       scheduledDays: row.scheduled_days,
       reps: row.reps,
       lapses: row.lapses,
-      state: row.state,
+      state: row.state != null ? Number(row.state) : 0,
       lastReview: row.last_review,
       graduated: row.graduated === 1,
     };

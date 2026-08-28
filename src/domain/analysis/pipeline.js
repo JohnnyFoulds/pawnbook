@@ -72,7 +72,8 @@ export async function runAnalysis({
     for (let i = 0; i < positions.length; i++) {
       const { fen } = positions[i];
       const stored = storedEvalByIdx.get(i);
-      const evalResult = stored?.bestmove ? stored : await sfClient.eval(fen, { depth: 18 });
+      // movetime cap keeps total analysis time predictable; depth 18 is a target not a floor.
+      const evalResult = stored?.bestmove ? stored : await sfClient.eval(fen, { depth: 18, movetime: 3000 });
       pass1Results.push({ ...positions[i], ...evalResult });
 
       const pct = Math.round(((i + 1) / total) * 100 * PASS_WEIGHTS[0]);
@@ -171,7 +172,7 @@ export async function runAnalysis({
   try {
     for (let i = 0; i < candidates.length; i++) {
       const c = candidates[i];
-      const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3 });
+      const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3, movetime: 6000 });
       // lines is sorted deepest-first; deduplicate by first move so each unique
       // alt move is evaluated at its deepest (most accurate) depth only.
       const seenMoves = new Set([c.bestMoveUci]);

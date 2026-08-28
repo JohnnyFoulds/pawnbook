@@ -98,7 +98,12 @@ export class UciEngineClient {
    * @returns {Promise<{cp: number|null, mate: number|null, bestmove: string, pv: string, lines: object[]}>}
    */
   async eval(fen, opts = {}) {
-    return (this._evalQueue = this._evalQueue.then(() => this._doEval(fen, opts)));
+    // Run this eval after all previous ones complete. The caller receives any
+    // rejection, but the queue itself absorbs it via .catch so that subsequent
+    // eval() calls are not permanently blocked by one timed-out position.
+    const result = this._evalQueue.then(() => this._doEval(fen, opts));
+    this._evalQueue = result.catch(() => {});
+    return result;
   }
 
   async _doEval(fen, opts = {}) {
@@ -113,7 +118,10 @@ export class UciEngineClient {
     this._listeners.push(infoHandler);
 
     const bestmoveLine = await this._waitForLine('bestmove', () => {
-      if (movetime) {
+      if (movetime && depth) {
+        // Both provided: stop at whichever limit comes first
+        this._write(`go depth ${depth} movetime ${movetime}\n`);
+      } else if (movetime) {
         this._write(`go movetime ${movetime}\n`);
       } else {
         this._write(`go depth ${depth}\n`);
@@ -142,7 +150,9 @@ export class UciEngineClient {
    * @returns {Promise<Map<string, number>>} move → probability (0–1)
    */
   async policy(fen, nodes = 2) {
-    return (this._evalQueue = this._evalQueue.then(() => this._doPolicy(fen, nodes)));
+    const result = this._evalQueue.then(() => this._doPolicy(fen, nodes));
+    this._evalQueue = result.catch(() => {});
+    return result;
   }
 
   async _doPolicy(fen, nodes = 2) {
@@ -232,6 +242,9 @@ export class UciEngineClient {
       timer = setTimeout(() => {
         if (done) return;
         cleanup();
+        // Kill the stuck process so the pool evicts it and future callers get a
+        // fresh spawn rather than issuing commands to a still-searching engine.
+        this.dispose();
         reject(new EngineTimeoutError(
           `Engine '${this._binaryPath}' timed out waiting for '${token}'`
         ));

@@ -149,7 +149,7 @@ export function applySchema(db) {
       scheduled_days  INTEGER,
       reps            INTEGER NOT NULL DEFAULT 0,
       lapses          INTEGER NOT NULL DEFAULT 0,
-      state           TEXT,
+      state           INTEGER,
       last_review     INTEGER,
       graduated       INTEGER NOT NULL DEFAULT 0
     );
