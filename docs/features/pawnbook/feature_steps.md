@@ -365,3 +365,29 @@ pipeline: pass-2 depth is 22 (not 20)
 ```
 
 **DoD:** All tests green; `make verify` passes; a real game measured end-to-end shows post-game analysis completes in ≤ 70 s when pre-eval ran during play.
+
+---
+
+## Phase 13 — Eval POV normalisation
+
+**Status:** Complete — 2026-08-28
+
+**Branch:** `fix/phase-13-eval-pov`  
+**Files:** `src/shared/pov.js` (new), `src/adapters/engine/uci-engine-client.js`, `src/adapters/engine/scripted-engine-client.js`, `tests/unit/pov.test.js` (new), `tests/unit/pipeline.test.js`, `tests/unit/analysis-service.test.js`, `scripts/regrade.js` (new), `docs/features/pawnbook/feature_spec.md`  
+**Spec refs:** FR-ENGINE-8
+
+**Design:** `src/ports/engine-client.js` declares `cp` as *"normalised to White's POV"* but no adapter honoured it. `UciEngineClient._doEval` and `ScriptedEngineClient.eval` both returned `top.cp` straight from the UCI `info` line, which is **always side-to-move relative**. As a result `cp_white` alternated in sign by ply, collapsing `cpLoss` to 0 for one side and inflating it for the other — both stored `maia-1600` games read at 23–31% accuracy instead of ≈85–92%.
+
+Fix: one exported helper `normaliseToWhitePov(fen, result)` in `src/shared/pov.js` — parses the FEN's side-to-move field and negates `cp`, `mate`, and every `lines[]` entry when `b`. Both adapters call it before returning. `scripts/regrade.js` (engine-free, idempotent) re-signs `cp_white`/`mate_in` for existing rows and re-derives the full grading chain from the corrected values. **Must run in the same deployment as the adapter fix** because `pipeline.js:59` restores cached evals as `cp: e.cp_white ?? e.cpWhite` — a resumed analysis over pre-fix rows would mix both sign conventions inside one game.
+
+```
+engine: eval negates cp when Black is to move
+engine: eval leaves cp unchanged when White is to move
+engine: eval negates mate when Black is to move
+engine: every multiPV line is normalised, not just the top line
+engine: the scripted client applies the same normalisation as the UCI client
+pipeline: consecutive positions no longer alternate in sign for a quiet game
+regression: a Black-to-move mate score is reported as negative from White POV
+```
+
+**DoD:** All green; `make verify` passes; `scripts/regrade.js` re-derives the two stored `maia-1600` games to ≈85%/≈90% and ≈87%/≈92% rather than 23%/31%; the review eval graph is visually smooth; a `fix(engine):` changelog entry is present.
