@@ -6,6 +6,7 @@
 import { existsSync } from 'fs';
 
 import { ENGINE_PATHS, WEIGHTS_DIR, logger } from '../../config.js';
+import { WeightsMissingError } from '../../errors.js';
 
 const log = logger.child({ mod: 'roster' });
 
@@ -22,6 +23,18 @@ const ROSTER_TABLE = [
   { id: 'maia-1900', name: 'Maia 1900', elo: 1900, type: 'maia3', description: 'Plays like a real 1900 — including the mistakes' },
   { id: 'maia-2000', name: 'Maia 2000', elo: 2000, type: 'maia3', description: 'Plays like a real 2000 — including the mistakes' },
   { id: 'maia-2200', name: 'Maia 2200', elo: 2200, type: 'maia3', description: 'Near-master human patterns' },
+  // Maia-1 (lc0 .pb.gz) — optional, only available when lc0 and the weight files are present.
+  // All IDs use the maia1- prefix so they coexist with the maia3 entries above.
+  { id: 'maia1-1100', name: 'Maia 1100 (lc0)', elo: 1100, type: 'maia', optional: true, weightsFile: 'maia-1100', description: 'Classic Maia-1 lc0 net at 1100' },
+  { id: 'maia1-1200', name: 'Maia 1200 (lc0)', elo: 1200, type: 'maia', optional: true, weightsFile: 'maia-1200', description: 'Classic Maia-1 lc0 net at 1200' },
+  { id: 'maia1-1300', name: 'Maia 1300 (lc0)', elo: 1300, type: 'maia', optional: true, weightsFile: 'maia-1300', description: 'Classic Maia-1 lc0 net at 1300' },
+  { id: 'maia1-1400', name: 'Maia 1400 (lc0)', elo: 1400, type: 'maia', optional: true, weightsFile: 'maia-1400', description: 'Classic Maia-1 lc0 net at 1400' },
+  { id: 'maia1-1500', name: 'Maia 1500 (lc0)', elo: 1500, type: 'maia', optional: true, weightsFile: 'maia-1500', description: 'Classic Maia-1 lc0 net at 1500' },
+  { id: 'maia1-1600', name: 'Maia 1600 (lc0)', elo: 1600, type: 'maia', optional: true, weightsFile: 'maia-1600', description: 'Classic Maia-1 lc0 net at 1600' },
+  { id: 'maia1-1700', name: 'Maia 1700 (lc0)', elo: 1700, type: 'maia', optional: true, weightsFile: 'maia-1700', description: 'Classic Maia-1 lc0 net at 1700' },
+  { id: 'maia1-1800', name: 'Maia 1800 (lc0)', elo: 1800, type: 'maia', optional: true, weightsFile: 'maia-1800', description: 'Classic Maia-1 lc0 net at 1800' },
+  { id: 'maia1-1900', name: 'Maia 1900 (lc0)', elo: 1900, type: 'maia', optional: true, weightsFile: 'maia-1900', description: 'Classic Maia-1 lc0 net at 1900' },
+  { id: 'maia1-2200', name: 'Maia 2200 (lc0)', elo: 2200, type: 'maia', optional: true, weightsFile: 'maia-2200', description: 'Classic Maia-1 lc0 net at 2200 (community fine-tune)' },
   { id: 'sf-1400',   name: 'Stockfish 1400', elo: 1400, type: 'stockfish', description: 'Engine-shaped play at 1400' },
   { id: 'sf-1700',   name: 'Stockfish 1700', elo: 1700, type: 'stockfish', description: 'Engine-shaped play at 1700' },
   { id: 'sf-2000',   name: 'Stockfish 2000', elo: 2000, type: 'stockfish', description: 'Engine-shaped play at 2000' },
@@ -48,6 +61,16 @@ export function getAvailableOpponents() {
         maia3Checked = true;
       }
       return maia3Available;
+    }
+    if (opp.type === 'maia') {
+      const weightsPath = `${WEIGHTS_DIR}/${opp.weightsFile ?? opp.id}.pb.gz`;
+      if (!existsSync(weightsPath)) {
+        if (opp.optional) {
+          log.debug({ opponentId: opp.id, weightsPath }, 'optional Maia-1 weights missing — opponent excluded');
+          return false;
+        }
+        throw new WeightsMissingError(`Required Maia weights not found: ${weightsPath}`);
+      }
     }
     return true;
   });
