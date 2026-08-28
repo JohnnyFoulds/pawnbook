@@ -121,9 +121,10 @@ export function createEnginePool() {
       }
 
       if (opponent.type === 'maia') {
-        const weightsPath = `${WEIGHTS_DIR}/${opponent.id}.pb.gz`;
+        const wf = opponent.weightsFile ?? opponent.id;
+        const weightsPath = `${WEIGHTS_DIR}/${wf}.pb.gz`;
         const client = await getClient(
-          opponent.id,
+          `lc0-${wf}`,
           ENGINE_PATHS.lc0,
           [`--weights=${weightsPath}`]
         );

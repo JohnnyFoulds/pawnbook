@@ -16,9 +16,9 @@ afterEach(() => {
 });
 
 describe('roster', () => {
-  it('getRosterTable returns all 19 entries', () => {
+  it('getRosterTable returns all 29 entries (11 maia3 + 10 maia1 + 6 sf + 1 drawfish + 1 sf-max)', () => {
     const table = getRosterTable();
-    expect(table.length).toBe(19);
+    expect(table.length).toBe(29);
   });
 
   it('getOpponent resolves a known id', () => {
@@ -36,10 +36,18 @@ describe('roster', () => {
     expect(df.elo).toBeNull();
   });
 
-  it('maia-2200 is no longer optional (maia3-backed)', () => {
+  it('maia-2200 is the maia3 entry and not optional', () => {
     const maia2200 = getRosterTable().find(o => o.id === 'maia-2200');
     expect(maia2200.optional).toBeUndefined();
     expect(maia2200.type).toBe('maia3');
+  });
+
+  it('maia1-1300 is the optional lc0 entry with correct weightsFile', () => {
+    const lc0 = getRosterTable().find(o => o.id === 'maia1-1300');
+    expect(lc0.type).toBe('maia');
+    expect(lc0.optional).toBe(true);
+    expect(lc0.weightsFile).toBe('maia-1300');
+    expect(lc0.elo).toBe(1300);
   });
 
   it('maia-2000 fills the former 1900→2200 gap', () => {
@@ -64,7 +72,6 @@ describe('roster', () => {
     const opponents = getAvailableOpponents();
     const types = opponents.map(o => o.type);
     expect(types).not.toContain('maia3');
-    // Stockfish and drawfish still available
     expect(opponents.some(o => o.type === 'stockfish')).toBe(true);
 
     vi.mocked(existsSync).mockReturnValue(true);
@@ -80,6 +87,33 @@ describe('roster', () => {
     expect(maia3Ids).toContain('maia-1300');
     expect(maia3Ids).toContain('maia-2000');
     expect(maia3Ids).toContain('maia-2200');
+  });
+
+  it('getAvailableOpponents includes lc0 maia1 entries when weights exist', async () => {
+    const { existsSync } = await import('fs');
+    vi.mocked(existsSync).mockReturnValue(true);
+
+    const { getAvailableOpponents } = await import('../../src/domain/game/roster.js');
+    const opponents = getAvailableOpponents();
+    const lc0Ids = opponents.filter(o => o.type === 'maia').map(o => o.id);
+    expect(lc0Ids).toContain('maia1-1300');
+    expect(lc0Ids).toContain('maia1-1900');
+  });
+
+  it('getAvailableOpponents silently excludes optional lc0 entries when weights are missing', async () => {
+    const { existsSync } = await import('fs');
+    vi.mocked(existsSync).mockImplementation((p) => {
+      if (typeof p === 'string' && p.endsWith('.pb.gz')) return false;
+      return true; // binary exists
+    });
+
+    const { getAvailableOpponents } = await import('../../src/domain/game/roster.js');
+    const opponents = getAvailableOpponents();
+    expect(opponents.some(o => o.type === 'maia')).toBe(false);
+    // maia3 and sf still present
+    expect(opponents.some(o => o.type === 'maia3')).toBe(true);
+
+    vi.mocked(existsSync).mockReturnValue(true);
   });
 
   it('getMaiaAnalysisWeights returns lc0 weight IDs that exist on disk', async () => {
