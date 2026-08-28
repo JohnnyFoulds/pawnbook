@@ -319,10 +319,11 @@ describe('analyseGame', () => {
     // chess.js omits the en passant square when no capture is possible.
     // FEN after 1.e4: KQkq - 0 1 (no en passant square because no black pawn adjacent).
     const POST_E4_FEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
-    // Default returns cp=100, bestmove=e2e4 (for start pos and all others).
-    // POST_E4_FEN returns cp=-600 → cpBeforeWhite(synthetic=15) - cpAfterWhite(-600) → Blunder.
+    // Default returns cp=100 (White to move — no POV flip), used for start pos and others.
+    // POST_E4_FEN is Black to move; score cp 600 = Black winning by 600 cp (UCI side-to-move
+    // convention) → normaliseToWhitePov negates → cp_white = -600 → blunder for White's e4.
     // Maia default policy has e2e4=0.5 which matches the start-pos bestmove → findability=0.5.
-    const BLUNDER_FIXTURE = 'info depth 18 score cp -600 nodes 100000 pv e7e5\nbestmove e7e5';
+    const BLUNDER_FIXTURE = 'info depth 18 score cp 600 nodes 100000 pv e7e5\nbestmove e7e5';
 
     const ws = makeFakeWs();
     const enginePool = makeFakeEnginePool({ sfFixtures: { [POST_E4_FEN]: BLUNDER_FIXTURE } });
@@ -350,7 +351,8 @@ describe('analyseGame', () => {
     settingsRepo.set('elo', '1200');
 
     const POST_E4_FEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
-    const BLUNDER_FIXTURE = 'info depth 18 score cp -600 nodes 100000 pv e7e5\nbestmove e7e5';
+    // score cp 600 at Black-to-move → normalised to -600 White POV → blunder for White's e4
+    const BLUNDER_FIXTURE = 'info depth 18 score cp 600 nodes 100000 pv e7e5\nbestmove e7e5';
     const blunderPool = makeFakeEnginePool({ sfFixtures: { [POST_E4_FEN]: BLUNDER_FIXTURE } });
 
     const session = makeFakeSession({ ranked: false });

@@ -11,9 +11,14 @@ const SF_DEFAULT = {
   'default': 'info depth 18 seldepth 24 score cp 30 nodes 100000 pv e2e4 e7e5\nbestmove e2e4',
 };
 
-// A blunder-producing eval: before=cp 100, after=cp -500 (huge swing from white's POV)
+// Blunder-producing eval pair.
+// SF_BLUNDER_BEFORE is used at the start position (White to move): score cp 100
+//   → no POV flip → cp_white = 100 (White slightly better).
+// SF_BLUNDER_AFTER is used at the position after 1.e4 (Black to move): score cp 500
+//   → UCI convention: positive means the side to move (Black) is winning by 500 cp
+//   → normaliseToWhitePov negates → cp_white = -500 (White losing by 5 pawns) → blunder.
 const SF_BLUNDER_BEFORE = 'info depth 18 seldepth 24 score cp 100 nodes 100000 pv e2e4 e7e5\nbestmove e2e4';
-const SF_BLUNDER_AFTER  = 'info depth 18 seldepth 24 score cp -500 nodes 100000 pv e7e5 e2e4\nbestmove e7e5';
+const SF_BLUNDER_AFTER  = 'info depth 18 seldepth 24 score cp 500 nodes 100000 pv e7e5 e2e4\nbestmove e7e5';
 
 function makeSfClient(fixtures = SF_DEFAULT) {
   return new ScriptedEngineClient(fixtures);
@@ -385,7 +390,7 @@ describe('pipeline', () => {
 
     const sfClient = new ScriptedEngineClient({
       [pos0]: MULTI_PV_FIXTURE,
-      [pos1]: SF_BLUNDER_AFTER, // cp=-500 → blunder detected, triggers pass 2
+      [pos1]: SF_BLUNDER_AFTER, // score cp 500, Black to move → normalised to cp_white -500 → blunder
       default: SF_DEFAULT['default'],
     });
     const maiaClient = makeMaiaClient('e2e4', new Map([['e2e4', 0.5], ['d2d4', 0.3]]));

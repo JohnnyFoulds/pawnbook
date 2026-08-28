@@ -4,6 +4,7 @@
  */
 
 import { parsePolicyLines } from './uci-engine-client.js';
+import { normaliseToWhitePov } from '../../shared/pov.js';
 
 export class ScriptedEngineClient {
   /**
@@ -26,8 +27,10 @@ export class ScriptedEngineClient {
   async eval(fen, opts = {}) {
     this._calls.push({ type: 'eval', fen, opts });
     const fixture = this._fixtures[opts.fixture ?? fen] ?? this._fixtures['default'];
-    if (fixture) return parseEvalFixture(fixture);
-    return { cp: 0, mate: null, bestmove: this._defaultBestmove, pv: this._defaultBestmove, lines: [] };
+    const raw = fixture
+      ? parseEvalFixture(fixture)
+      : { cp: 0, mate: null, bestmove: this._defaultBestmove, pv: this._defaultBestmove, lines: [] };
+    return normaliseToWhitePov(fen, raw);
   }
 
   /**
