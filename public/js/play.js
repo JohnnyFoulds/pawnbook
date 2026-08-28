@@ -346,11 +346,6 @@ function onAnalysisDone(msg) {
   if (reviewLink) {
     reviewLink.href = `review.html?game=${gameId}`;
     reviewLink.removeAttribute('aria-disabled');
-    // Promote Review to primary now that it has content; demote Play again to ghost
-    reviewLink.className = 'btn btn--primary btn--large';
-    reviewLink.style.textAlign = 'center';
-    const playAgainBtn = document.getElementById('play-again-btn');
-    if (playAgainBtn) playAgainBtn.className = 'btn btn--ghost btn--large';
     if (count > 0) reviewLink.textContent = `Review & quiz (${count} positions)`;
   }
 }
