@@ -53,6 +53,8 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 - FR-ANALYSE-11: The post-game pass-1 step MUST skip any ply for which a `move_evals` row already exists for that `(game_id, ply)`.
 - FR-ANALYSE-12: Incremental pre-evaluation results MUST be stored in `move_evals` with the same schema as post-game pass-1 results; they MUST be usable by pass-2 without re-evaluation.
 - FR-ANALYSE-13: If a game is abandoned or resigned, any pre-evaluated `move_evals` rows MUST be retained and used when post-game analysis runs.
+- FR-ANALYSE-14: The pipeline MUST compute both sides' strength estimates from pass-1 data alone and MUST NOT issue additional engine calls for this purpose.
+- FR-ANALYSE-15: A failed analysis MUST NOT overwrite `accuracy`, `opponent_accuracy`, `strength_elo`, or `opponent_strength_elo` already stored for that game.
 
 ### FR-GRADE: Move grading
 
@@ -61,6 +63,12 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 - FR-GRADE-3: The sub-inaccuracy tiers (Great < 25cp, Good < 50cp) MUST use centipawn loss.
 - FR-GRADE-4: White's first move MUST use a synthetic `+0.15` prior eval.
 - FR-GRADE-5: Losing or missing a forced mate MUST be classified Blunder, downgraded to Mistake if the position was already below ∓700cp.
+- FR-GRADE-6: The system MUST estimate each side's playing strength as `STRENGTH_ANCHOR_ELO − STRENGTH_ELO_PER_ASE · (ase − STRENGTH_ANCHOR_ASE)`, where `ase` is the mean of `ln(1 + min(cpLoss, STRENGTH_CP_CAP)/100)` over that side's eligible plies, clamped to `[STRENGTH_ELO_MIN, STRENGTH_ELO_MAX]` and rounded.
+- FR-GRADE-7: A ply MUST be excluded from the strength estimate if the mover had exactly one legal move, if the pre-move evaluation is a mate score, or if the pre-move White-POV evaluation exceeds ±`STRENGTH_DECIDED_CP`.
+- FR-GRADE-8: A side with fewer than `STRENGTH_MIN_PLIES` eligible plies MUST yield a null estimate and MUST NOT yield a number.
+- FR-GRADE-9: The system MUST report a standard error alongside each estimate, computed as `STRENGTH_ELO_PER_ASE · sd / √n`, where `sd` is the sample standard deviation of the scaled losses and is defined as 0 when fewer than two plies are eligible.
+- FR-GRADE-10: The estimate MUST NOT take the opponent's known Elo, the player's stored Elo, or the game result as an input.
+- FR-GRADE-11: Coefficients MUST be read from `src/shared/balance.js` at runtime; no domain code may read `calibration/strength-model.json`.
 
 ### FR-PUZZLE: Puzzle selection
 
@@ -109,6 +117,8 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 - FR-STORE-5: `games.status` MUST be `in_progress | finished | abandoned`.
 - FR-STORE-6: `activity` rows MUST use a 04:00 local day boundary.
 - FR-STORE-7: The streak MUST be derived from `activity`, never stored as a counter.
+- FR-STORE-8: `games.strength_elo` and `games.opponent_strength_elo` MUST be nullable INTEGER columns, where NULL means too few eligible plies.
+- FR-STORE-9: Each analysed game MUST persist one `strength_samples` row per side holding `(n, ase, sd, p75_loss, was_timed, coeff_version)`, so the calibration corpus can be re-fitted without re-analysing games. `p75_loss` MUST be the 75th percentile of `min(cpLoss, STRENGTH_CP_CAP)` over that side's eligible plies.
 
 ### FR-STATS: Statistics
 
@@ -116,6 +126,7 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 - FR-STATS-2: The stats page MUST show: rating over time (line), accuracy trend (line), results (stat tiles), mistakes by phase (bar), queue health meter (`due / DUE_SOFT_CAP`), retired-mistakes tile.
 - FR-STATS-3: A retired-mistakes stat tile MUST be present on the stats page.
 - FR-STATS-4: `settings.show_streak` (default 1) MUST be honoured by both clients.
+- FR-STATS-5: The games list MUST show both strength estimates in a single column as player-then-opponent; the review page MUST show both with their standard error and a rolling `STRENGTH_ROLLING_N`-game aggregate. A null estimate MUST render as an em dash.
 
 ### FR-ENGINE: Engine management
 
@@ -198,6 +209,8 @@ GET  /api/stats
 | NFR-A3 | Maia probe: ≤ 0.5 s/candidate | 8 × 0.5 = 4 s |
 | NFR-A4 | 40-move game, cold path (no pre-evals): ≤ 4 min | 162 + 56 + 4 = 222 s ≈ 3.7 min |
 | NFR-A5 | 40-move game, pre-eval path (all plies cached): ≤ 70 s | pass 1 ≈ 0 s + pass 2 ≤ 56 s + Maia ≤ 4 s + overhead ≤ 10 s |
+| NFR-A6 | Strength estimation ≤ 5 ms per game, 0 engine calls | pure arithmetic over pass-1 rows already in memory |
+| NFR-STR | Per-game estimate expected error ≤ 300 Elo; ≤ 150 Elo for a `STRENGTH_ROLLING_N`-game aggregate | §1.4 noise-floor derivation; best Kaggle *Finding Elo* entry on supplied data reached ~222 Elo residual SD |
 | NFR-ENG | UCI handshake timeout | 10 s |
 | NFR-WS | Reconnect backoff cap | 30 s |
 | NFR-TUI | Full board frame redraw | ≤ 16 ms |

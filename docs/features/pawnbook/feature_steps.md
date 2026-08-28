@@ -391,3 +391,82 @@ regression: a Black-to-move mate score is reported as negative from White POV
 ```
 
 **DoD:** All green; `make verify` passes; `scripts/regrade.js` re-derives the two stored `maia-1600` games to ≈85%/≈90% and ≈87%/≈92% rather than 23%/31%; the review eval graph is visually smooth; a `fix(engine):` changelog entry is present.
+
+---
+
+## Phase 14 — Playing-strength estimate
+
+**Status:** Complete — 2026-08-28
+
+**Branch:** `feat/phase-14-playing-strength`  
+**Files:** `src/shared/balance.js`, `src/domain/analysis/grade.js`, `src/domain/analysis/pipeline.js`, `src/adapters/sqlite/schema.js`, `src/adapters/sqlite/repositories.js`, `src/adapters/memory/repositories.js`, `src/ports/repositories.js`, `src/api/ws/analysis-service.js`, `src/api/routes/games.js`, `public/games.html`, `public/js/games.js`, `public/review.html`, `public/js/review.js`, `scripts/refit-strength.js` (new), `calibration/strength-model.json` (new), `docs/research/strength-estimation.md` (new), `tests/unit/strength.test.js` (new), `tests/unit/analysis-service.test.js`, `tests/unit/api-routes.test.js`, `tests/unit/ui-phase9.test.js`, `tests/contract/repositories.test.js`  
+**Spec refs:** FR-GRADE-6–11, FR-ANALYSE-14–15, FR-STORE-8–9, FR-STATS-5, Q-7, NFR-A6, NFR-STR
+
+**Design:** Regan & Haworth's `ln(1+x)` scaled error, averaged over eligible plies, mapped linearly to Elo. Eligible plies exclude only-moves, mate evals, and decided positions (`|cpWhite| > STRENGTH_DECIDED_CP`). Both sides are scored symmetrically under identical criteria on the shared White-POV evaluation series — they are a disjoint partition, not the same ply set. The opponent's known Elo, the player's stored Elo, and the game result are never inputs (`FR-GRADE-10`), which makes every game against a rated Maia a live calibration sample.
+
+Coefficients are versioned in `calibration/strength-model.json` (append-only) and read from `src/shared/balance.js`. A `STRENGTH_COEFF_VERSION` constant ties them together; a test enforces the invariant. `scripts/refit-strength.js` runs WLS regression of `opponent_elo ~ ase` over `strength_samples` once ≥ 20 samples spanning ≥ 3 distinct ratings are available — it appends to the JSON and prints paste-ready constants but never writes `balance.js`.
+
+The `_saveFailed()` helper in `analysis-service.js` reads the existing game row before every failure save and carries `accuracy`, `opponentAccuracy`, `strengthElo`, and `opponentStrengthElo` forward, so a failed re-analysis cannot null a previously stored result (`FR-ANALYSE-15`).
+
+The review page rolling aggregate uses inverse-variance weighting over the most recent `STRENGTH_ROLLING_N` games. SE is recomputed on read from stored `(n, sd)` — never stored — so a coefficient refit is retroactive for free.
+
+```
+strength: scaledError(0) is 0
+strength: scaledError is strictly increasing and compresses large losses
+strength: a cpLoss above STRENGTH_CP_CAP is winsorised to the cap
+strength: playingStrength(ase = STRENGTH_ANCHOR_ASE) returns STRENGTH_ANCHOR_ELO
+strength: playingStrength is strictly decreasing in average scaled error
+strength: playingStrength clamps to [STRENGTH_ELO_MIN, STRENGTH_ELO_MAX]
+strength: a flawless game never returns Infinity or NaN
+strength: zero eligible plies returns ase null, sd 0 and strength null, never NaN
+strength: exactly one eligible ply returns sd 0, not NaN
+strength: playingStrength returns an integer Elo and an integer standard error
+strength: playingStrength returns null below STRENGTH_MIN_PLIES eligible plies
+strength: playingStrength ignores plies where the mover had exactly one legal move
+strength: playingStrength ignores plies whose pre-move eval is a mate score
+strength: playingStrength ignores plies with |cpWhite| above STRENGTH_DECIDED_CP
+strength: playingStrength reports n, ase, sd and p75Loss alongside the estimate
+strength: p75Loss is the 75th percentile of winsorised cpLoss over eligible plies only
+strength: p75Loss does not affect the estimate or the standard error
+strength: the standard error is ELO_PER_ASE * sd / sqrt(n)
+strength: a wider spread of losses yields a wider standard error at equal n
+strength: a clean game estimates above a sloppy game of the same ply count
+strength: playingStrength never reads a result, a player Elo, or an opponent Elo
+pipeline: runAnalysis returns both sides' strength beside accuracy
+pipeline: every position records its legal-move count for strength filtering
+pipeline: strength estimation issues no engine calls
+pipeline: a six-move game returns null strengths, not zero
+pipeline: both sides' eligibility gates are evaluated on the same White-POV series
+pipeline: a ply is eligible for exactly one side, never both and never neither
+analysis: the success save persists both strength estimates and both sample rows
+analysis: a failed analysis does not null a previously stored strength estimate
+analysis: a failed analysis does not null a previously stored accuracy
+store: [sqlite|memory] strengthElo round-trips through save and findById
+store: [sqlite|memory] strengthElo survives a second save that supplies it
+store: [sqlite|memory] strengthElo is exposed by listRecent
+store: [sqlite|memory] a strength_samples row round-trips per side
+store: [sqlite|memory] a strength_samples row carries p75Loss and was_timed for later refitting
+store: [sqlite|memory] saveStrengthSample is idempotent on (gameId, side)
+store: [sqlite|memory] listStrengthSamples returns newest first and honours limit
+store: [sqlite|memory] listStrengthSamples filters by side
+store: [sqlite] deleting a game removes its strength_samples rows
+store: an absent strength column loads as null, not zero
+routes: GET /api/games exposes both strength estimates
+routes: GET /api/games/:id/review exposes both estimates, their SEs and the rolling aggregate
+routes: the review standard error equals ELO_PER_ASE * sd / sqrt(n) from the stored sample
+routes: the rolling aggregate is inverse-variance weighted, not a plain mean
+routes: the rolling aggregate is null when no game has enough eligible plies
+routes: a game with no estimate exposes null, not zero
+ui: games.html has eight columns and the loading row spans all eight
+ui: games.js renders both strength numbers in one right-aligned cell
+ui: games.js renders an em dash for a null estimate
+ui: review.js writes strength-line as a sibling of acc-bars, not into it
+balance: every STRENGTH_ parameter is documented in balance.md
+calibration: the stored maia-1600 fixture estimates its opponent within 300 Elo of 1600
+calibration: refit-strength refuses to fit below 20 samples or 3 distinct ratings
+calibration: refit-strength tolerates an sd of 0 without an infinite weight
+calibration: refit-strength appends a version and never rewrites an existing one
+calibration: the newest strength-model.json entry matches balance.js and STRENGTH_COEFF_VERSION
+```
+
+**DoD:** All 634 tests pass (632 passing + 2 expected fail); branch coverage 91.03%; `scripts/refit-strength.js` exits non-zero on the 2-game corpus with the required message; `calibration/strength-model.json` v1 committed; `docs/research/strength-estimation.md` written; no model binary in any commit.
