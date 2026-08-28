@@ -4,7 +4,7 @@
  * pipeline skip logic, and analysis-service reconfiguration.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 import { INCREMENTAL_MAX_QUEUE, INCREMENTAL_DEPTH } from '../../src/shared/balance.js';
 import { createEnginePool } from '../../src/adapters/engine/engine-pool.js';
@@ -49,7 +49,7 @@ describe('pool: analysis SF uses Threads=4, Hash=512 during the play phase', () 
     const setOptionCalls = [];
     // Verify via source inspection: getAnalysisSfClient calls setOption(4) and setOption(512)
     // We test this through the engine-pool's observable behaviour using a mock client factory
-    const { createUciEngineClient: _orig } = await import('../../src/adapters/engine/uci-engine-client.js');
+    await import('../../src/adapters/engine/uci-engine-client.js');
 
     const mockClient = {
       setOption: (n, v) => setOptionCalls.push([n, v]),
@@ -289,8 +289,6 @@ describe('pipeline: pass-2 depth is 22 (not 20)', () => {
 
     const sfClient = new SpyClient({ default: SF_AFTER, blunder: SF_BLUNDER, deep: SF_DEEP });
     sfClient._scripts = { default: SF_AFTER };
-    // Override eval to return SF_AFTER by default and SF_DEEP for depth-22 calls
-    const origEval = sfClient.eval.bind(sfClient);
     sfClient.eval = async (fen, opts = {}) => {
       evalCalls.push({ fen, depth: opts.depth, multiPV: opts.multiPV });
       if (opts.depth === 22) {

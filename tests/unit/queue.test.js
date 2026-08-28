@@ -50,6 +50,12 @@ describe('queue', () => {
       // lapses defaults to 0, so should graduate if other conditions met
       expect(shouldGraduate(card)).toBe(true);
     });
+
+    it('treats card with neither scheduled_days nor scheduledDays as 0 interval (fires ?? 0 right side)', () => {
+      const card = { reps: GRADUATE_REPS, lapses: 0 };
+      // both ?? branches reach the right-side 0 — interval=0, not > GRADUATE_INTERVAL_D
+      expect(shouldGraduate(card)).toBe(false);
+    });
   });
 
   describe('formatDueCount', () => {

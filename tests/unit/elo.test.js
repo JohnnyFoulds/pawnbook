@@ -59,6 +59,10 @@ describe('elo', () => {
     expect(() => validateRanked({ oppElo: null })).toThrow();
   });
 
+  it('an opponent with undefined rating also throws (line 51 || branch)', () => {
+    expect(() => validateRanked({ oppElo: undefined })).toThrow();
+  });
+
   it('rating cannot drop below ELO_FLOOR', () => {
     // Start just above the floor, lose heavily — should land at exactly ELO_FLOOR
     const result = updateElo({ myElo: ELO_FLOOR + 5, oppElo: 3190, score: 0, gamesPlayed: 100 });
@@ -68,5 +72,9 @@ describe('elo', () => {
   it('ELO_FLOOR is enforced even for a catastrophic rating collapse', () => {
     const result = updateElo({ myElo: ELO_FLOOR, oppElo: 3190, score: 0, gamesPlayed: 100 });
     expect(result.newElo).toBe(ELO_FLOOR);
+  });
+
+  it('validateRanked does not throw when oppElo is a valid number (FALSE branch of null/undefined check)', () => {
+    expect(() => validateRanked({ oppElo: 1200 })).not.toThrow();
   });
 });

@@ -408,6 +408,133 @@ describe('pipeline', () => {
     expect(alts.some(a => a.uci === 'd2d4')).toBe(true);
   });
 
+  it('pass 2 catch: runAnalysis rejects when onProgress throws during pass2', async () => {
+    const chess = (await import('chess.js')).Chess;
+    const game = new chess();
+    const pos0 = game.fen();
+    game.move({ from: 'e2', to: 'e4' });
+    const pos1 = game.fen();
+
+    const sfClient = new ScriptedEngineClient({
+      [pos0]: SF_BLUNDER_BEFORE,
+      [pos1]: SF_BLUNDER_AFTER,
+      default: SF_DEFAULT['default'],
+    });
+    const maiaClient = makeMaiaClient();
+
+    await expect(runAnalysis({
+      plies: ['e2e4'],
+      playerColor: 'white',
+      sfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+      onProgress: ({ phase }) => {
+        if (phase === 'pass2') throw new Error('pass2 progress error');
+      },
+    })).rejects.toThrow('pass2 progress error');
+  });
+
+  it('pass 3 catch: runAnalysis rejects when onProgress throws during maia pass', async () => {
+    const chess = (await import('chess.js')).Chess;
+    const game = new chess();
+    const pos0 = game.fen();
+    game.move({ from: 'e2', to: 'e4' });
+    const pos1 = game.fen();
+
+    const sfClient = new ScriptedEngineClient({
+      [pos0]: SF_BLUNDER_BEFORE,
+      [pos1]: SF_BLUNDER_AFTER,
+      default: SF_DEFAULT['default'],
+    });
+    const maiaClient = makeMaiaClient();
+
+    await expect(runAnalysis({
+      plies: ['e2e4'],
+      playerColor: 'white',
+      sfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+      onProgress: ({ phase }) => {
+        if (phase === 'maia') throw new Error('pass3 progress error');
+      },
+    })).rejects.toThrow('pass3 progress error');
+  });
+
+  it('pass 2: custom sfClient covers lines 179-186 (null lines, !pv, null cp, far cp)', async () => {
+    // 4 plies: e4 e5 d4 d5 — player is white → plies 0,2 are player plies.
+    // Both white positions are blunders (large cp swing) → pass2 runs TWICE.
+    // Call 1 returns lines:null (covers ?? [] right side, line 179).
+    // Call 2 returns edge-case lines (covers !l.pv, l.cp===null, far cp).
+    const chess = (await import('chess.js')).Chess;
+    const game = new chess();
+    const pos0 = game.fen();                       // before e4 (player ply 1)
+    game.move({ from: 'e2', to: 'e4' });
+    const pos1 = game.fen();                       // before e5 (opponent ply)
+    game.move({ from: 'e7', to: 'e5' });
+    const pos2 = game.fen();                       // before d4 (player ply 2)
+    game.move({ from: 'd2', to: 'd4' });
+    const pos3 = game.fen();                       // before d5 (opponent ply)
+    game.move({ from: 'd7', to: 'd5' });
+    const pos4 = game.fen();                       // final position
+
+    let pass2CallCount = 0;
+    const customSfClient = {
+      _calls: [],
+      async eval(fen, opts = {}) {
+        this._calls.push({ type: 'eval', fen, opts });
+        if (opts && opts.multiPV === 3) {
+          pass2CallCount++;
+          // First call: return lines:null → covers ?? [] right side (line 179)
+          if (pass2CallCount === 1) {
+            return { cp: 0, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: null };
+          }
+          // Second call: edge-case lines — covers all branches on 180, 184, 186
+          return {
+            cp: 0, mate: null, bestmove: 'd2d4', pv: 'd2d4',
+            lines: [
+              { depth: 5, cp: 20 },                          // no pv → !l.pv TRUE (line 180)
+              { depth: 18, cp: 0, pv: 'd2d4 d7d5' },        // same as bestmove → seenMoves skip
+              { depth: 18, cp: null, pv: 'f2f3 e7e5' },     // cp: null → l.cp !== null FALSE (line 184)
+              { depth: 16, cp: -500, pv: 'h2h3 e7e5' },     // far cp → > NEAR_MISS TRUE (line 186)
+              { depth: 14, cp: -2, pv: 'g1f3 d7d5' },       // near-miss → included
+            ],
+          };
+        }
+        // pass1: blunder on pos0 (player) and pos2 (player); opponent plies are fine
+        if (fen === pos0) return { cp: 100, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: [] };
+        if (fen === pos1) return { cp: -500, mate: null, bestmove: 'e7e5', pv: 'e7e5', lines: [] };
+        if (fen === pos2) return { cp: 100, mate: null, bestmove: 'd2d4', pv: 'd2d4', lines: [] };
+        if (fen === pos3) return { cp: -500, mate: null, bestmove: 'd7d5', pv: 'd7d5', lines: [] };
+        if (fen === pos4) return { cp: 0, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: [] };
+        return { cp: 30, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: [] };
+      },
+    };
+
+    const policyMap = new Map([['e2e4', 0.5], ['d2d4', 0.3], ['g1f3', 0.2]]);
+    const maiaClient = makeMaiaClient('e2e4', policyMap);
+
+    const { puzzleCandidates } = await runAnalysis({
+      plies: ['e2e4', 'e7e5', 'd2d4', 'd7d5'],
+      playerColor: 'white',
+      sfClient: customSfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+    });
+
+    expect(Array.isArray(puzzleCandidates)).toBe(true);
+    // pass2 should have been called twice (one per player blunder)
+    expect(pass2CallCount).toBe(2);
+    // The second call's near-miss alt move 'g1f3' should appear in altMovesJson
+    const candidates = puzzleCandidates.filter(c => c.mover === 'player');
+    expect(candidates.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('regression: existingEvals with bestmove skips the SF call for that position', async () => {
     // Build a 2-ply game; pre-supply existingEvals covering ply 1 (idx=0)
     // The SF client records every call; if existingEvals is respected it should

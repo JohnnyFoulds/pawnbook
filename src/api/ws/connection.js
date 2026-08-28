@@ -11,6 +11,7 @@ import { WebSocketServer } from 'ws';
 
 import { logger } from '../../config.js';
 import { INCREMENTAL_MAX_QUEUE, INCREMENTAL_DEPTH } from '../../shared/balance.js';
+
 import { makeMessageHandler } from './handlers.js';
 import { analyseGame } from './analysis-service.js';
 

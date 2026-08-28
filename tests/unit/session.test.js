@@ -90,6 +90,11 @@ describe('session', () => {
     expect(session.ranked).toBe(false);
   });
 
+  it('status getter returns the current session status', () => {
+    const session = makeSession();
+    expect(session.status).toBe('in_progress');
+  });
+
   it('termination is one of the eight enum values for checkmate', () => {
     const VALID = new Set(['checkmate','resignation','stalemate','threefold',
       'fifty_move','insufficient_material','timeout','abandoned']);

@@ -45,6 +45,21 @@ describe('selectPuzzles', () => {
     expect(selected[2].instructiveness).toBe(1.0);
   });
 
+  it('sort covers both ?? 0 branches when some candidates lack instructiveness (line 60)', () => {
+    // 3 candidates: 2 with undefined instructiveness, 1 with 2.0
+    // Sort must compare (defined, undefined) AND (undefined, defined) to cover both ?? 0 right sides
+    const D4_FEN = 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1';
+    const candidates = [
+      makeCandidate({ instructiveness: undefined, fen: START_FEN, ply: 1 }),
+      makeCandidate({ instructiveness: 2.0,       fen: E4_FEN,    ply: 2 }),
+      makeCandidate({ instructiveness: undefined, fen: D4_FEN,    ply: 3 }),
+    ];
+    const selected = selectPuzzles(candidates);
+    // The candidate with instructiveness=2.0 should come first; undefined treated as 0
+    expect(selected[0].instructiveness).toBe(2.0);
+    expect(selected).toHaveLength(3);
+  });
+
   it('capped at PUZZLES_PER_GAME_MAX', () => {
     const candidates = Array.from({ length: PUZZLES_PER_GAME_MAX + 3 }, (_, i) =>
       makeCandidate({ instructiveness: i, ply: i + 1 })
@@ -115,6 +130,25 @@ describe('buildAcceptedMoves', () => {
     const result = buildAcceptedMoves('e2e4', null, 100);
     const moves = JSON.parse(result);
     expect(moves).toEqual(['e2e4']);
+  });
+
+  it('handles Infinity cp by clamping via Math.sign (isFinite false branch)', () => {
+    const result = buildAcceptedMoves('e2e4', [], Infinity);
+    const moves = JSON.parse(result);
+    expect(moves).toContain('e2e4');
+  });
+
+  it('covers line 78 ?? 0: null bestCp is treated as 0', () => {
+    const result = buildAcceptedMoves('e2e4', [], null);
+    const moves = JSON.parse(result);
+    expect(moves).toEqual(['e2e4']);
+  });
+
+  it('accepts alt line with null cp by treating it as 0 (line 83 ?? 0 right side)', () => {
+    // line.cp is null → winPct(null ?? 0) = winPct(0) = 50; bestCp=0 → bestWin=50; diff=0 ≤ NEAR_MISS
+    const result = buildAcceptedMoves('e2e4', [{ uci: 'd2d4', cp: null }], 0);
+    const moves = JSON.parse(result);
+    expect(moves).toContain('d2d4');
   });
 });
 

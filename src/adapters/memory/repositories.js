@@ -134,6 +134,21 @@ export class InMemoryGameRepository {
   getStreak(todayTimestampMs) {
     return _deriveStreak([...this._activity.keys()], _activityDayKey(todayTimestampMs));
   }
+
+  getPlayerMoveClassifications() {
+    if (!this._evals) return [];
+    const results = [];
+    for (const [gameId, evals] of this._evals) {
+      const game = this._games.get(gameId);
+      if (!game || game.status !== 'finished') continue;
+      for (const eval_ of evals) {
+        if (eval_.mover === 'player' && eval_.classification != null) {
+          results.push({ classification: eval_.classification, played_at: game.playedAt ?? 0 });
+        }
+      }
+    }
+    return results.sort((a, b) => (a.played_at ?? 0) - (b.played_at ?? 0));
+  }
 }
 
 export class InMemoryPuzzleRepository {
@@ -195,6 +210,14 @@ export class InMemoryPuzzleRepository {
       .sort((a, b) => (a.sourcePly ?? 0) - (b.sourcePly ?? 0));
   }
 
+  getPuzzleCountsByGameId() {
+    const counts = {};
+    for (const p of this._puzzles.values()) {
+      if (p.sourceGameId) counts[p.sourceGameId] = (counts[p.sourceGameId] ?? 0) + 1;
+    }
+    return counts;
+  }
+
   saveReview(review) {
     if (!this._reviews) this._reviews = [];
     this._reviews.push({ ...review, id: review.id ?? randomUUID() });
@@ -203,6 +226,16 @@ export class InMemoryPuzzleRepository {
   saveReviewAndCard(review, card) {
     this.saveReview(review);
     this.saveCard(card);
+  }
+
+  getPracticeCards(now) {
+    const results = [];
+    for (const [puzzleId, card] of this._cards) {
+      if (card.due > now && !card.graduated) {
+        results.push({ ...this._puzzles.get(puzzleId), ...card });
+      }
+    }
+    return results.sort((a, b) => (b.instructiveness ?? 0) - (a.instructiveness ?? 0));
   }
 }
 

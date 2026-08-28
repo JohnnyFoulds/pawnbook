@@ -32,6 +32,26 @@ describe('InMemoryGameRepository — id and default branches', () => {
   });
 });
 
+describe('InMemoryGameRepository — listRecent and savePreEval branch coverage', () => {
+  it('listRecent fires ?? 0 for both comparands when games lack startedAt', () => {
+    const repo = new InMemoryGameRepository();
+    repo.save({ id: 'g-no-started-1' });
+    repo.save({ id: 'g-no-started-2' });
+    const result = repo.listRecent();
+    expect(result).toHaveLength(2);
+  });
+
+  it('savePreEval with empty evalData fires all four ?? null branches', () => {
+    const repo = new InMemoryGameRepository();
+    repo.savePreEval('g1', 0, 'fen1', {});
+    const evals = repo.getEvals('g1');
+    expect(evals[0].cpWhite).toBeNull();
+    expect(evals[0].mateIn).toBeNull();
+    expect(evals[0].bestMoveUci).toBeNull();
+    expect(evals[0].pv).toBeNull();
+  });
+});
+
 describe('InMemoryPuzzleRepository — id and dedup branches', () => {
   it('save without id generates a UUID', () => {
     const repo = new InMemoryPuzzleRepository();

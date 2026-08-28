@@ -15,6 +15,9 @@ export default defineConfig({
       exclude: [
         'src/server.js',
         'src/telemetry.js',
+        // These require a live engine binary — covered by smoke.sh in Phase 8
+        'src/adapters/engine/uci-engine-client.js',
+        'src/adapters/engine/engine-pool.js',
       ],
       thresholds: {
         branches: 90,

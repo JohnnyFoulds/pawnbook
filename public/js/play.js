@@ -22,7 +22,6 @@ async function api(path, opts) {
 
 let ws = null;
 let gameId = null;
-let currentFen = null;
 let legalMoves = [];
 let youPlay = null;
 let selectedOpponentId = null;
@@ -247,7 +246,6 @@ function handleMessage(msg) {
 function onGameStarted(msg) {
   gameId = msg.gameId;
   youPlay = msg.youPlay;
-  currentFen = msg.fen;
   legalMoves = msg.legalMoves ?? [];
 
   document.getElementById('opponent-name-display').textContent = selectedOpponentId;
@@ -260,7 +258,6 @@ function onGameStarted(msg) {
 }
 
 async function onEngineMove(msg) {
-  currentFen = msg.fen;
   legalMoves = msg.legalMoves ?? [];
   document.getElementById('thinking-display').style.display = 'none';
 
