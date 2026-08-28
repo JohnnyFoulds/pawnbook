@@ -404,6 +404,127 @@ for (const { name, factory } of implementations) {
   });
 }
 
+// ─── strength store contract ─────────────────────────────────────────────────
+
+for (const { name, factory } of implementations) {
+  describe(`store: [${name}]`, () => {
+    let repos;
+    beforeEach(() => { repos = factory(); });
+    afterEach(() => repos.cleanup());
+
+    it('strengthElo round-trips through save and findById', () => {
+      const game = makeGame({ strengthElo: 1425, opponentStrengthElo: 1830 });
+      repos.games.save(game);
+      const loaded = repos.games.findById(game.id);
+      expect(loaded.strengthElo).toBe(1425);
+      expect(loaded.opponentStrengthElo).toBe(1830);
+    });
+
+    it('strengthElo survives a second save that supplies it', () => {
+      const game = makeGame();
+      repos.games.save(game);
+      repos.games.save({ ...game, strengthElo: 1500, opponentStrengthElo: 1600 });
+      const loaded = repos.games.findById(game.id);
+      expect(loaded.strengthElo).toBe(1500);
+      expect(loaded.opponentStrengthElo).toBe(1600);
+    });
+
+    it('strengthElo is exposed by listRecent', () => {
+      const game = makeGame({ strengthElo: 1400, opponentStrengthElo: 1700 });
+      repos.games.save(game);
+      const list = repos.games.listRecent(10);
+      const found = list.find(g => g.id === game.id);
+      expect(found.strengthElo).toBe(1400);
+      expect(found.opponentStrengthElo).toBe(1700);
+    });
+
+    it('a strength_samples row round-trips per side', () => {
+      const game = makeGame();
+      repos.games.save(game);
+      repos.games.saveStrengthSample({ gameId: game.id, side: 'player', n: 20, ase: 0.15, sd: 0.08, p75Loss: 40, wasTimed: false, coeffVersion: 1 });
+      const rows = repos.games.listStrengthSamples();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].gameId).toBe(game.id);
+      expect(rows[0].side).toBe('player');
+      expect(rows[0].n).toBe(20);
+      expect(rows[0].ase).toBeCloseTo(0.15);
+      expect(rows[0].sd).toBeCloseTo(0.08);
+    });
+
+    it('a strength_samples row carries p75Loss and was_timed for later refitting', () => {
+      const game = makeGame();
+      repos.games.save(game);
+      repos.games.saveStrengthSample({ gameId: game.id, side: 'opponent', n: 15, ase: 0.2, sd: 0.1, p75Loss: 55.5, wasTimed: true, coeffVersion: 1 });
+      const [row] = repos.games.listStrengthSamples();
+      expect(row.p75Loss).toBeCloseTo(55.5);
+      expect(row.wasTimed).toBe(true);
+      expect(row.coeffVersion).toBe(1);
+    });
+
+    it('saveStrengthSample is idempotent on (gameId, side)', () => {
+      const game = makeGame();
+      repos.games.save(game);
+      repos.games.saveStrengthSample({ gameId: game.id, side: 'player', n: 10, ase: 0.1, sd: 0.05, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+      repos.games.saveStrengthSample({ gameId: game.id, side: 'player', n: 20, ase: 0.2, sd: 0.09, p75Loss: 30, wasTimed: false, coeffVersion: 1 });
+      const rows = repos.games.listStrengthSamples();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].n).toBe(20);
+    });
+
+    it('listStrengthSamples returns newest game first and honours limit', () => {
+      const g1 = makeGame({ startedAt: 1_000_000 });
+      const g2 = makeGame({ startedAt: 2_000_000 });
+      repos.games.save(g1);
+      repos.games.save(g2);
+      repos.games.saveStrengthSample({ gameId: g1.id, side: 'player', n: 12, ase: 0.15, sd: 0.07, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+      repos.games.saveStrengthSample({ gameId: g2.id, side: 'player', n: 14, ase: 0.18, sd: 0.09, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+      const all = repos.games.listStrengthSamples({ side: 'player' });
+      expect(all[0].gameId).toBe(g2.id);
+      const limited = repos.games.listStrengthSamples({ side: 'player', limit: 1 });
+      expect(limited).toHaveLength(1);
+      expect(limited[0].gameId).toBe(g2.id);
+    });
+
+    it('listStrengthSamples filters by side', () => {
+      const game = makeGame();
+      repos.games.save(game);
+      repos.games.saveStrengthSample({ gameId: game.id, side: 'player', n: 12, ase: 0.15, sd: 0.07, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+      repos.games.saveStrengthSample({ gameId: game.id, side: 'opponent', n: 13, ase: 0.16, sd: 0.08, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+      const playerRows = repos.games.listStrengthSamples({ side: 'player' });
+      expect(playerRows).toHaveLength(1);
+      expect(playerRows[0].side).toBe('player');
+    });
+
+    it('an absent strength column loads as null, not zero', () => {
+      const game = makeGame();
+      repos.games.save(game);
+      const loaded = repos.games.findById(game.id);
+      expect(loaded.strengthElo).toBeNull();
+      expect(loaded.opponentStrengthElo).toBeNull();
+    });
+  });
+}
+
+describe('store: [sqlite] cascade delete', () => {
+  let db, dbPath, repos;
+  beforeEach(() => {
+    dbPath = join(tmpdir(), `pawnbook-cascade-${randomUUID()}.db`);
+    db = new Database(dbPath);
+    applySchema(db);
+    repos = { games: new SqliteGameRepository(db) };
+  });
+  afterEach(() => { db.close(); if (existsSync(dbPath)) unlinkSync(dbPath); });
+
+  it('deleting a game removes its strength_samples rows', () => {
+    const game = makeGame();
+    repos.games.save(game);
+    repos.games.saveStrengthSample({ gameId: game.id, side: 'player', n: 12, ase: 0.15, sd: 0.07, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+    db.prepare('DELETE FROM games WHERE id = ?').run(game.id);
+    const rows = db.prepare('SELECT * FROM strength_samples WHERE game_id = ?').all(game.id);
+    expect(rows).toHaveLength(0);
+  });
+});
+
 // ─── sqlite-only tests ───────────────────────────────────────────────────────
 
 describe('[sqlite] schema', () => {

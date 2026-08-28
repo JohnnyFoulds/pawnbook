@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 
 import { EngineUnavailableError, EngineTimeoutError, WeightsMissingError } from '../../errors.js';
 import { logger } from '../../config.js';
+import { normaliseToWhitePov } from '../../shared/pov.js';
 
 const log = logger.child({ mod: 'uci-engine-client' });
 
@@ -134,13 +135,14 @@ export class UciEngineClient {
     const deepest = lines.filter(l => l.depth).sort((a, b) => b.depth - a.depth);
     const top = selectTopLine(deepest, multiPV);
 
-    return {
+    const raw = {
       cp: top.cp ?? null,
       mate: top.mate ?? null,
       bestmove,
       pv: top.pv ?? '',
       lines: deepest,
     };
+    return normaliseToWhitePov(fen, raw);
   }
 
   /**

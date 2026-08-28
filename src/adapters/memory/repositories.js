@@ -41,6 +41,7 @@ export class InMemoryGameRepository {
     this._eloHistory = [];
     this._settings = new Map();
     this._activity = new Map(); // dayKey → {games, reviews}
+    this._strengthSamples = new Map(); // `${gameId}:${side}` → sample
   }
 
   save(game) {
@@ -52,7 +53,10 @@ export class InMemoryGameRepository {
   findById(id) {
     const game = this._games.get(id);
     if (!game) throw new GameNotFoundError(`Game '${id}' not found`);
-    return { ...game };
+    const g = { ...game };
+    g.strengthElo = game.strengthElo ?? null;
+    g.opponentStrengthElo = game.opponentStrengthElo ?? null;
+    return g;
   }
 
   appendMove(gameId, move) {
@@ -99,7 +103,8 @@ export class InMemoryGameRepository {
   listRecent(limit = 50) {
     return [...this._games.values()]
       .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
-      .slice(0, limit);
+      .slice(0, limit)
+      .map(g => ({ ...g, strengthElo: g.strengthElo ?? null, opponentStrengthElo: g.opponentStrengthElo ?? null }));
   }
 
   getEvals(gameId) {
@@ -133,6 +138,22 @@ export class InMemoryGameRepository {
 
   getStreak(todayTimestampMs) {
     return _deriveStreak([...this._activity.keys()], _activityDayKey(todayTimestampMs));
+  }
+
+  saveStrengthSample({ gameId, side, n, ase, sd, p75Loss, wasTimed, coeffVersion }) {
+    this._strengthSamples.set(`${gameId}:${side}`, { gameId, side, n, ase, sd, p75Loss: p75Loss ?? null, wasTimed: !!wasTimed, coeffVersion });
+  }
+
+  listStrengthSamples({ side, limit } = {}) {
+    let rows = [...this._strengthSamples.values()];
+    if (side != null) rows = rows.filter(r => r.side === side);
+    rows.sort((a, b) => {
+      const ga = this._games.get(a.gameId);
+      const gb = this._games.get(b.gameId);
+      return (gb?.startedAt ?? 0) - (ga?.startedAt ?? 0);
+    });
+    if (limit != null) rows = rows.slice(0, limit);
+    return rows.map(r => ({ ...r }));
   }
 
   getPlayerMoveClassifications() {

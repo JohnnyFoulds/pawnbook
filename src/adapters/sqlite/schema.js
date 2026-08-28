@@ -13,6 +13,8 @@ export function applySchema(db) {
   // Idempotent migrations for columns added after initial schema creation.
   try { db.exec('ALTER TABLE games ADD COLUMN analysis_error TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE move_evals ADD COLUMN win_loss_pts REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE games ADD COLUMN strength_elo INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE games ADD COLUMN opponent_strength_elo INTEGER'); } catch { /* already exists */ }
 
   // make move_san nullable — original DDL had NOT NULL which silently dropped all rows via INSERT OR IGNORE
   const moveSanNotNull = db.prepare("PRAGMA table_info(move_evals)").all()
@@ -75,10 +77,24 @@ export function applySchema(db) {
       elo_after              INTEGER,
       accuracy               REAL,
       opponent_accuracy      REAL,
+      strength_elo           INTEGER,
+      opponent_strength_elo  INTEGER,
       analysis_state         TEXT NOT NULL DEFAULT 'pending'
                                CHECK(analysis_state IN ('pending','running','done','failed')),
       analysis_error         TEXT,
       analysed_at            INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS strength_samples (
+      game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+      side          TEXT NOT NULL CHECK (side IN ('player','opponent')),
+      n             INTEGER NOT NULL,
+      ase           REAL NOT NULL,
+      sd            REAL NOT NULL,
+      p75_loss      REAL,
+      was_timed     INTEGER NOT NULL DEFAULT 0,
+      coeff_version INTEGER NOT NULL,
+      PRIMARY KEY (game_id, side)
     );
 
     CREATE TABLE IF NOT EXISTS game_moves (

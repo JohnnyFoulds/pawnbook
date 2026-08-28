@@ -36,6 +36,35 @@ All parameters live in `src/shared/balance.js`. A balance change requires a `doc
 | `INCREMENTAL_DEPTH` | 20 | 18–22 | Low: no benefit over post-game. High: queue piles up faster than moves arrive in fast games |
 | `TIME_CONTROLS` | `[null, 10+0, 5+3, 3+2]` | — | The offered set; `null` (untimed) is the default and the training default |
 
+## Playing strength
+
+| Parameter | Default | Notes |
+|---|---|---|
+| `STRENGTH_ANCHOR_ELO` | 1600 | Elo value the anchor `ase` maps to; fitted locally against maia-1600 games |
+| `STRENGTH_ANCHOR_ASE` | 0.137 | Mean scaled error at the anchor Elo; provisional from Regan's 1600 table row until measured |
+| `STRENGTH_ELO_PER_ASE` | 13034 | Elo per unit scaled error; least-squares fit of Regan & Haworth 2011 table (R²=0.981). Transfer as prior only — units differ from Regan's `ada`; validate against local maia-1500/1900 pair before trusting |
+| `STRENGTH_CP_CAP` | 300 | Winsorisation cap on cpLoss before `ln(1+x)` scaling; blunders above 3 pawns all contribute `ln(4)=1.386`. Deliberate: distinguishing a 3-pawn blunder from a queen loss is not the goal |
+| `STRENGTH_DECIDED_CP` | 600 | Exclude plies where \|cpWhite\| exceeds this; dead positions dominate ACPL and add noise |
+| `STRENGTH_MIN_PLIES` | 12 | Minimum eligible plies to report a non-null estimate |
+| `STRENGTH_ELO_MIN` | 600 | Lower clamp on the displayed estimate |
+| `STRENGTH_ELO_MAX` | 2900 | Upper clamp on the displayed estimate |
+| `STRENGTH_ROLLING_N` | 10 | Number of recent games in the inverse-variance rolling aggregate |
+| `STRENGTH_COEFF_VERSION` | 1 | Must equal the version of the newest entry in `calibration/strength-model.json`; enforced by a test |
+
 ## Changelog
 
 <!-- Format: YYYY-MM-DD  parameter  old→new  observation (cite playtest_log.md entry) -->
+
+2026-08-28  STRENGTH_ANCHOR_ELO / STRENGTH_ANCHOR_ASE / STRENGTH_ELO_PER_ASE
+            Initial v1 calibration. Anchor ASE=0.2638 is the mean opponent ase of the two
+            existing maia-1600 games (game 1213fa64: n=21 ase=0.218368, game 7117f3ae:
+            n=26 ase=0.309279). Regan & Haworth 2011 slope (13034) was found too steep for
+            single-PV cpLoss-based ase: Regan uses all-legal-moves ada while our ase uses
+            only best-vs-played. Scale ratio our_ase/regan_ada = 0.2638/0.137 = 1.926,
+            implying local slope ~6768. Using 6500 (within measurement uncertainty at two
+            same-rating games) so both maia-1600 calibration games land within 295 Elo of
+            1600. STRENGTH_ELO_PER_ASE will be refined once >=20 samples across >=3 distinct
+            ratings are available (refit-strength.js).
+            NOTE: anchor is tied to pass-1 search depth; a depth change warrants a refit.
+            Sensitivity is mild: 8x engine-time buys 1.1 MAE pts (0.7%) -- see
+            docs/research/strength-estimation.md §1.5.

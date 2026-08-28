@@ -73,6 +73,45 @@ Consecutive local calendar days (04:00 boundary) with at least one game or revie
 - Graduation: `reps >= 5`, no lapses, `interval > 180d` → `graduated = true`, leaves the active queue
 - Empty queue: phrased as a win state, not an error
 
+## Playing-strength estimate (FR-GRADE-6–11)
+
+After every analysed game, pawnbook estimates the Elo at which each side *played* in that game, using Regan & Haworth's scaled-error statistic (AAAI 2011) computed from pass-1 engine evaluations. The full research record is in `docs/research/strength-estimation.md`.
+
+**The formula.** For each side, eligible plies are those where the mover had more than one legal move, the pre-move eval is not a mate score, and `|cpWhite| ≤ STRENGTH_DECIDED_CP` (excludes dead positions that dominate ACPL). For each eligible ply:
+
+```
+scaledLoss = ln(1 + min(cpLoss, STRENGTH_CP_CAP) / 100)
+```
+
+`ase` (average scaled error) is the mean over eligible plies. The estimate:
+
+```
+strength = STRENGTH_ANCHOR_ELO − STRENGTH_ELO_PER_ASE × (ase − STRENGTH_ANCHOR_ASE)
+```
+
+clamped to `[STRENGTH_ELO_MIN, STRENGTH_ELO_MAX]`. Null when fewer than `STRENGTH_MIN_PLIES` eligible plies exist.
+
+**Standard error.** Reported alongside each estimate as one SE:
+
+```
+se = STRENGTH_ELO_PER_ASE × sd / √n
+```
+
+where `sd` is the sample standard deviation of per-ply `scaledLoss` (0 when `n < 2`). The `±` shown on the review page is **one standard error (≈ 68% coverage)**, not a confidence interval. A flawless game yields `se = 0`, which is arithmetic, not certainty.
+
+**Expected accuracy.** Per-game error is inherently ±250–300 Elo — a property of the problem, not a defect. The 2014 Kaggle *Finding Elo* competition (157 teams, Stockfish at 1 s/move) achieved ~222 Elo residual SD using only supplied data. Any test asserting a tighter single-game bound will flake.
+
+**The rolling aggregate** (last `STRENGTH_ROLLING_N` games) uses inverse-variance weighting and is a more reliable figure than any individual estimate. It assumes a fixed recent strength and therefore lags an improving player.
+
+**Eligibility symmetry.** Both sides' eligible plies are a disjoint partition of the game (`mover === side` makes them disjoint by construction) evaluated under identical criteria on the same White-POV series. Neither side gets a systematically easier bar; the two numbers are directly comparable.
+
+**Calibration.** Coefficients are versioned in `calibration/strength-model.json` and read from `src/shared/balance.js` at runtime. No domain code reads the JSON. Re-fit via `scripts/refit-strength.js` once ≥ 20 samples spanning ≥ 3 distinct opponent ratings are available. The anchor is tied to the current pass-1 search depth; a depth change warrants a refit.
+
+**Known limitations (not to be tuned away):**
+- A heavily-booked opening inflates the estimate — opening plies with zero loss are counted, biasing `ase` low.
+- A heavily won endgame has most plies filtered by `STRENGTH_DECIDED_CP`, reducing `n` and producing `—`.
+- Long won endgames may produce a null estimate for the winner even when `n` is reasonable.
+
 ## Time control (FR-CLOCK)
 
 Optional, untimed by default. Offered: `10+0 · 5+3 · 3+2`. Server-authoritative via the `Clock` port. Fischer increment applied after the move. Clock pauses on disconnect. Flag-fall → `termination = 'timeout'`.

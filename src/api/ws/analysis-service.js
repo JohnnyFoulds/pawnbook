@@ -16,6 +16,7 @@ import { updateElo } from '../../domain/game/elo.js';
 import { getAvailableOpponents } from '../../domain/game/roster.js';
 import { logger } from '../../config.js';
 import { getTracer } from '../../telemetry.js';
+import { STRENGTH_COEFF_VERSION } from '../../shared/balance.js';
 
 const log = logger.child({ mod: 'analysis-service' });
 
@@ -44,7 +45,13 @@ export async function analyseGame({
     attributes: { 'analysis.game_id': gameId, 'analysis.opponent': opponent.id, 'analysis.ranked': ranked },
   });
 
-  // Mark analysis as running
+  // Read any previously-stored analysis outputs before the 'running' save so they
+  // can be carried forward on both the running save and any failure path (FR-ANALYSE-15).
+  let _prior = {};
+  try { _prior = gameRepo.findById(gameId); } catch { /* new game — nothing to carry */ }
+
+  // Mark analysis as running; carry prior analysis outputs forward so they survive
+  // if a failure triggers _saveFailed before new results arrive.
   gameRepo.save({
     id: gameId,
     opponentId: opponent.id,
@@ -56,15 +63,20 @@ export async function analyseGame({
     termination: result.termination,
     analysisState: 'running',
     playedAt: Date.now(),
+    accuracy: _prior.accuracy ?? null,
+    opponentAccuracy: _prior.opponentAccuracy ?? null,
+    strengthElo: _prior.strengthElo ?? null,
+    opponentStrengthElo: _prior.opponentStrengthElo ?? null,
+    eloBefore: _prior.eloBefore ?? null,
+    eloAfter: _prior.eloAfter ?? null,
+    analysedAt: _prior.analysedAt ?? null,
   });
 
   // Get game moves for analysis
   const moves = gameRepo.getMoves(gameId);
   if (!moves.length) {
     log.warn({ gameId }, 'no moves found for analysis — skipping');
-    gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
-      playerColor, ranked, status: 'finished', result: result.result,
-      termination: result.termination, analysisState: 'failed' });
+    _saveFailed(gameRepo, { gameId, opponentId: opponent.id, opponentElo: opponent.elo, playerColor, ranked, result });
     return;
   }
 
@@ -90,10 +102,7 @@ export async function analyseGame({
     span?.recordException(err);
     span?.setStatus({ code: 2, message: err.message });
     span?.end();
-    gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
-      playerColor, ranked, status: 'finished', result: result.result,
-      termination: result.termination, analysisState: 'failed',
-      analysisError: err.message });
+    _saveFailed(gameRepo, { gameId, opponentId: opponent.id, opponentElo: opponent.elo, playerColor, ranked, result, error: err.message });
     _sendIfOpen(ws, { type: 'error', error_code: 'analysis_failed',
       message: 'Analysis engine unavailable', detail: {} });
     return;
@@ -107,7 +116,7 @@ export async function analyseGame({
   const existingEvals = gameRepo.getEvals(gameId);
 
   try {
-    const { moveEvals, accuracy, opponentAccuracy, puzzleCandidates } = await runAnalysis({
+    const { moveEvals, accuracy, opponentAccuracy, playerStrength, opponentStrength, puzzleCandidates } = await runAnalysis({
       plies,
       playerColor,
       sfClient,
@@ -124,6 +133,16 @@ export async function analyseGame({
     // Save move evals
     for (const e of moveEvals) {
       gameRepo.saveMoveEval({ ...e, gameId });
+    }
+
+    // Save strength samples (sufficient statistics for corpus re-fitting)
+    if (playerStrength.n > 0) {
+      gameRepo.saveStrengthSample({ gameId, side: 'player', n: playerStrength.n, ase: playerStrength.ase,
+        sd: playerStrength.sd, p75Loss: playerStrength.p75Loss, wasTimed, coeffVersion: STRENGTH_COEFF_VERSION });
+    }
+    if (opponentStrength.n > 0) {
+      gameRepo.saveStrengthSample({ gameId, side: 'opponent', n: opponentStrength.n, ase: opponentStrength.ase,
+        sd: opponentStrength.sd, p75Loss: opponentStrength.p75Loss, wasTimed, coeffVersion: STRENGTH_COEFF_VERSION });
     }
 
     // Select puzzles
@@ -211,6 +230,8 @@ export async function analyseGame({
       termination: result.termination,
       accuracy,
       opponentAccuracy,
+      strengthElo: playerStrength.strength,
+      opponentStrengthElo: opponentStrength.strength,
       analysisState: 'done',
       analysedAt: Date.now(),
       eloBefore,
@@ -243,13 +264,31 @@ export async function analyseGame({
     span?.recordException(err);
     span?.setStatus({ code: 2, message: err.message }); // ERROR
     span?.end();
-    gameRepo.save({ id: gameId, opponentId: opponent.id, opponentElo: opponent.elo,
-      playerColor, ranked, status: 'finished', result: result.result,
-      termination: result.termination, analysisState: 'failed',
-      analysisError: err.message });
+    _saveFailed(gameRepo, { gameId, opponentId: opponent.id, opponentElo: opponent.elo, playerColor, ranked, result, error: err.message });
     _sendIfOpen(ws, { type: 'error', error_code: 'analysis_failed',
       message: `Analysis failed: ${err.message}`, detail: {} });
   }
+}
+
+/**
+ * FR-ANALYSE-15: save a failed-analysis marker without nulling analysis outputs
+ * that were already stored (accuracy, strength, elo) for a previously-completed game.
+ */
+function _saveFailed(gameRepo, { gameId, opponentId, opponentElo, playerColor, ranked, result, error }) {
+  let existing = {};
+  try { existing = gameRepo.findById(gameId); } catch { /* game not yet created — nothing to carry */ }
+  gameRepo.save({
+    id: gameId, opponentId, opponentElo, playerColor, ranked,
+    status: 'finished', result: result.result, termination: result.termination,
+    analysisState: 'failed', analysisError: error ?? null,
+    accuracy: existing.accuracy ?? null,
+    opponentAccuracy: existing.opponentAccuracy ?? null,
+    strengthElo: existing.strengthElo ?? null,
+    opponentStrengthElo: existing.opponentStrengthElo ?? null,
+    eloBefore: existing.eloBefore ?? null,
+    eloAfter: existing.eloAfter ?? null,
+    analysedAt: existing.analysedAt ?? null,
+  });
 }
 
 function _sendIfOpen(ws, obj) {
