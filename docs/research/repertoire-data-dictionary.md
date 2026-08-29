@@ -1,212 +1,210 @@
-# Data dictionary — auto-repertoire dataset
+# Repertoire research dataset — data dictionary
 
-**Date:** 2026-08-29 (preliminary; finalised at Phase 25)  
-Shipped with every `scripts/export-research-dataset.js` run. Every exported field is listed here;
-every field listed here is exported. Phase 25 DoD requires these sets to match.
+Version 1. Exported from pawnbook Phase 25.
 
----
-
-## Export structure
-
-```
-export/
-├── manifest.json         SHA-256 of every data file; export metadata (book_version, schema_version)
-├── games.jsonl           One game per line
-├── game_moves.jsonl      All moves (both sides)
-├── move_evals.jsonl      Engine evaluations
-├── rep_observations.jsonl  Append-only repertoire observations
-├── rep_deviations.jsonl    Per-game deviation log
-├── rep_challenges.jsonl    Refusal record (the labelled dataset)
-├── rep_audits.jsonl        Engine audit measurements
-├── rep_changelog.jsonl     Book change feed
-├── rep_suppressions.jsonl  Reversal memory
-├── rep_provenance.jsonl    Measurement context records
-├── rep_book_version.jsonl  Version counter history
-├── data_dictionary.md    This file
-└── games.pgn             All games in PGN format
-```
-
-`--anonymise` removes `games.white_name` / `games.black_name` and any free-text fields.
+Each table is exported as NDJSON (one JSON object per line), ordered by the key columns shown.
+Field names in the export use the SQL column names (snake_case).
 
 ---
 
-## `games`
+## games
 
-| Field | Type | Units | Notes |
+Primary key: `id`. Ordered by `id`.
+
+| Column | Type | Notes | Used in |
 |---|---|---|---|
-| `id` | integer | — | PK |
-| `opponent_id` | integer | — | References roster |
-| `opponent_name` | string | — | Denormalised for convenience |
-| `opponent_elo` | integer\|null | Elo points | Null for Drawfish |
-| `player_color` | `'white'\|'black'` | — | |
-| `ranked` | 0\|1 | — | 0 if flipped by coach |
-| `coach_enabled` | 0\|1 | — | 1 = coach was active |
-| `result` | `'1-0'\|'0-1'\|'1/2-1/2'\|'*'` | — | |
-| `elo_before` | integer | Elo points | Player Elo at game start |
-| `elo_after` | integer\|null | Elo points | Null if unranked |
-| `accuracy` | real\|null | % (0–100) | Player move accuracy |
-| `strength_elo` | integer\|null | Elo points | Estimated strength this game |
-| `opponent_strength_elo` | integer\|null | Elo points | Estimated opponent strength |
-| `analysis_state` | string | — | `'done'` for exported games |
-| `created_at` | integer | Unix epoch ms | Game start time |
-| `ended_at` | integer\|null | Unix epoch ms | |
-
-**Used by RQs:** RQ1 (result), RQ2 (game count), RQ3 (result + elo_before), RQ4 (coach_enabled)
+| id | TEXT | UUID | all |
+| opponent_id | TEXT | Maia model or engine ID (e.g. `maia-1500`) | RQ2, RQ3 |
+| opponent_elo | INTEGER | Opponent Elo at game start | RQ1, RQ3 |
+| player_color | TEXT | `white` or `black` | RQ1 |
+| ranked | INTEGER | 1=ranked, 0=unranked; set to 0 when coach intervened | RQ2, RQ4 |
+| coach_enabled | INTEGER | 1=coach active, 0=disabled for this game | RQ4 |
+| status | TEXT | `in_progress`, `finished`, `abandoned` | filter |
+| result | TEXT | `win`, `loss`, `draw` | RQ1, RQ3 |
+| termination | TEXT | Reason game ended | — |
+| elo_before | INTEGER | Player Elo before game (omitted when `--anonymise`) | RQ3 |
+| elo_after | INTEGER | Player Elo after game (omitted when `--anonymise`) | RQ3 |
+| accuracy | REAL | Player accuracy % from Stockfish analysis | RQ3 |
+| played_at | INTEGER | Unix ms timestamp game finished | RQ2 timeline |
+| analysis_state | TEXT | `pending`, `running`, `done`, `failed` | filter |
 
 ---
 
-## `rep_observations`
+## game_moves
 
-| Field | Type | Units | Notes |
+Primary key: `(game_id, ply)`. Ordered by `game_id, ply`.
+
+| Column | Type | Notes | Used in |
 |---|---|---|---|
-| `id` | integer | — | PK |
-| `game_id` | integer | — | FK games |
-| `ply` | integer | half-moves | 1-indexed |
-| `epd` | string | — | First four FEN fields; the position key |
-| `side` | `'white'\|'black'` | — | Moving side |
-| `move_uci` | string | — | e.g. `'e2e4'` |
-| `move_san` | string | — | Algebraic notation |
-| `win_loss_pts` | real\|null | win% points | Mover's perspective; null until eval exists |
-| `classification` | string\|null | — | `'best'\|'great'\|'good'\|'ok'\|'inaccuracy'\|...` |
-| `played_at` | integer | Unix epoch ms | |
-| `source` | string | — | `'game'\|'coach_kept'\|'coach_corrected'` |
-| `provenance_id` | integer | — | FK rep_provenance |
-| `book_version` | integer | — | Book state at recording time |
-
-**Used by RQs:** All (primary source of the book's formation history)  
-**Note:** Only `source ∈ ('game','coach_kept')` rows count toward promotion and the vote.
-`coach_corrected` rows are in the dataset for audit purposes.
+| game_id | TEXT | FK → games.id | all |
+| ply | INTEGER | 1-indexed half-move (1=White's first) | — |
+| uci | TEXT | Move in UCI format (e.g. `e2e4`) | RQ4 |
+| san | TEXT | Move in SAN format (e.g. `e4`) | PGN |
+| ms_taken | INTEGER | Think time in ms (from clock) | RQ1 challenge evidence |
 
 ---
 
-## `rep_deviations`
+## move_evals
 
-| Field | Type | Units | Notes |
+Primary key: `(game_id, ply)`. Ordered by `game_id, ply`.
+
+| Column | Type | Notes | Used in |
 |---|---|---|---|
-| `id` | integer | — | PK |
-| `game_id` | integer | — | FK games |
-| `ply` | integer | half-moves | |
-| `epd` | string | — | Position key |
-| `kind` | string | — | Deviation classification (e.g. `'order_slip'`, `'novelty'`) |
-| `played_uci` | string | — | Move the player tried |
-| `book_uci` | string\|null | — | Canonical book move offered; null if node had no canonical |
-| `resolution` | string | — | `'alerted_corrected'\|'alerted_kept'\|'alerted_timeout'\|'post_game'` |
-| `decision_ms_taken` | integer\|null | milliseconds | Null for timeout/post_game |
-| `provenance_id` | integer | — | FK rep_provenance |
-| `book_version` | integer | — | |
-
-**Used by RQs:** RQ2 (interaction cost per game), RQ4 (deviation rate per node)
+| game_id | TEXT | FK → games.id | — |
+| ply | INTEGER | — | — |
+| fen | TEXT | Position before the move | — |
+| move_uci | TEXT | Move played | — |
+| win_before | REAL | Win% before move, mover's POV | RQ3 gate inputs |
+| win_after | REAL | Win% after move, mover's POV | RQ3 trend |
+| win_loss_pts | REAL | `win_before - win_after` (loss = positive) | RQ3 soundness gate |
+| best_move_uci | TEXT | Engine's top move | — |
+| classification | TEXT | `blunder`, `mistake`, `inaccuracy`, etc. | — |
+| maia_policy | REAL | Maia probability of the played move | RQ5 calibration |
 
 ---
 
-## `rep_challenges` — the labelled dataset
+## rep_observations
 
-| Field | Type | Units | Notes |
+Primary key: `(game_id, ply)`. Ordered by `game_id, ply`.
+**Append-only — never mutated or deleted.**
+
+| Column | Type | Notes | Used in |
 |---|---|---|---|
-| `id` | integer | — | PK |
-| `epd` | string | — | Position key |
-| `side` | string | — | Moving side |
-| `fen` | string | — | Representative FEN |
-| `incumbent_uci` | string | — | Book move at time of challenge |
-| `challenger_uci` | string | — | Refused move |
-| `opened_game_id` | integer | — | FK games |
-| `opened_ply` | integer | half-moves | |
-| `opened_at` | integer | Unix epoch ms | |
-| `inc_observations` | integer | count | Self-directed observations at open time |
-| `inc_mean_win_loss_pts` | real\|null | win% points | Incumbent's mean loss |
-| `inc_score_w/d/l` | integer | count | Incumbent results snapshot |
-| `inc_card_state` | string\|null | JSON | FSRS card state at open time |
-| `challenger_plays` | integer | count | Opening refusal + unprompted repeats |
-| `incumbent_plays` | integer | count | Unprompted plays after challenge opened |
-| `encounters_since_open` | integer | count | Node encounters since open |
-| `move_ms_taken` | integer\|null | milliseconds | Think-time before played_uci |
-| `move_ms_zscore` | real\|null | — | z-score vs player's distribution at this ply |
-| `decision_ms_taken` | integer\|null | milliseconds | Time to answer the alert |
-| `engine_delta_win_pts` | real\|null | win% points | `winPct(challenger) − winPct(incumbent)`; positive = challenger better |
-| `engine_audit_id` | integer\|null | — | FK rep_audits; the A/B audit |
-| `trend_challenger` | real\|null | win% | Mean win% at +TREND_PLIES, challenger games |
-| `trend_incumbent` | real\|null | win% | Same for incumbent games |
-| `result_challenger_perf` | real\|null | — | Elo-adjusted performance, challenger games |
-| `result_challenger_n` | integer | count | Games in challenger result sample |
-| `result_incumbent_perf` | real\|null | — | |
-| `result_incumbent_n` | integer | count | |
-| `status` | string | — | `'open'\|'promoted'\|'rejected'\|'rejected_unsound'\|'abandoned'\|'settled_both'` |
-| `resolution_rule` | string\|null | — | Numbered rule from §FR-REP-CHAL-4 |
-| `resolved_at` | integer\|null | Unix epoch ms | |
-| `resolved_by` | string\|null | — | `'algorithm'\|'user_override'` |
-| `gate_reason` | string\|null | — | Why gate veto fired |
-| `provenance_id` | integer | — | FK rep_provenance |
-| `book_version` | integer | — | |
-
-**Used by RQs:** RQ1 (primary — every row is one refusal event), RQ3 (style-call promotions)
-
-**Note on `engine_delta_win_pts` sign convention:** positive = challenger is better than incumbent.
-This is the key quantity for RQ1. A distribution skewed positive means refusals tend to be
-improvements. Zero median means neutral. Negative median means the player tends to refuse book moves
-that were actually better.
+| game_id | TEXT | FK → games.id | — |
+| ply | INTEGER | — | — |
+| epd | TEXT | EPD (first four FEN fields) of the position | all |
+| side | TEXT | `white` or `black` (who played) | — |
+| move_uci | TEXT | Move played | RQ2, RQ4 |
+| win_loss_pts | REAL | Win% points lost by this move | RQ3 gate evidence |
+| source | TEXT | `game`, `coach_kept`, `coach_corrected` | RQ2 — only `game`+`coach_kept` count toward confirmation |
+| book_version | INTEGER | Book state when observation was recorded | RQ2 reproducibility |
+| provenance_id | INTEGER | FK → rep_provenance.id | reproducibility |
 
 ---
 
-## `rep_audits`
+## rep_deviations
 
-| Field | Type | Units | Notes |
+Primary key: `id`. Ordered by `game_id, ply`.
+**Append-only.**
+
+| Column | Type | Notes | Used in |
 |---|---|---|---|
-| `id` | integer | — | PK |
-| `epd` | string | — | |
-| `side` | string | — | |
-| `move_uci` | string | — | |
-| `depth` | integer | plies | Stockfish depth |
-| `multipv` | integer | count | MultiPV setting |
-| `win_pct` | real | % (0–100) | Mover's win% after move_uci |
-| `cp` | real\|null | centipawns | Null for forced-mate positions |
-| `pv` | string\|null | — | Space-separated UCI moves |
-| `run_at` | integer | Unix epoch ms | |
-| `provenance_id` | integer | — | FK rep_provenance |
-| `book_version` | integer | — | |
-
-**Used by RQs:** RQ1 (engine_delta via this table), RQ3 (engine side of style-call evidence)
+| id | TEXT | UUID | — |
+| game_id | TEXT | FK → games.id | — |
+| ply | INTEGER | — | — |
+| epd | TEXT | Position where deviation occurred | RQ4 |
+| kind | TEXT | `refused_repeat`, `lapse`, `novelty`, `order_slip`, etc. | RQ4 |
+| played_uci | TEXT | What the player actually played | RQ1 |
+| book_uci | TEXT | What the book wanted | RQ1 |
+| resolution | TEXT | `alerted_corrected`, `alerted_kept`, `alerted_timeout`, `post_game` | RQ4 |
+| decision_ms_taken | INTEGER | Time from alert to choice, ms | RQ4 hesitation |
 
 ---
 
-## `rep_provenance`
+## rep_challenges
 
-| Field | Type | Notes |
-|---|---|---|
-| `id` | integer | PK |
-| `at` | integer | Unix epoch ms |
-| `schema_version` | integer | DB schema version |
-| `balance_hash` | string | SHA-256 of `src/shared/balance.js` |
-| `app_git_sha` | string | Git commit at time of measurement |
-| `sf_version` | string | Stockfish version string |
-| `sf_depth` | integer | Default analysis depth |
-| `sf_multipv` | integer | Default MultiPV |
-| `maia_weights_id` | string | Maia weights identifier |
+Primary key: `id`. Ordered by `id`.
+**Append-only — never deleted.**
 
-Used to condition analyses on the measurement context. Any analysis that compares values produced
-under different `balance_hash` or `sf_version` values must account for the instrument change.
-
----
-
-## Elo-adjusted performance formula
-
-Used in `rep_challenges.result_challenger_perf` and `result_incumbent_perf`:
-
-```
-performance = score − 1 / (1 + 10^((opponent_elo − elo_before) / 400))
-```
-
-where `score ∈ {1, 0.5, 0}`, `opponent_elo` and `elo_before` are from `games`. Averaged over all
-games in the sample. A positive value means the player outperformed their expected score against
-that opponent at that Elo.
+| Column | Type | Notes | Used in |
+|---|---|---|---|
+| id | TEXT | UUID | RQ1 |
+| epd | TEXT | Position of the contest | RQ1 |
+| incumbent_uci | TEXT | Current canonical move | RQ1 |
+| challenger_uci | TEXT | Move the player refused back to | RQ1 |
+| opened_at | INTEGER | Unix ms when challenge opened | RQ1 timeline |
+| challenger_plays | INTEGER | Unprompted plays of challenger after opening | RQ1 rule 3 |
+| incumbent_plays | INTEGER | Plays of incumbent after opening | RQ1 rule 6 |
+| engine_delta_win_pts | REAL | `winPct(challenger) − winPct(incumbent)`; positive = challenger better | RQ1, RQ3 |
+| result_challenger_perf | REAL | Elo-adjusted performance score, challenger games | RQ1, RQ3 |
+| result_challenger_n | INTEGER | Number of games contributing to challenger performance | RQ1 |
+| result_incumbent_n | INTEGER | Number of games contributing to incumbent performance | RQ1 |
+| status | TEXT | `open`, `promoted`, `rejected`, `rejected_unsound`, `abandoned`, `settled_both` | RQ1 |
+| resolution_rule | TEXT | Which numbered rule in §9 fired | RQ1 |
+| move_ms_taken | INTEGER | Player think-time on the challenging move | RQ1 (misclick proxy) |
+| decision_ms_taken | INTEGER | Time from alert to 'keep' choice | RQ1 |
 
 ---
 
-## Engine delta sign convention
+## rep_changelog
 
-```
-engine_delta_win_pts = winPct(challenger) − winPct(incumbent)
-```
+Primary key: `id`. Ordered by `at, id`.
+**Append-only.**
 
-Positive = challenger is the better move by engine evaluation. This is the sign the challenge
-resolution rules use. Getting this wrong inverts the feature: an engine-clear threshold of +2 would
-accept only challengers that are *worse* than the incumbent.
+| Column | Type | Notes | Used in |
+|---|---|---|---|
+| id | TEXT | UUID | — |
+| at | INTEGER | Unix ms of the change | RQ2 timeline |
+| epd | TEXT | Position that changed | RQ2 |
+| side | TEXT | `white` or `black` | — |
+| kind | TEXT | `promote`, `retire`, `confirm`, `settle`, `reverse` | RQ2 |
+| from_uci | TEXT | Outgoing move (if applicable) | RQ1, RQ2 |
+| to_uci | TEXT | Incoming move (if applicable) | RQ1 |
+| rule | TEXT | Rule number that fired (for `promote`) | RQ1 |
+| detail_json | TEXT | JSON with supporting statistics | RQ1 |
+| book_version | INTEGER | Version after this change | reproducibility |
+
+---
+
+## rep_nodes
+
+Primary key: `(epd, side)`. Ordered by `epd, side`.
+**Rebuildable projection.**
+
+| Column | Type | Notes | Used in |
+|---|---|---|---|
+| epd | TEXT | Position key | all |
+| side | TEXT | `white` or `black` | — |
+| fen | TEXT | Representative full FEN | PGN context |
+| encounters | INTEGER | Times any move was played here | RQ2 TTL |
+| times_reached | INTEGER | Total times the node was reached in games | RQ5 denominator |
+| reach_prob | REAL | Maia-policy reach probability, cached | RQ5 |
+| line_loss | REAL | Min cumulative win% loss over book paths to this node | RQ3 gate 3 |
+
+---
+
+## rep_moves
+
+Primary key: `(epd, side, move_uci)`. Ordered by `epd, side, move_uci`.
+**Rebuildable projection.**
+
+| Column | Type | Notes | Used in |
+|---|---|---|---|
+| epd | TEXT | Position key | — |
+| side | TEXT | — | — |
+| move_uci | TEXT | — | — |
+| move_san | TEXT | — | — |
+| role | TEXT | `candidate`, `canonical`, `alt`, `challenger`, `quarantined`, `refused`, `retired` | RQ2 |
+| observations | INTEGER | Self-directed plays (excludes `coach_corrected`) | RQ2 |
+| mean_win_loss_pts | REAL | Mean win% loss over observed games | RQ3 |
+| score_w / score_d / score_l | INTEGER | W/D/L results when this move was played | RQ1, RQ3 |
+| first_played | INTEGER | Unix ms of first observation | RQ2 growth curve |
+| last_played | INTEGER | Unix ms of most recent observation | — |
+
+---
+
+## rep_provenance
+
+Primary key: `id`. Ordered by `id`.
+
+| Column | Type | Notes | Used in |
+|---|---|---|---|
+| id | INTEGER | Auto-increment | reproducibility |
+| at | INTEGER | Unix ms when context was first seen | — |
+| schema_version | TEXT | Phase number that produced this data | reproducibility |
+| balance_hash | TEXT | SHA-256 of `src/shared/balance.js` at export time | reproducibility |
+| app_git_sha | TEXT | Git SHA of the app at export time (nullable) | reproducibility |
+| sf_version | TEXT | Stockfish version used (nullable) | RQ3 |
+| sf_depth | INTEGER | Analysis depth | RQ3 |
+| sf_multipv | INTEGER | MultiPV setting | RQ3 |
+| maia_weights_id | TEXT | Maia weights used for policy (nullable) | RQ5 |
+
+---
+
+## Notes on reproducibility (invariant 13)
+
+- All NDJSON files are ordered by explicit SQL `ORDER BY` clauses — no map-iteration order.
+- Timestamps in exported files come from DB columns; the only wall-clock value is `sidecar.json`'s `exportedAt`, which is excluded from `manifest.sha256`.
+- Two exports of the same database at the same `book_version` produce byte-identical NDJSON and PGN files.
+- `manifest.sha256` lists SHA-256 hashes of all files except `sidecar.json` and itself; re-run `sha256sum -c manifest.sha256` from the export directory to verify integrity.
+- `rep_nodes` and `rep_moves` are rebuildable projections — their contents may differ across book versions even if observations are unchanged.
