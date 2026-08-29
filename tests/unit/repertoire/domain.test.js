@@ -158,6 +158,28 @@ describe('vote', () => {
     expect(canonical).toBe('d2d4');
   });
 
+  it('score tie-break: same weightedScore and same meanWinLossPts → higher score wins', () => {
+    const obs = [{ playedAt: NOW - 1 * DAY_MS }];
+    const moves = [
+      { uci: 'e2e4', observations: obs, meanWinLossPts: 5, score: 0.5 },
+      { uci: 'd2d4', observations: obs, meanWinLossPts: 5, score: 0.8 },
+    ];
+    const { canonical } = electCanonical(moves, NOW);
+    expect(canonical).toBe('d2d4');
+  });
+
+  it('alternation: winner has too few recent observations → no alt', () => {
+    // Challenger has 3 recent obs; winner's obs are all outside the 120-day half-life
+    const recentObs = Array.from({ length: REP_ALT_ALTERNATION_MIN }, (_, i) => ({ playedAt: NOW - (i + 1) * DAY_MS }));
+    const oldObs = [{ playedAt: NOW - 200 * DAY_MS }]; // outside half-life
+    const moves = [
+      { uci: 'e2e4', observations: oldObs, meanWinLossPts: 3, score: 0.8 },
+      { uci: 'd2d4', observations: recentObs, meanWinLossPts: 5, score: 0.4 },
+    ];
+    const { alts } = electCanonical(moves, NOW);
+    expect(alts).toHaveLength(0);
+  });
+
   it('returns null canonical when no moves have observations', () => {
     expect(electCanonical([], NOW).canonical).toBeNull();
   });
@@ -396,6 +418,21 @@ describe('reach', () => {
     expect(computeExpectedDepth(nodes)).toBeCloseTo(2.8);
   });
 
+  it('expected_depth: two nodes at same ply accumulate reach (covers byPly.has false branch)', () => {
+    const nodes = [
+      { ply: 2, reachProb: 0.3, hasCoverage: true },
+      { ply: 2, reachProb: 0.5, hasCoverage: true }, // same ply → accumulated
+    ];
+    expect(computeExpectedDepth(nodes)).toBeCloseTo(2);
+  });
+
+  it('expected_depth returns 0 when no covered nodes (covers sumReach=0 branch)', () => {
+    const nodes = [
+      { ply: 2, reachProb: 0.5, hasCoverage: false }, // skipped
+    ];
+    expect(computeExpectedDepth(nodes)).toBe(0);
+  });
+
   it('gap list contains replies above 1/REP_COVERAGE_GOAL not covered', () => {
     const candidates = [
       { epd: 'epd1', opponentReplyUci: 'd2d4', reachProb: 0.1, hasCoverage: false },  // 1 in 10 — in frontier
@@ -420,6 +457,17 @@ describe('reach', () => {
       { epd: 'e1', opponentReplyUci: 'd2d4', reachProb: 0.001, hasCoverage: false },
     ];
     expect(buildGapReport(candidates)).toHaveLength(0);
+  });
+
+  it('buildGapReport sort: two uncovered frontier nodes sorted by reach descending', () => {
+    const candidates = [
+      { epd: 'epd1', opponentReplyUci: 'd2d4', reachProb: 1 / 30, hasCoverage: false },
+      { epd: 'epd2', opponentReplyUci: 'e2e4', reachProb: 1 / 10, hasCoverage: false },
+    ];
+    const gaps = buildGapReport(candidates);
+    expect(gaps).toHaveLength(2);
+    expect(gaps[0].opponentReplyUci).toBe('e2e4'); // higher reach first
+    expect(gaps[1].opponentReplyUci).toBe('d2d4');
   });
 });
 

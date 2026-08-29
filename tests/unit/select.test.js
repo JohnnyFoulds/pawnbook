@@ -1,6 +1,6 @@
 import { describe, it, expect, test } from 'vitest';
 
-import { selectPuzzles, buildAcceptedMoves } from '../../src/domain/puzzles/select.js';
+import { selectPuzzles, buildAcceptedMoves, derivePhase } from '../../src/domain/puzzles/select.js';
 import { FINDABILITY_MIN, PUZZLES_PER_GAME_MAX } from '../../src/shared/balance.js';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -115,6 +115,53 @@ describe('buildAcceptedMoves', () => {
     const result = buildAcceptedMoves('e2e4', null, 100);
     const moves = JSON.parse(result);
     expect(moves).toEqual(['e2e4']);
+  });
+
+  it('covers line.cp ?? 0 null branch when cp is not provided', () => {
+    // { uci: 'd2d4' } has no cp → cp ?? 0 = 0 → winPct(0) ~ 50 → within NEAR_MISS of bestCp=0
+    const result = buildAcceptedMoves('e2e4', [{ uci: 'd2d4' }], 0);
+    const moves = JSON.parse(result);
+    expect(moves).toContain('d2d4');
+  });
+
+  it('covers bestCp ?? 0 null branch when bestCp is null', () => {
+    const result = buildAcceptedMoves('e2e4', [{ uci: 'd2d4', cp: 0 }], null);
+    expect(typeof result).toBe('string');
+  });
+});
+
+describe('selectPuzzles sort comparator', () => {
+  it('sorts 2 candidates by instructiveness descending', () => {
+    const c1 = { fen: START_FEN, ply: 1, bestMoveUci: 'e2e4', moveUci: 'd2d4',
+      instructiveness: 0.3, findability: FINDABILITY_MIN + 0.1, pv: null,
+      cpLoss: 50, winLoss: 10, classification: 'inaccuracy', temptation: 0.2,
+      maiaModel: 'maia-1300', policyTemperature: 1.0, tags: '', mover: 'player', altMovesJson: null };
+    const c2 = { ...c1, fen: E4_FEN, instructiveness: 0.8 };
+    const result = selectPuzzles([c1, c2]);
+    expect(result[0].instructiveness).toBe(0.8);
+  });
+
+  it('covers null instructiveness in sort (instructiveness ?? 0)', () => {
+    const c1 = { fen: START_FEN, ply: 1, bestMoveUci: 'e2e4', moveUci: 'd2d4',
+      instructiveness: null, findability: FINDABILITY_MIN + 0.1, pv: null,
+      cpLoss: 50, winLoss: 10, classification: 'inaccuracy', temptation: 0.2,
+      maiaModel: 'maia-1300', policyTemperature: 1.0, tags: '', mover: 'player', altMovesJson: null };
+    const c2 = { ...c1, fen: E4_FEN, instructiveness: 0.5 };
+    const result = selectPuzzles([c1, c2]);
+    expect(result.length).toBe(2);
+  });
+});
+
+describe('derivePhase — direct tests', () => {
+  it('classifies opening from START_FEN', () => {
+    const phase = derivePhase({ fen: START_FEN, ply: 1 });
+    expect(phase).toBe('opening');
+  });
+
+  it('classifies endgame from bare-kings FEN', () => {
+    // Very few pieces → endgame
+    const phase = derivePhase({ fen: '8/8/8/8/8/8/8/k6K w - - 0 1', ply: 40 });
+    expect(phase).toBe('endgame');
   });
 });
 

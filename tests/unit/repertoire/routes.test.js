@@ -158,4 +158,117 @@ describe('POST /api/repertoire/changelog/:id/reverse', () => {
     const supp = repo.getSuppression(EPD, 'white', 'e2e4');
     expect(supp).not.toBeNull();
   });
+
+  it('reverses a promotion with challengeId — closes the challenge as user_override', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    repo.upsertNode({ epd: EPD, side: 'white', fen: EPD + ' 0 1', timesReached: 3, encounters: 3, firstSeen: 1_000, lastSeen: 3_000 });
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'd2d4', moveSan: 'd4', role: 'retired', observations: 5, scoreW: 2, scoreD: 1, scoreL: 0 });
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'e2e4', moveSan: 'e4', role: 'canonical', observations: 2, scoreW: 1, scoreD: 0, scoreL: 0 });
+
+    // Open a challenge that the promotion closed
+    const challengeId = randomUUID();
+    repo.openChallenge({
+      id: challengeId, epd: EPD, side: 'white', fen: EPD + ' 0 1',
+      incumbentUci: 'd2d4', challengerUci: 'e2e4',
+      openedGameId: 'g1', openedPly: 1, openedAt: 1_000,
+      challengerPlays: 2, incumbentPlays: 1, encountersSinceOpen: 3,
+      resultChallengerN: 0, resultIncumbentN: 0,
+      status: 'promoted', provenanceId: provId, bookVersion: 1,
+    });
+
+    const entryId = randomUUID();
+    repo.appendChangelog({ id: entryId, at: Date.now(), epd: EPD, side: 'white', kind: 'promote',
+      fromUci: 'd2d4', toUci: 'e2e4', challengeId, rule: '3', detailJson: null, provenanceId: provId, bookVersion: 1 });
+
+    const res = await request(makeApp(repo)).post(`/api/repertoire/changelog/${entryId}/reverse`);
+    expect(res.status).toBe(200);
+
+    // Challenge should now be rejected
+    const ch = repo.getChallenge(challengeId);
+    expect(ch.status).toBe('rejected');
+    expect(ch.resolutionRule).toBe('user_override');
+  });
+
+  it('reverses a settle entry — restores challenger to challenger role', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    repo.upsertNode({ epd: EPD, side: 'white', fen: EPD + ' 0 1', timesReached: 3, encounters: 3, firstSeen: 1_000, lastSeen: 3_000 });
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'd2d4', moveSan: 'd4', role: 'canonical', observations: 5, scoreW: 2, scoreD: 1, scoreL: 0 });
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'e2e4', moveSan: 'e4', role: 'alt', observations: 2, scoreW: 1, scoreD: 0, scoreL: 0 });
+
+    // The settle entry has a challengeId pointing to a real challenge
+    const challengeId = randomUUID();
+    repo.openChallenge({
+      id: challengeId, epd: EPD, side: 'white', fen: EPD + ' 0 1',
+      incumbentUci: 'd2d4', challengerUci: 'e2e4',
+      openedGameId: 'g1', openedPly: 1, openedAt: 1_000,
+      challengerPlays: 2, incumbentPlays: 2, encountersSinceOpen: 4,
+      resultChallengerN: 0, resultIncumbentN: 0,
+      status: 'settled_both', provenanceId: provId, bookVersion: 1,
+    });
+
+    const entryId = randomUUID();
+    repo.appendChangelog({ id: entryId, at: Date.now(), epd: EPD, side: 'white', kind: 'settle',
+      fromUci: null, toUci: null, challengeId, rule: '9', detailJson: null, provenanceId: provId, bookVersion: 1 });
+
+    const res = await request(makeApp(repo)).post(`/api/repertoire/changelog/${entryId}/reverse`);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    // Challenger should be back to 'challenger' role (not alt)
+    expect(repo.getMove(EPD, 'white', 'e2e4').role).toBe('challenger');
+  });
+
+  it('reverses a settle entry with no challengeId — handles null challengerMove', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    repo.upsertNode({ epd: EPD, side: 'white', fen: EPD + ' 0 1', timesReached: 2, encounters: 2, firstSeen: 1_000, lastSeen: 2_000 });
+
+    const entryId = randomUUID();
+    repo.appendChangelog({ id: entryId, at: Date.now(), epd: EPD, side: 'white', kind: 'settle',
+      fromUci: null, toUci: null, challengeId: null, rule: '9', detailJson: null, provenanceId: provId, bookVersion: 1 });
+
+    const res = await request(makeApp(repo)).post(`/api/repertoire/changelog/${entryId}/reverse`);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('GET /api/repertoire/changelog with limit returns limited entries', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    for (let i = 0; i < 5; i++) {
+      repo.appendChangelog({ id: randomUUID(), at: Date.now() + i, epd: EPD, side: 'white', kind: 'confirm',
+        fromUci: 'd2d4', toUci: null, challengeId: null, rule: null, detailJson: null, provenanceId: provId, bookVersion: i });
+    }
+    const app = makeApp(repo);
+    const res = await request(app).get('/api/repertoire/changelog?limit=3');
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toHaveLength(3);
+  });
+
+  it('GET /api/repertoire/refusals with alerted_corrected and alerted_timeout', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    repo.appendDeviation({ id: randomUUID(), gameId: 'g1', ply: 3, epd: EPD, kind: 'refused_repeat', playedUci: 'e2e4', bookUci: 'd2d4', resolution: 'alerted_corrected', decisionMsTaken: 3000, provenanceId: provId, bookVersion: 0 });
+    repo.appendDeviation({ id: randomUUID(), gameId: 'g2', ply: 5, epd: EPD, kind: 'lapse', playedUci: 'e2e4', bookUci: 'd2d4', resolution: 'alerted_timeout', decisionMsTaken: null, provenanceId: provId, bookVersion: 0 });
+
+    const app = makeApp(repo);
+    const res = await request(app).get('/api/repertoire/refusals');
+    expect(res.status).toBe(200);
+    expect(res.body.refusals).toHaveLength(2);
+  });
+
+  it('GET /api/repertoire/coverage returns non-zero candidateCount', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.upsertNode({ epd: EPD, side: 'white', fen: EPD + ' 0 1', timesReached: 2, encounters: 2, firstSeen: 1_000, lastSeen: 2_000 });
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'd2d4', moveSan: 'd4', role: 'candidate', observations: 2, scoreW: 1, scoreD: 0, scoreL: 0 });
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'e2e4', moveSan: 'e4', role: 'canonical', observations: 3, scoreW: 2, scoreD: 0, scoreL: 0 });
+
+    const app = makeApp(repo);
+    const res = await request(app).get('/api/repertoire/coverage');
+    expect(res.status).toBe(200);
+    expect(res.body.candidateCount).toBe(1);
+    expect(res.body.canonicalCount).toBe(1);
+  });
 });

@@ -8,7 +8,11 @@
 import { randomUUID } from 'crypto';
 
 import { resolveChallenge } from '../../domain/repertoire/challenge.js';
-import { REP_REVERSAL_SUPPRESS_ENCOUNTERS } from '../../shared/balance.js';
+import {
+  REP_REVERSAL_SUPPRESS_ENCOUNTERS,
+  REP_ALT_ALTERNATION_MIN,
+  REP_RECENCY_HALFLIFE_DAYS,
+} from '../../shared/balance.js';
 import { logger } from '../../config.js';
 
 const log = logger.child({ mod: 'challenge-service' });
@@ -155,6 +159,21 @@ function _gatherEvidence(challenge, repo) {
   const node = repo.getNode(challenge.epd, challenge.side);
   const isSuppressed = supp != null && (node?.encounters ?? 0) < supp.untilEncounters;
 
+  const halfLifeMs = REP_RECENCY_HALFLIFE_DAYS * 86_400_000;
+  const nowMs = Date.now();
+  const incumbentRecentCount = observations.filter(
+    o => o.moveUci === challenge.incumbentUci &&
+         o.source !== 'coach_corrected' &&
+         (nowMs - (o.playedAt ?? 0)) <= halfLifeMs
+  ).length;
+  const challengerRecentCount = observations.filter(
+    o => o.moveUci === challenge.challengerUci &&
+         o.source !== 'coach_corrected' &&
+         (nowMs - (o.playedAt ?? 0)) <= halfLifeMs
+  ).length;
+  const qualifiesForAlternation = incumbentRecentCount >= REP_ALT_ALTERNATION_MIN &&
+                                   challengerRecentCount >= REP_ALT_ALTERNATION_MIN;
+
   return {
     challengerPlays,
     incumbentPlays,
@@ -169,6 +188,6 @@ function _gatherEvidence(challenge, repo) {
     resultIncumbentPerf: challenge.resultIncumbentPerf ?? null,
     resultIncumbentN: challenge.resultIncumbentN ?? 0,
     isSuppressed,
-    qualifiesForAlternation: false, // Phase 26: half-life filter
+    qualifiesForAlternation,
   };
 }

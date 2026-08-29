@@ -311,6 +311,33 @@ describe('resolveOpenChallenges — service', () => {
     expect(rule).toBe('9');
   });
 
+  it('settled_both: service resolves to settled_both when both moves qualify for alternation', async () => {
+    const repo = makeRepo();
+    addMoves(repo);
+    const now = Date.now();
+    const ch = openChallenge(repo, { openedAt: now - 10_000 });
+    const provenanceId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+
+    // Add ≥ REP_ALT_ALTERNATION_MIN (3) recent self-directed observations for both moves
+    for (let i = 0; i < 3; i++) {
+      addObservation(repo, INCUMBENT_UCI, now - (i + 1) * 1000);
+      addObservation(repo, CHALLENGER_UCI, now - (i + 1) * 1000);
+    }
+
+    await resolveOpenChallenges({ repertoireRepo: repo, bookVersion: 0, provenanceId });
+
+    const resolved = repo.getChallenge(ch.id);
+    expect(resolved.status).toBe('settled_both');
+    expect(resolved.resolutionRule).toBe('9');
+
+    // Challenger should now be 'alt'
+    expect(repo.getMove(EPD, SIDE, CHALLENGER_UCI).role).toBe('alt');
+
+    // Changelog should have a 'settle' entry
+    const changelog = repo.getChangelog(10);
+    expect(changelog.some(e => e.kind === 'settle')).toBe(true);
+  });
+
   it('invariant 15: timeout deviation has no challenge', async () => {
     const repo = makeRepo();
     addMoves(repo);
@@ -357,5 +384,61 @@ describe('resolveOpenChallenges — service', () => {
     const all = repo.listOpenChallenges();
     repo.updateChallenge(all[0].id, { status: 'abandoned', resolutionRule: '7', resolvedAt: Date.now(), resolvedBy: 'algorithm' });
     expect(repo.listOpenChallenges()).toHaveLength(0);
+  });
+
+  it('outer catch: swallows error when listOpenChallenges throws', async () => {
+    const brokenRepo = { listOpenChallenges: () => { throw new Error('db gone'); } };
+    // Should resolve (not throw) — outer catch swallows the error
+    await expect(
+      resolveOpenChallenges({ repertoireRepo: brokenRepo, bookVersion: 0, provenanceId: 1 })
+    ).resolves.toBeUndefined();
+  });
+
+  it('inner catch: swallows error when single challenge resolution throws', async () => {
+    const repo = makeRepo();
+    addMoves(repo);
+    openChallenge(repo, { openedAt: 1_000 });
+    // Patch getObservationsForNode to throw inside _gatherEvidence
+    const original = repo.getObservationsForNode.bind(repo);
+    repo.getObservationsForNode = () => { throw new Error('query failed'); };
+    const provenanceId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    // Restore for provenance call (already done above), then break it
+    repo.getObservationsForNode = () => { throw new Error('query failed'); };
+    await expect(
+      resolveOpenChallenges({ repertoireRepo: repo, bookVersion: 0, provenanceId })
+    ).resolves.toBeUndefined();
+    // Restore so afterEach cleanup works
+    repo.getObservationsForNode = original;
+  });
+
+  it('observations with null playedAt hit ?? 0 branch in recency filter', async () => {
+    const repo = makeRepo();
+    addMoves(repo);
+    const ch = openChallenge(repo, { openedAt: 1_000 });
+    const provenanceId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+
+    // Add observations with null playedAt — triggers ?? 0 in the half-life filter
+    addObservation(repo, INCUMBENT_UCI, null);
+    addObservation(repo, CHALLENGER_UCI, null);
+    // Also add recent ones so the challenge stays open (not enough for alternation)
+    addObservation(repo, CHALLENGER_UCI, Date.now() - 1000);
+
+    await resolveOpenChallenges({ repertoireRepo: repo, bookVersion: 0, provenanceId });
+    // Challenge is still open — null playedAt obs are outside half-life window
+    expect(repo.getChallenge(ch.id).status).toBe('open');
+  });
+
+  it('challenge with non-null resultChallengerN covers ?? 0 non-null branch', async () => {
+    const repo = makeRepo();
+    addMoves(repo);
+    // Open challenge WITH resultChallengerN set to a non-null value
+    const ch = openChallenge(repo, { openedAt: 1_000, resultChallengerN: 5, resultIncumbentN: 3 });
+    const provenanceId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+
+    addObservation(repo, CHALLENGER_UCI, 2_000);
+
+    await resolveOpenChallenges({ repertoireRepo: repo, bookVersion: 0, provenanceId });
+    // Just verify no error — resultChallengerN/resultIncumbentN were passed through
+    expect(repo.getChallenge(ch.id)).not.toBeNull();
   });
 });
