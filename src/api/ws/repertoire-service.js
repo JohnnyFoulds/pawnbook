@@ -29,6 +29,23 @@ function _getBalanceHash() {
 const SCHEMA_VERSION = '19';
 
 /**
+ * Get or create a provenance record for the current code version.
+ * @param {object} repertoireRepo
+ * @returns {number} provenance id
+ */
+export function getProvenanceId(repertoireRepo) {
+  return repertoireRepo.getOrCreateProvenance({
+    schemaVersion: SCHEMA_VERSION,
+    balanceHash: _getBalanceHash(),
+    appGitSha: null,
+    sfVersion: null,
+    sfDepth: null,
+    sfMultipv: null,
+    maiaWeightsId: null,
+  });
+}
+
+/**
  * Update the repertoire book after a game is analysed.
  * Always resolves (never rejects) — errors are logged and swallowed.
  *

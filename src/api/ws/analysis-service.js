@@ -178,6 +178,11 @@ export async function analyseGame({
       }
     }
 
+    // Strength-sample guard: skip if coach interrupted this game.
+    // The coach changes the player's moves, biasing strength estimation.
+    // session.alertsInGame > 0 means the coach intervened; session.ranked is already false.
+    // When saveStrengthSample is added, guard it with: session.alertsInGame === 0.
+
     // Update ELO if ranked game with a known opponent ELO
     let eloBefore = null;
     let eloAfter = null;

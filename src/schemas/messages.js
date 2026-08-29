@@ -35,10 +35,16 @@ export const ResumeMessageSchema = z.object({
   gameId: z.string().uuid(),
 });
 
+export const RepertoireChoiceMessageSchema = z.object({
+  type: z.literal('repertoire_choice'),
+  choice: z.enum(['correct', 'keep']),
+}).strict();
+
 export const InboundMessageSchema = z.discriminatedUnion('type', [
   NewGameMessageSchema,
   MoveMessageSchema,
   ResignMessageSchema,
   HintMessageSchema,
   ResumeMessageSchema,
+  RepertoireChoiceMessageSchema,
 ]);

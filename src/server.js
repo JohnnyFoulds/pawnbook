@@ -10,7 +10,7 @@ import { dirname, join } from 'path';
 
 import express from 'express';
 
-import { openDb, SqliteGameRepository, SqlitePuzzleRepository, SqliteSettingsRepository } from './adapters/sqlite/repositories.js';
+import { openDb, SqliteGameRepository, SqlitePuzzleRepository, SqliteSettingsRepository, SqliteRepertoireRepository } from './adapters/sqlite/repositories.js';
 import { SystemClock } from './adapters/clock/system-clock.js';
 import { FsrsScheduler } from './adapters/scheduler/fsrs-scheduler.js';
 import { errorMiddleware } from './api/error-middleware.js';
@@ -32,9 +32,10 @@ async function start() {
 
   // ── Adapters ──────────────────────────────────────────────────────────────
   const db          = openDb(DB_PATH);
-  const gameRepo    = new SqliteGameRepository(db);
-  const puzzleRepo  = new SqlitePuzzleRepository(db);
-  const settingsRepo = new SqliteSettingsRepository(db);
+  const gameRepo       = new SqliteGameRepository(db);
+  const puzzleRepo     = new SqlitePuzzleRepository(db);
+  const settingsRepo   = new SqliteSettingsRepository(db);
+  const repertoireRepo = new SqliteRepertoireRepository(db);
   const clock       = new SystemClock();
   const scheduler   = new FsrsScheduler();
 
@@ -92,7 +93,7 @@ async function start() {
   // ── HTTP + WS server ─────────────────────────────────────────────────────
   const httpServer = createServer(app);
 
-  attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool });
+  attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool, repertoireRepo });
 
   httpServer.listen(PORT, BIND_ADDR, () => {
     log.info({ port: PORT, bind: BIND_ADDR }, 'pawnbook listening');
