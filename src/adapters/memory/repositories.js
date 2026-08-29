@@ -274,6 +274,10 @@ export class InMemoryRepertoireRepository {
       .map(d => ({ ...d }));
   }
 
+  getAllDeviations(limit = 200) {
+    return [...this._deviations].reverse().slice(0, limit).map(d => ({ ...d }));
+  }
+
   appendAudit(audit) {
     this._audits.set(audit.id, { ...audit });
   }
@@ -305,6 +309,13 @@ export class InMemoryRepertoireRepository {
     return null;
   }
 
+  listOpenChallenges() {
+    return [...this._challenges.values()]
+      .filter(c => c.status === 'open')
+      .sort((a, b) => (a.openedAt ?? 0) - (b.openedAt ?? 0))
+      .map(c => ({ ...c }));
+  }
+
   appendChangelog(entry) {
     this._changelog.push({ ...entry });
   }
@@ -314,6 +325,11 @@ export class InMemoryRepertoireRepository {
       .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
       .slice(0, limit)
       .map(e => ({ ...e }));
+  }
+
+  getChangelogEntry(id) {
+    const entry = this._changelog.find(e => e.id === id);
+    return entry ? { ...entry } : null;
   }
 
   upsertSuppression(supp) {

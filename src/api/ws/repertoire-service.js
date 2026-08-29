@@ -10,6 +10,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import { processGame } from '../../domain/repertoire/build.js';
+import { resolveOpenChallenges } from './challenge-service.js';
 import { logger } from '../../config.js';
 
 const log = logger.child({ mod: 'repertoire-service' });
@@ -118,6 +119,9 @@ export async function updateRepertoire({ gameId, playerColor, gameResult, gameRe
       }
       if (changelogEntries.length > 0) repertoireRepo.incrementBookVersion();
     });
+
+    // Resolve any open challenges with the freshly-written observations
+    await resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId });
 
     if (ws?.readyState === 1) {
       const confirmedCount = changelogEntries.filter(e => e.kind === 'confirm').length;

@@ -649,6 +649,11 @@ export class SqliteRepertoireRepository {
     ).all(gameId).map(_devRow);
   }
 
+  /** @param {number} [limit] @returns {Object[]} */
+  getAllDeviations(limit = 200) {
+    return this._db.prepare('SELECT * FROM rep_deviations ORDER BY rowid DESC LIMIT ?').all(limit).map(_devRow);
+  }
+
   /** @param {Object} audit @returns {void} */
   appendAudit(audit) {
     this._db.prepare(`
@@ -772,6 +777,13 @@ export class SqliteRepertoireRepository {
     return row ? _challengeRow(row) : null;
   }
 
+  /** @returns {Object[]} */
+  listOpenChallenges() {
+    return this._db.prepare(
+      "SELECT * FROM rep_challenges WHERE status = 'open' ORDER BY opened_at ASC"
+    ).all().map(_challengeRow);
+  }
+
   /** @param {Object} entry @returns {void} */
   appendChangelog(entry) {
     this._db.prepare(`
@@ -793,12 +805,13 @@ export class SqliteRepertoireRepository {
   /** @param {number} [limit] @returns {Object[]} */
   getChangelog(limit = 50) {
     return this._db.prepare('SELECT * FROM rep_changelog ORDER BY at DESC LIMIT ?').all(limit)
-      .map(r => ({
-        id: r.id, at: r.at, epd: r.epd, side: r.side, kind: r.kind,
-        fromUci: r.from_uci, toUci: r.to_uci, challengeId: r.challenge_id,
-        rule: r.rule, detailJson: r.detail_json,
-        provenanceId: r.provenance_id, bookVersion: r.book_version,
-      }));
+      .map(_changelogRow);
+  }
+
+  /** @param {string} id @returns {Object|null} */
+  getChangelogEntry(id) {
+    const row = this._db.prepare('SELECT * FROM rep_changelog WHERE id = ?').get(id);
+    return row ? _changelogRow(row) : null;
   }
 
   /** @param {Object} supp @returns {void} */
@@ -965,6 +978,15 @@ function _challengeRow(r) {
     resultIncumbentPerf: r.result_incumbent_perf, resultIncumbentN: r.result_incumbent_n,
     status: r.status, resolutionRule: r.resolution_rule,
     resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, gateReason: r.gate_reason,
+    provenanceId: r.provenance_id, bookVersion: r.book_version,
+  };
+}
+
+function _changelogRow(r) {
+  return {
+    id: r.id, at: r.at, epd: r.epd, side: r.side, kind: r.kind,
+    fromUci: r.from_uci, toUci: r.to_uci, challengeId: r.challenge_id,
+    rule: r.rule, detailJson: r.detail_json,
     provenanceId: r.provenance_id, bookVersion: r.book_version,
   };
 }

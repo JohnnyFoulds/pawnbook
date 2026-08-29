@@ -231,6 +231,12 @@
 
 /**
  * @function
+ * @name RepertoireRepository#listOpenChallenges
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
  * @name RepertoireRepository#appendChangelog
  * @param {Object} entry
  * @returns {void}
@@ -239,6 +245,20 @@
 /**
  * @function
  * @name RepertoireRepository#getChangelog
+ * @param {number} [limit]
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getChangelogEntry
+ * @param {string} id
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getAllDeviations
  * @param {number} [limit]
  * @returns {Object[]}
  */

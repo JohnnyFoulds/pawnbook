@@ -399,6 +399,19 @@ for (const { name, factory } of implementations) {
       expect(moves).toHaveLength(2);
     });
 
+    it('listOpenChallenges returns only open challenges', () => {
+      const ch1 = makeChallenge({ id: randomUUID(), provenanceId: provId });
+      const ch2 = makeChallenge({ id: randomUUID(), provenanceId: provId });
+      repos.repertoire.openChallenge(ch1);
+      repos.repertoire.openChallenge(ch2);
+      expect(repos.repertoire.listOpenChallenges()).toHaveLength(2);
+      // close ch1
+      repos.repertoire.updateChallenge(ch1.id, { status: 'promoted', resolutionRule: '3', resolvedAt: Date.now(), resolvedBy: 'algorithm' });
+      const open = repos.repertoire.listOpenChallenges();
+      expect(open).toHaveLength(1);
+      expect(open[0].id).toBe(ch2.id);
+    });
+
     it('appendAudit and getAudit round-trip', () => {
       const audit = {
         id: randomUUID(),

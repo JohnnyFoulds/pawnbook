@@ -19,6 +19,7 @@ import { gamesRouter } from './api/routes/games.js';
 import { puzzlesRouter } from './api/routes/puzzles.js';
 import { statsRouter } from './api/routes/stats.js';
 import { stateRouter } from './api/routes/state.js';
+import { makeRepertoireRouter } from './api/routes/repertoire.js';
 import { attachWebSocketServer } from './api/ws/connection.js';
 import { createEnginePool } from './adapters/engine/engine-pool.js';
 import { PORT, BIND_ADDR, DB_PATH, NODE_ENV, logger } from './config.js';
@@ -81,6 +82,7 @@ async function start() {
   app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }));
   app.use('/api/stats',     statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }));
   app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }));
+  app.use('/api/repertoire', makeRepertoireRouter({ repertoireRepo }));
 
   if (NODE_ENV === 'test') {
     const { debugRouter } = await import('./api/routes/debug.js');
