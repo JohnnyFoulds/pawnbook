@@ -13,6 +13,7 @@ export function applySchema(db) {
   // Idempotent migrations for columns added after initial schema creation.
   try { db.exec('ALTER TABLE games ADD COLUMN analysis_error TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE move_evals ADD COLUMN win_loss_pts REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE games ADD COLUMN coach_enabled INTEGER NOT NULL DEFAULT 1'); } catch { /* already exists */ }
 
   // make move_san nullable — original DDL had NOT NULL which silently dropped all rows via INSERT OR IGNORE
   const moveSanNotNull = db.prepare("PRAGMA table_info(move_evals)").all()
@@ -67,6 +68,7 @@ export function applySchema(db) {
                                'fifty_move','insufficient_material','timeout','abandoned')),
       pgn                    TEXT,
       ranked                 INTEGER NOT NULL DEFAULT 1,
+      coach_enabled          INTEGER NOT NULL DEFAULT 1,
       time_control_initial_sec INTEGER,
       time_control_inc_sec   INTEGER,
       clock_white_ms         INTEGER,
@@ -182,5 +184,191 @@ export function applySchema(db) {
       games   INTEGER NOT NULL DEFAULT 0,
       reviews INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS rep_book_version (
+      singleton INTEGER PRIMARY KEY DEFAULT 0 CHECK(singleton = 0),
+      version   INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS rep_provenance (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      at              INTEGER NOT NULL,
+      schema_version  TEXT NOT NULL,
+      balance_hash    TEXT NOT NULL,
+      app_git_sha     TEXT,
+      sf_version      TEXT,
+      sf_depth        INTEGER,
+      sf_multipv      INTEGER,
+      maia_weights_id TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS rep_observations (
+      game_id        TEXT    NOT NULL REFERENCES games(id),
+      ply            INTEGER NOT NULL,
+      epd            TEXT    NOT NULL,
+      side           TEXT    NOT NULL CHECK(side IN ('white','black')),
+      move_uci       TEXT    NOT NULL,
+      move_san       TEXT,
+      win_loss_pts   REAL,
+      classification TEXT,
+      played_at      INTEGER NOT NULL,
+      source         TEXT    NOT NULL CHECK(source IN ('game','coach_kept','coach_corrected')),
+      provenance_id  INTEGER NOT NULL REFERENCES rep_provenance(id),
+      book_version   INTEGER NOT NULL,
+      PRIMARY KEY (game_id, ply)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rep_obs_epd ON rep_observations(epd, side);
+
+    CREATE TABLE IF NOT EXISTS rep_deviations (
+      id              TEXT    PRIMARY KEY,
+      game_id         TEXT    NOT NULL REFERENCES games(id),
+      ply             INTEGER NOT NULL,
+      epd             TEXT    NOT NULL,
+      kind            TEXT    NOT NULL CHECK(kind IN (
+                        'refused_repeat','in_book_canonical','in_book_alt',
+                        'transposition','new_territory','order_slip','lapse','novelty')),
+      played_uci      TEXT    NOT NULL,
+      book_uci        TEXT,
+      resolution      TEXT    CHECK(resolution IN (
+                        'alerted_corrected','alerted_kept','alerted_timeout','post_game')),
+      decision_ms_taken INTEGER,
+      provenance_id   INTEGER NOT NULL REFERENCES rep_provenance(id),
+      book_version    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rep_dev_game ON rep_deviations(game_id);
+
+    CREATE TABLE IF NOT EXISTS rep_audits (
+      id            TEXT    PRIMARY KEY,
+      epd           TEXT    NOT NULL,
+      side          TEXT    NOT NULL CHECK(side IN ('white','black')),
+      move_uci      TEXT    NOT NULL,
+      depth         INTEGER NOT NULL,
+      multipv       INTEGER NOT NULL,
+      win_pct       REAL,
+      cp            REAL,
+      pv            TEXT,
+      run_at        INTEGER NOT NULL,
+      provenance_id INTEGER NOT NULL REFERENCES rep_provenance(id),
+      book_version  INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rep_audits_epd ON rep_audits(epd, side, move_uci);
+
+    CREATE TABLE IF NOT EXISTS rep_challenges (
+      id                    TEXT    PRIMARY KEY,
+      epd                   TEXT    NOT NULL,
+      side                  TEXT    NOT NULL CHECK(side IN ('white','black')),
+      fen                   TEXT    NOT NULL,
+      incumbent_uci         TEXT    NOT NULL,
+      challenger_uci        TEXT    NOT NULL,
+      opened_game_id        TEXT    NOT NULL REFERENCES games(id),
+      opened_ply            INTEGER NOT NULL,
+      opened_at             INTEGER NOT NULL,
+      inc_observations      INTEGER,
+      inc_mean_win_loss_pts REAL,
+      inc_score_w           INTEGER,
+      inc_score_d           INTEGER,
+      inc_score_l           INTEGER,
+      inc_card_state        TEXT,
+      challenger_plays      INTEGER NOT NULL DEFAULT 0,
+      incumbent_plays       INTEGER NOT NULL DEFAULT 0,
+      encounters_since_open INTEGER NOT NULL DEFAULT 0,
+      move_ms_taken         INTEGER,
+      move_ms_zscore        REAL,
+      decision_ms_taken     INTEGER,
+      engine_delta_win_pts  REAL,
+      engine_audit_id       TEXT    REFERENCES rep_audits(id),
+      trend_challenger      REAL,
+      trend_incumbent       REAL,
+      result_challenger_perf REAL,
+      result_challenger_n   INTEGER NOT NULL DEFAULT 0,
+      result_incumbent_perf REAL,
+      result_incumbent_n    INTEGER NOT NULL DEFAULT 0,
+      status                TEXT    NOT NULL DEFAULT 'open'
+                              CHECK(status IN ('open','promoted','rejected',
+                                              'rejected_unsound','abandoned','settled_both')),
+      resolution_rule       TEXT,
+      resolved_at           INTEGER,
+      resolved_by           TEXT    CHECK(resolved_by IN ('algorithm','user_override')),
+      gate_reason           TEXT,
+      provenance_id         INTEGER NOT NULL REFERENCES rep_provenance(id),
+      book_version          INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rep_chal_epd ON rep_challenges(epd, side, status);
+
+    CREATE TABLE IF NOT EXISTS rep_changelog (
+      id            TEXT    PRIMARY KEY,
+      at            INTEGER NOT NULL,
+      epd           TEXT    NOT NULL,
+      side          TEXT    NOT NULL CHECK(side IN ('white','black')),
+      kind          TEXT    NOT NULL CHECK(kind IN (
+                      'promote','retire','confirm','refuse','settle','reverse')),
+      from_uci      TEXT,
+      to_uci        TEXT,
+      challenge_id  TEXT    REFERENCES rep_challenges(id),
+      rule          TEXT,
+      detail_json   TEXT,
+      provenance_id INTEGER NOT NULL REFERENCES rep_provenance(id),
+      book_version  INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rep_changelog_epd ON rep_changelog(epd, side);
+
+    CREATE TABLE IF NOT EXISTS rep_suppressions (
+      epd           TEXT    NOT NULL,
+      side          TEXT    NOT NULL CHECK(side IN ('white','black')),
+      move_uci      TEXT    NOT NULL,
+      until_encounters INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL,
+      changelog_id  TEXT    REFERENCES rep_changelog(id),
+      PRIMARY KEY (epd, side, move_uci)
+    );
+
+    CREATE TABLE IF NOT EXISTS rep_nodes (
+      epd                         TEXT    NOT NULL,
+      side                        TEXT    NOT NULL CHECK(side IN ('white','black')),
+      fen                         TEXT,
+      first_seen                  INTEGER,
+      last_seen                   INTEGER,
+      times_reached               INTEGER NOT NULL DEFAULT 0,
+      encounters                  INTEGER NOT NULL DEFAULT 0,
+      min_ply                     INTEGER,
+      reach_prob                  REAL,
+      reach_stale                 INTEGER NOT NULL DEFAULT 1,
+      line_loss                   REAL,
+      vote_frozen_until_encounter INTEGER,
+      PRIMARY KEY (epd, side)
+    );
+
+    CREATE TABLE IF NOT EXISTS rep_moves (
+      epd               TEXT    NOT NULL,
+      side              TEXT    NOT NULL CHECK(side IN ('white','black')),
+      move_uci          TEXT    NOT NULL,
+      move_san          TEXT,
+      role              TEXT    NOT NULL CHECK(role IN (
+                          'candidate','canonical','alt','challenger',
+                          'quarantined','refused','retired')),
+      observations      INTEGER NOT NULL DEFAULT 0,
+      weighted_score    REAL,
+      mean_win_loss_pts REAL,
+      worst_win_loss_pts REAL,
+      audit_id          TEXT    REFERENCES rep_audits(id),
+      gate_reason       TEXT,
+      score_w           INTEGER NOT NULL DEFAULT 0,
+      score_d           INTEGER NOT NULL DEFAULT 0,
+      score_l           INTEGER NOT NULL DEFAULT 0,
+      first_played      INTEGER,
+      last_played       INTEGER,
+      PRIMARY KEY (epd, side, move_uci)
+    );
+
+    CREATE TABLE IF NOT EXISTS rep_policy (
+      epd             TEXT    NOT NULL,
+      maia_model      TEXT    NOT NULL,
+      maia_weights_id TEXT    NOT NULL,
+      policy_json     TEXT    NOT NULL,
+      computed_at     INTEGER NOT NULL,
+      PRIMARY KEY (epd, maia_model, maia_weights_id)
+    );
   `);
+
+  db.prepare('INSERT OR IGNORE INTO rep_book_version (singleton, version) VALUES (0, 0)').run();
 }

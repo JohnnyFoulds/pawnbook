@@ -219,3 +219,157 @@ export class InMemorySettingsRepository {
     this._store.set(key, String(value));
   }
 }
+
+export class InMemoryRepertoireRepository {
+  constructor() {
+    this._observations = [];
+    this._deviations = [];
+    this._audits = new Map();
+    this._challenges = new Map();
+    this._changelog = [];
+    this._suppressions = new Map();
+    this._nodes = new Map();
+    this._moves = new Map();
+    this._policy = new Map();
+    this._provenance = new Map();
+    this._provenanceCounter = 0;
+    this._bookVersion = 0;
+  }
+
+  getOrCreateProvenance(ctx) {
+    const key = `${ctx.balanceHash}|${ctx.schemaVersion}|${ctx.sfVersion ?? ''}|${ctx.sfDepth ?? ''}|${ctx.sfMultipv ?? ''}|${ctx.maiaWeightsId ?? ''}`;
+    if (this._provenance.has(key)) return this._provenance.get(key);
+    const id = ++this._provenanceCounter;
+    this._provenance.set(key, id);
+    return id;
+  }
+
+  getCurrentBookVersion() {
+    return this._bookVersion;
+  }
+
+  incrementBookVersion() {
+    return ++this._bookVersion;
+  }
+
+  appendObservation(obs) {
+    this._observations.push({ ...obs });
+  }
+
+  getObservationsForNode(epd, side) {
+    return this._observations
+      .filter(o => o.epd === epd && o.side === side)
+      .sort((a, b) => (a.playedAt ?? 0) - (b.playedAt ?? 0))
+      .map(o => ({ ...o }));
+  }
+
+  appendDeviation(dev) {
+    this._deviations.push({ ...dev });
+  }
+
+  getDeviationsForGame(gameId) {
+    return this._deviations
+      .filter(d => d.gameId === gameId)
+      .sort((a, b) => (a.ply ?? 0) - (b.ply ?? 0))
+      .map(d => ({ ...d }));
+  }
+
+  appendAudit(audit) {
+    this._audits.set(audit.id, { ...audit });
+  }
+
+  getAudit(id) {
+    const a = this._audits.get(id);
+    return a ? { ...a } : null;
+  }
+
+  openChallenge(challenge) {
+    this._challenges.set(challenge.id, { ...challenge });
+  }
+
+  updateChallenge(id, patch) {
+    const existing = this._challenges.get(id);
+    if (!existing) throw new Error(`Challenge '${id}' not found`);
+    this._challenges.set(id, { ...existing, ...patch });
+  }
+
+  getChallenge(id) {
+    const c = this._challenges.get(id);
+    return c ? { ...c } : null;
+  }
+
+  getOpenChallenge(epd, side) {
+    for (const c of this._challenges.values()) {
+      if (c.epd === epd && c.side === side && c.status === 'open') return { ...c };
+    }
+    return null;
+  }
+
+  appendChangelog(entry) {
+    this._changelog.push({ ...entry });
+  }
+
+  getChangelog(limit = 50) {
+    return [...this._changelog]
+      .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+      .slice(0, limit)
+      .map(e => ({ ...e }));
+  }
+
+  upsertSuppression(supp) {
+    this._suppressions.set(`${supp.epd}:${supp.side}:${supp.moveUci}`, { ...supp });
+  }
+
+  getSuppression(epd, side, moveUci) {
+    const s = this._suppressions.get(`${epd}:${side}:${moveUci}`);
+    return s ? { ...s } : null;
+  }
+
+  upsertNode(node) {
+    this._nodes.set(`${node.epd}:${node.side}`, { ...node });
+  }
+
+  getNode(epd, side) {
+    const n = this._nodes.get(`${epd}:${side}`);
+    return n ? { ...n } : null;
+  }
+
+  listNodes() {
+    return [...this._nodes.values()]
+      .sort((a, b) => (a.epd < b.epd ? -1 : a.epd > b.epd ? 1 : a.side < b.side ? -1 : 1))
+      .map(n => ({ ...n }));
+  }
+
+  upsertMove(move) {
+    this._moves.set(`${move.epd}:${move.side}:${move.moveUci}`, { ...move });
+  }
+
+  getMove(epd, side, moveUci) {
+    const m = this._moves.get(`${epd}:${side}:${moveUci}`);
+    return m ? { ...m } : null;
+  }
+
+  getMovesForNode(epd, side) {
+    return [...this._moves.values()]
+      .filter(m => m.epd === epd && m.side === side)
+      .sort((a, b) => {
+        if (a.role < b.role) return -1;
+        if (a.role > b.role) return 1;
+        return (a.moveUci ?? '') < (b.moveUci ?? '') ? -1 : 1;
+      })
+      .map(m => ({ ...m }));
+  }
+
+  upsertPolicy(policy) {
+    this._policy.set(`${policy.epd}:${policy.maiaModel}:${policy.maiaWeightsId}`, { ...policy });
+  }
+
+  getPolicy(epd, maiaModel, maiaWeightsId) {
+    const p = this._policy.get(`${epd}:${maiaModel}:${maiaWeightsId}`);
+    return p ? { ...p } : null;
+  }
+
+  transaction(fn) {
+    return fn();
+  }
+}

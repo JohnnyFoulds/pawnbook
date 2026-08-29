@@ -15,11 +15,13 @@ import {
   SqliteGameRepository,
   SqlitePuzzleRepository,
   SqliteSettingsRepository,
+  SqliteRepertoireRepository,
 } from '../../src/adapters/sqlite/repositories.js';
 import {
   InMemoryGameRepository,
   InMemoryPuzzleRepository,
   InMemorySettingsRepository,
+  InMemoryRepertoireRepository,
 } from '../../src/adapters/memory/repositories.js';
 import { FixedClock } from '../../src/adapters/clock/fixed-clock.js';
 import { GameNotFoundError, PuzzleNotFoundError } from '../../src/errors.js';
@@ -53,6 +55,45 @@ function makePuzzle(overrides = {}) {
   };
 }
 
+function makeObservation(overrides = {}) {
+  return {
+    gameId: overrides.gameId ?? 'g-test',
+    ply: overrides.ply ?? 1,
+    epd: overrides.epd ?? 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3',
+    side: overrides.side ?? 'white',
+    moveUci: overrides.moveUci ?? 'e2e4',
+    moveSan: overrides.moveSan ?? 'e4',
+    winLossPts: overrides.winLossPts ?? 3.0,
+    classification: overrides.classification ?? 'good',
+    playedAt: overrides.playedAt ?? 1_700_000_000_000,
+    source: overrides.source ?? 'game',
+    provenanceId: overrides.provenanceId ?? 1,
+    bookVersion: overrides.bookVersion ?? 0,
+  };
+}
+
+function makeChallenge(overrides = {}) {
+  return {
+    id: overrides.id ?? randomUUID(),
+    epd: overrides.epd ?? 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3',
+    side: overrides.side ?? 'white',
+    fen: overrides.fen ?? 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+    incumbentUci: overrides.incumbentUci ?? 'd2d4',
+    challengerUci: overrides.challengerUci ?? 'e2e4',
+    openedGameId: overrides.openedGameId ?? 'g-test',
+    openedPly: overrides.openedPly ?? 1,
+    openedAt: overrides.openedAt ?? 1_700_000_000_000,
+    challengerPlays: overrides.challengerPlays ?? 0,
+    incumbentPlays: overrides.incumbentPlays ?? 0,
+    encountersSinceOpen: overrides.encountersSinceOpen ?? 0,
+    resultChallengerN: overrides.resultChallengerN ?? 0,
+    resultIncumbentN: overrides.resultIncumbentN ?? 0,
+    status: overrides.status ?? 'open',
+    provenanceId: overrides.provenanceId ?? 1,
+    bookVersion: overrides.bookVersion ?? 0,
+  };
+}
+
 // ─── helpers to build both implementations ───────────────────────────────────
 
 function sqliteRepos() {
@@ -63,6 +104,7 @@ function sqliteRepos() {
     games: new SqliteGameRepository(db),
     puzzles: new SqlitePuzzleRepository(db),
     settings: new SqliteSettingsRepository(db),
+    repertoire: new SqliteRepertoireRepository(db),
     cleanup: () => { db.close(); if (existsSync(dbPath)) unlinkSync(dbPath); },
   };
 }
@@ -72,6 +114,7 @@ function memoryRepos() {
     games: new InMemoryGameRepository(),
     puzzles: new InMemoryPuzzleRepository(),
     settings: new InMemorySettingsRepository(),
+    repertoire: new InMemoryRepertoireRepository(),
     cleanup: () => {},
   };
 }
@@ -234,6 +277,150 @@ for (const { name, factory } of implementations) {
       expect(repos.settings.get('elo')).toBe('1247');
     });
   });
+
+  describe(`[${name}] repertoire repository`, () => {
+    let repos;
+    let provId;
+    beforeEach(() => {
+      repos = factory();
+      repos.games.save(makeGame({ id: 'g-test' }));
+      provId = repos.repertoire.getOrCreateProvenance({ schemaVersion: '1', balanceHash: 'test-hash' });
+    });
+    afterEach(() => repos.cleanup());
+
+    it('book version starts at 0 and increments monotonically', () => {
+      expect(repos.repertoire.getCurrentBookVersion()).toBe(0);
+      const v1 = repos.repertoire.incrementBookVersion();
+      const v2 = repos.repertoire.incrementBookVersion();
+      expect(v1).toBe(1);
+      expect(v2).toBe(2);
+      expect(repos.repertoire.getCurrentBookVersion()).toBe(2);
+    });
+
+    it('appendObservation and getObservationsForNode round-trip', () => {
+      const obs = makeObservation({ provenanceId: provId });
+      repos.repertoire.appendObservation(obs);
+      const results = repos.repertoire.getObservationsForNode(obs.epd, obs.side);
+      expect(results).toHaveLength(1);
+      expect(results[0].moveUci ?? results[0].move_uci).toBe('e2e4');
+    });
+
+    it('observations with source=coach_corrected are stored and retrievable', () => {
+      repos.repertoire.appendObservation(makeObservation({ source: 'coach_corrected', ply: 2, provenanceId: provId }));
+      repos.repertoire.appendObservation(makeObservation({ source: 'game', ply: 3, provenanceId: provId }));
+      const all = repos.repertoire.getObservationsForNode(
+        'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3', 'white'
+      );
+      expect(all).toHaveLength(2);
+      const sources = all.map(o => o.source);
+      expect(sources).toContain('coach_corrected');
+      expect(sources).toContain('game');
+    });
+
+    it('openChallenge + getOpenChallenge round-trip', () => {
+      const ch = makeChallenge({ provenanceId: provId });
+      repos.repertoire.openChallenge(ch);
+      const found = repos.repertoire.getOpenChallenge(ch.epd, ch.side);
+      expect(found).not.toBeNull();
+      expect(found.id).toBe(ch.id);
+    });
+
+    it('getOpenChallenge returns null when no open challenge', () => {
+      expect(repos.repertoire.getOpenChallenge('nonexistent', 'white')).toBeNull();
+    });
+
+    it('updateChallenge changes status', () => {
+      const ch = makeChallenge({ provenanceId: provId });
+      repos.repertoire.openChallenge(ch);
+      repos.repertoire.updateChallenge(ch.id, {
+        status: 'promoted',
+        resolutionRule: '3',
+        resolvedAt: 1_700_000_001_000,
+        resolvedBy: 'algorithm',
+      });
+      const updated = repos.repertoire.getChallenge(ch.id);
+      expect(updated.status).toBe('promoted');
+    });
+
+    it('upsertSuppression and getSuppression round-trip', () => {
+      const supp = {
+        epd: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3',
+        side: 'white',
+        moveUci: 'e2e4',
+        untilEncounters: 10,
+        createdAt: 1_700_000_000_000,
+        changelogId: null,
+      };
+      repos.repertoire.upsertSuppression(supp);
+      const found = repos.repertoire.getSuppression(supp.epd, supp.side, supp.moveUci);
+      expect(found).not.toBeNull();
+      const ue = found.untilEncounters ?? found.until_encounters;
+      expect(ue).toBe(10);
+    });
+
+    it('getSuppression returns null when absent', () => {
+      expect(repos.repertoire.getSuppression('x', 'white', 'e2e4')).toBeNull();
+    });
+
+    it('upsertNode and getNode round-trip', () => {
+      const node = {
+        epd: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3',
+        side: 'white',
+        fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+        firstSeen: 1_700_000_000_000,
+        lastSeen: 1_700_000_000_000,
+        timesReached: 1,
+        encounters: 1,
+        minPly: 1,
+        reachProb: null,
+        reachStale: true,
+        lineLoss: null,
+        voteFrozenUntilEncounter: null,
+      };
+      repos.repertoire.upsertNode(node);
+      const found = repos.repertoire.getNode(node.epd, node.side);
+      expect(found).not.toBeNull();
+      expect(found.encounters).toBe(1);
+    });
+
+    it('upsertMove and getMovesForNode round-trip', () => {
+      const epd = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3';
+      repos.repertoire.upsertMove({
+        epd, side: 'white', moveUci: 'e2e4', moveSan: 'e4',
+        role: 'candidate', observations: 1,
+        scoreW: 0, scoreD: 0, scoreL: 0,
+      });
+      repos.repertoire.upsertMove({
+        epd, side: 'white', moveUci: 'd2d4', moveSan: 'd4',
+        role: 'canonical', observations: 5,
+        scoreW: 2, scoreD: 1, scoreL: 0,
+      });
+      const moves = repos.repertoire.getMovesForNode(epd, 'white');
+      expect(moves).toHaveLength(2);
+    });
+
+    it('appendAudit and getAudit round-trip', () => {
+      const audit = {
+        id: randomUUID(),
+        epd: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3',
+        side: 'white',
+        moveUci: 'e2e4',
+        depth: 22,
+        multipv: 3,
+        winPct: 52.4,
+        cp: 30,
+        pv: 'e7e5 g1f3',
+        runAt: 1_700_000_000_000,
+        provenanceId: provId,
+        bookVersion: 0,
+      };
+      repos.repertoire.appendAudit(audit);
+      const found = repos.repertoire.getAudit(audit.id);
+      expect(found).not.toBeNull();
+      const winPct = found.winPct ?? found.win_pct;
+      expect(winPct).toBeCloseTo(52.4);
+    });
+  });
 }
 
 // ─── sqlite-only tests ───────────────────────────────────────────────────────
@@ -275,6 +462,13 @@ describe('[sqlite] schema', () => {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     expect(() => stmt.run('x', 1, 'maia-1300', 'white', 'finished', 'zzz')).toThrow();
+  });
+
+  it('games table has coach_enabled column defaulting to 1', () => {
+    applySchema(db);
+    db.prepare('INSERT INTO games (id, started_at, opponent_id, player_color) VALUES (?, ?, ?, ?)').run('g1', 1, 'maia-1300', 'white');
+    const row = db.prepare('SELECT coach_enabled FROM games WHERE id = ?').get('g1');
+    expect(row.coach_enabled).toBe(1);
   });
 
   it('move_evals PK (game_id, ply) rejects duplicates', () => {
