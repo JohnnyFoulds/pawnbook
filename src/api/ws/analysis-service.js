@@ -9,6 +9,8 @@ import { randomUUID } from 'crypto';
 
 import { Chess } from 'chess.js';
 
+import { updateRepertoire } from './repertoire-service.js';
+
 import { runAnalysis } from '../../domain/analysis/pipeline.js';
 import { selectPuzzles } from '../../domain/puzzles/select.js';
 import { nearestMaiaModel } from '../../domain/analysis/findability.js';
@@ -33,7 +35,7 @@ const log = logger.child({ mod: 'analysis-service' });
  * @param {object} opts.enginePool
  */
 export async function analyseGame({
-  gameId, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool,
+  gameId, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool, repertoireRepo,
 }) {
   const { opponent, playerColor, ranked } = session;
 
@@ -224,6 +226,10 @@ export async function analyseGame({
         eloBefore,
         eloAfter,
       });
+    }
+
+    if (repertoireRepo) {
+      await updateRepertoire({ gameId, playerColor, gameResult: result.result, gameRepo, repertoireRepo, ws });
     }
 
     _sendIfOpen(ws, {
