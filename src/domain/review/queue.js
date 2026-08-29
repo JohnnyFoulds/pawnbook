@@ -49,6 +49,12 @@ export function sortDueCards(cards, now = new Date()) {
 
   const nowMs = now.getTime();
   return cards.slice().sort((a, b) => {
+    // Opening cards always sort before tactical when over the soft cap
+    const kindA = a.kind ?? 'tactical';
+    const kindB = b.kind ?? 'tactical';
+    if (kindA === 'opening' && kindB !== 'opening') return -1;
+    if (kindA !== 'opening' && kindB === 'opening') return 1;
+
     const overdueFactor = (card) => {
       const dueMs = new Date(card.due).getTime();
       const overdueMs = Math.max(0, nowMs - dueMs);

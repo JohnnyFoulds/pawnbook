@@ -107,5 +107,16 @@ describe('queue', () => {
     it('returns empty array for empty input', () => {
       expect(sortDueCards([], now)).toEqual([]);
     });
+
+    it('opening cards sort before tactical when over DUE_SOFT_CAP', () => {
+      const base = new Date('2025-01-10T00:00:00Z').getTime();
+      const cards = Array.from({ length: DUE_SOFT_CAP + 2 }, (_, i) => ({
+        due: new Date(base - i * 86_400_000).toISOString(),
+        instructiveness: 10, // all same instructiveness
+        kind: i === DUE_SOFT_CAP ? 'opening' : 'tactical',
+      }));
+      const sorted = sortDueCards(cards, now);
+      expect(sorted[0].kind).toBe('opening');
+    });
   });
 });

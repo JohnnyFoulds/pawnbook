@@ -335,25 +335,27 @@ export class SqlitePuzzleRepository {
 
   /** @param {object} puzzle */
   save(puzzle) {
-    const existing = this._db.prepare('SELECT id FROM puzzles WHERE fen = ?').get(puzzle.fen);
+    const kind = puzzle.kind ?? 'tactical';
+    const existing = this._db.prepare('SELECT id FROM puzzles WHERE fen = ? AND kind = ?').get(puzzle.fen, kind);
     if (existing) {
-      this._db.prepare('UPDATE puzzles SET times_seen = times_seen + 1 WHERE fen = ?').run(puzzle.fen);
+      this._db.prepare('UPDATE puzzles SET times_seen = times_seen + 1 WHERE fen = ? AND kind = ?').run(puzzle.fen, kind);
       return existing.id;
     }
     const id = puzzle.id ?? randomUUID();
     this._db.prepare(`
-      INSERT INTO puzzles (id, fen, side_to_move, best_move_uci, best_move_san, pv,
+      INSERT INTO puzzles (id, kind, fen, side_to_move, best_move_uci, best_move_san, pv,
         accepted_moves_json, followup_uci, played_move_uci, played_move_san,
         cp_loss, win_loss_pts, classification, findability, temptation, instructiveness,
         tags, maia_model, policy_temperature, elo_at_creation, source_game_id, source_ply,
         phase, was_timed, times_seen, created_at)
-      VALUES (@id, @fen, @side_to_move, @best_move_uci, @best_move_san, @pv,
+      VALUES (@id, @kind, @fen, @side_to_move, @best_move_uci, @best_move_san, @pv,
         @accepted_moves_json, @followup_uci, @played_move_uci, @played_move_san,
         @cp_loss, @win_loss_pts, @classification, @findability, @temptation, @instructiveness,
         @tags, @maia_model, @policy_temperature, @elo_at_creation, @source_game_id, @source_ply,
         @phase, @was_timed, 1, @created_at)
     `).run({
       id,
+      kind,
       fen: puzzle.fen,
       side_to_move: puzzle.sideToMove,
       best_move_uci: puzzle.bestMoveUci,
@@ -382,6 +384,23 @@ export class SqlitePuzzleRepository {
     return id;
   }
 
+  /**
+   * @param {string} fen
+   * @param {string} kind
+   * @returns {object|null}
+   */
+  getByFenAndKind(fen, kind) {
+    return this._db.prepare('SELECT * FROM puzzles WHERE fen = ? AND kind = ?').get(fen, kind) ?? null;
+  }
+
+  /**
+   * @param {string} id
+   * @param {string} acceptedMovesJson
+   */
+  updateAcceptedMoves(id, acceptedMovesJson) {
+    this._db.prepare('UPDATE puzzles SET accepted_moves_json = ? WHERE id = ?').run(acceptedMovesJson, id);
+  }
+
   /** @param {string} id @returns {object} */
   findById(id) {
     const row = this._db.prepare('SELECT * FROM puzzles WHERE id = ?').get(id);
@@ -395,7 +414,9 @@ export class SqlitePuzzleRepository {
    */
   getDueCards(now) {
     return this._db.prepare(`
-      SELECT p.*, f.due, f.stability, f.difficulty, f.reps, f.lapses, f.state, f.graduated
+      SELECT p.id, p.kind, p.fen, p.side_to_move, p.best_move_uci, p.best_move_san,
+        p.accepted_moves_json, p.findability, p.instructiveness, p.tags,
+        f.due, f.stability, f.difficulty, f.reps, f.lapses, f.state, f.graduated
       FROM puzzles p
       JOIN fsrs_cards f ON f.puzzle_id = p.id
       WHERE f.due <= ? AND f.graduated = 0

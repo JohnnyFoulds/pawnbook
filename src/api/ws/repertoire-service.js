@@ -56,9 +56,10 @@ export function getProvenanceId(repertoireRepo) {
  * @param {string|null} opts.gameResult
  * @param {object} opts.gameRepo
  * @param {object} opts.repertoireRepo
+ * @param {object} [opts.puzzleRepo]
  * @param {import('ws').WebSocket} [opts.ws]
  */
-export async function updateRepertoire({ gameId, playerColor, gameResult, gameRepo, repertoireRepo, ws }) {
+export async function updateRepertoire({ gameId, playerColor, gameResult, gameRepo, repertoireRepo, puzzleRepo, ws }) {
   try {
     const gameMoves = gameRepo.getMoves(gameId);
     if (!gameMoves.length) return;
@@ -123,6 +124,11 @@ export async function updateRepertoire({ gameId, playerColor, gameResult, gameRe
     // Resolve any open challenges with the freshly-written observations
     await resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId });
 
+    // Create/update opening FSRS cards for all confirmed canonical nodes
+    if (puzzleRepo) {
+      _ensureOpeningCards(repertoireRepo, puzzleRepo);
+    }
+
     if (ws?.readyState === 1) {
       const confirmedCount = changelogEntries.filter(e => e.kind === 'confirm').length;
       ws.send(JSON.stringify({
@@ -137,5 +143,81 @@ export async function updateRepertoire({ gameId, playerColor, gameResult, gameRe
     log.info({ gameId, observations: observations.length, confirmed: changelogEntries.length }, 'repertoire updated');
   } catch (err) {
     log.warn({ err, gameId }, 'repertoire update failed — swallowed');
+  }
+}
+
+/**
+ * Create or update opening FSRS cards for every canonical node in the book.
+ * Idempotent: safe to call after every game.
+ * Accepted moves = canonical + alt + challenger (NOT quarantined — invariant 2).
+ *
+ * @param {object} repertoireRepo
+ * @param {object} puzzleRepo
+ */
+export function _ensureOpeningCards(repertoireRepo, puzzleRepo) {
+  const nodes = repertoireRepo.listNodes();
+  const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+
+  for (const node of nodes) {
+    const moves = repertoireRepo.getMovesForNode(node.epd, node.side);
+    const canonicalMove = moves.find(m => m.role === 'canonical');
+    if (!canonicalMove) continue;
+
+    const acceptedUcis = [...new Set(
+      moves
+        .filter(m => m.role === 'canonical' || m.role === 'alt' || m.role === 'challenger')
+        .map(m => m.moveUci)
+    )];
+    const acceptedMovesJson = JSON.stringify(acceptedUcis);
+
+    const fen = node.fen;
+    const existing = puzzleRepo.getByFenAndKind?.(fen, 'opening');
+    if (existing) {
+      puzzleRepo.updateAcceptedMoves?.(existing.id, acceptedMovesJson);
+      continue;
+    }
+
+    const puzzleId = puzzleRepo.save({
+      kind: 'opening',
+      fen,
+      sideToMove: node.side,
+      bestMoveUci: canonicalMove.moveUci,
+      bestMoveSan: canonicalMove.moveSan,
+      pv: null,
+      acceptedMovesJson,
+      followupUci: null,
+      playedMoveUci: null,
+      playedMoveSan: null,
+      cpLoss: null,
+      winLossPts: null,
+      classification: null,
+      findability: null,
+      temptation: null,
+      instructiveness: null,
+      tags: 'opening',
+      maiaModel: null,
+      policyTemperature: null,
+      eloAtCreation: null,
+      sourceGameId: null,
+      sourcePly: null,
+      phase: 'opening',
+      wasTimed: 0,
+    });
+
+    if (!puzzleRepo.getCard(puzzleId)) {
+      puzzleRepo.saveCard({
+        puzzleId,
+        due: tomorrow,
+        stability: 0,
+        difficulty: 0,
+        elapsedDays: 0,
+        scheduledDays: 0,
+        reps: 0,
+        lapses: 0,
+        state: 0,
+        lastReview: null,
+        graduated: 0,
+      });
+    }
   }
 }

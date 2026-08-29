@@ -234,7 +234,7 @@ export async function analyseGame({
     }
 
     if (repertoireRepo) {
-      await updateRepertoire({ gameId, playerColor, gameResult: result.result, gameRepo, repertoireRepo, ws });
+      await updateRepertoire({ gameId, playerColor, gameResult: result.result, gameRepo, repertoireRepo, puzzleRepo, ws });
     }
 
     _sendIfOpen(ws, {

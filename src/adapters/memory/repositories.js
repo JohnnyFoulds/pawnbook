@@ -138,23 +138,36 @@ export class InMemoryGameRepository {
 
 export class InMemoryPuzzleRepository {
   constructor() {
-    this._puzzles = new Map();  // id → puzzle
-    this._fenIndex = new Map(); // fen → id
-    this._cards = new Map();    // puzzleId → card
+    this._puzzles = new Map();       // id → puzzle
+    this._fenKindIndex = new Map();  // `${fen}|${kind}` → id
+    this._cards = new Map();         // puzzleId → card
   }
 
   save(puzzle) {
-    const existing = this._fenIndex.get(puzzle.fen);
+    const kind = puzzle.kind ?? 'tactical';
+    const key = `${puzzle.fen}|${kind}`;
+    const existing = this._fenKindIndex.get(key);
     if (existing) {
       const p = this._puzzles.get(existing);
       p.timesSeen = (p.timesSeen ?? 1) + 1;
       return existing;
     }
     const id = puzzle.id ?? randomUUID();
-    const stored = { ...puzzle, id, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
+    const stored = { ...puzzle, id, kind, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
     this._puzzles.set(id, stored);
-    this._fenIndex.set(puzzle.fen, id);
+    this._fenKindIndex.set(key, id);
     return id;
+  }
+
+  getByFenAndKind(fen, kind) {
+    const key = `${fen}|${kind}`;
+    const id = this._fenKindIndex.get(key);
+    return id ? { ...this._puzzles.get(id) } : null;
+  }
+
+  updateAcceptedMoves(id, acceptedMovesJson) {
+    const p = this._puzzles.get(id);
+    if (p) p.acceptedMovesJson = acceptedMovesJson;
   }
 
   findById(id) {
@@ -167,7 +180,8 @@ export class InMemoryPuzzleRepository {
     const results = [];
     for (const [puzzleId, card] of this._cards) {
       if (card.due <= now && !card.graduated) {
-        results.push({ ...this._puzzles.get(puzzleId), ...card });
+        const puzzle = this._puzzles.get(puzzleId);
+        results.push({ kind: puzzle?.kind ?? 'tactical', ...puzzle, ...card });
       }
     }
     return results.sort((a, b) => a.due - b.due);

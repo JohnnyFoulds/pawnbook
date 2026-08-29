@@ -9,7 +9,7 @@
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-import { openDb, SqliteGameRepository, SqliteRepertoireRepository } from '../src/adapters/sqlite/repositories.js';
+import { openDb, SqliteGameRepository, SqliteRepertoireRepository, SqlitePuzzleRepository } from '../src/adapters/sqlite/repositories.js';
 import { updateRepertoire } from '../src/api/ws/repertoire-service.js';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,7 @@ const rebuild = process.argv.includes('--rebuild');
 const db = openDb(dbPath);
 const gameRepo = new SqliteGameRepository(db);
 const repertoireRepo = new SqliteRepertoireRepository(db);
+const puzzleRepo = new SqlitePuzzleRepository(db);
 
 if (rebuild) {
   console.log('Rebuilding rep_nodes and rep_moves from observations...');
@@ -43,6 +44,7 @@ for (const game of games) {
     gameResult: game.result,
     gameRepo,
     repertoireRepo,
+    puzzleRepo,
     ws: null,
   });
   processed++;

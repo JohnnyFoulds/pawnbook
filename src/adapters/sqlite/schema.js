@@ -15,6 +15,51 @@ export function applySchema(db) {
   try { db.exec('ALTER TABLE move_evals ADD COLUMN win_loss_pts REAL'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE games ADD COLUMN coach_enabled INTEGER NOT NULL DEFAULT 1'); } catch { /* already exists */ }
 
+  // Phase 23: add kind column to puzzles and fix UNIQUE(fen) → UNIQUE(fen, kind)
+  try { db.exec("ALTER TABLE puzzles ADD COLUMN kind TEXT NOT NULL DEFAULT 'tactical'"); } catch { /* already exists */ }
+  const _puzzlesInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='puzzles'").get();
+  if (_puzzlesInfo?.sql?.includes('fen TEXT NOT NULL UNIQUE') || _puzzlesInfo?.sql?.includes('"fen" TEXT NOT NULL UNIQUE')) {
+    db.exec(`
+      CREATE TABLE puzzles_new (
+        id                   TEXT PRIMARY KEY,
+        kind                 TEXT NOT NULL DEFAULT 'tactical',
+        fen                  TEXT NOT NULL,
+        side_to_move         TEXT NOT NULL,
+        best_move_uci        TEXT NOT NULL,
+        best_move_san        TEXT,
+        pv                   TEXT,
+        accepted_moves_json  TEXT,
+        followup_uci         TEXT,
+        played_move_uci      TEXT,
+        played_move_san      TEXT,
+        cp_loss              REAL,
+        win_loss_pts         REAL,
+        classification       TEXT,
+        findability          REAL,
+        temptation           REAL,
+        instructiveness      REAL,
+        tags                 TEXT,
+        maia_model           TEXT,
+        policy_temperature   REAL,
+        elo_at_creation      INTEGER,
+        source_game_id       TEXT REFERENCES games(id),
+        source_ply           INTEGER,
+        phase                TEXT,
+        was_timed            INTEGER NOT NULL DEFAULT 0,
+        times_seen           INTEGER NOT NULL DEFAULT 1,
+        created_at           INTEGER NOT NULL,
+        UNIQUE(fen, kind)
+      );
+      INSERT INTO puzzles_new SELECT id, kind, fen, side_to_move, best_move_uci, best_move_san,
+        pv, accepted_moves_json, followup_uci, played_move_uci, played_move_san, cp_loss,
+        win_loss_pts, classification, findability, temptation, instructiveness, tags, maia_model,
+        policy_temperature, elo_at_creation, source_game_id, source_ply, phase, was_timed,
+        times_seen, created_at FROM puzzles;
+      DROP TABLE puzzles;
+      ALTER TABLE puzzles_new RENAME TO puzzles;
+    `);
+  }
+
   // make move_san nullable — original DDL had NOT NULL which silently dropped all rows via INSERT OR IGNORE
   const moveSanNotNull = db.prepare("PRAGMA table_info(move_evals)").all()
     .find(c => c.name === 'move_san')?.notnull === 1;
@@ -115,7 +160,8 @@ export function applySchema(db) {
 
     CREATE TABLE IF NOT EXISTS puzzles (
       id                   TEXT PRIMARY KEY,
-      fen                  TEXT NOT NULL UNIQUE,
+      kind                 TEXT NOT NULL DEFAULT 'tactical',
+      fen                  TEXT NOT NULL,
       side_to_move         TEXT NOT NULL,
       best_move_uci        TEXT NOT NULL,
       best_move_san        TEXT,
@@ -139,7 +185,8 @@ export function applySchema(db) {
       phase                TEXT,
       was_timed            INTEGER NOT NULL DEFAULT 0,
       times_seen           INTEGER NOT NULL DEFAULT 1,
-      created_at           INTEGER NOT NULL
+      created_at           INTEGER NOT NULL,
+      UNIQUE(fen, kind)
     );
 
     CREATE TABLE IF NOT EXISTS fsrs_cards (
