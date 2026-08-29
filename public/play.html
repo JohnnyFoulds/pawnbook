@@ -37,11 +37,12 @@
       pawnbook
     </a>
     <nav class="top-bar__nav">
-      <a href="index.html"   class="nav-link">Home</a>
-      <a href="play.html"    class="nav-link nav-link--active">Play</a>
-      <a href="puzzles.html" class="nav-link">Drill <span class="due-badge" id="due-count">0</span></a>
-      <a href="games.html"   class="nav-link">Games</a>
-      <a href="stats.html"   class="nav-link">Stats</a>
+      <a href="index.html"       class="nav-link">Home</a>
+      <a href="play.html"        class="nav-link nav-link--active">Play</a>
+      <a href="puzzles.html"     class="nav-link">Drill <span class="due-badge" id="due-count">0</span></a>
+      <a href="games.html"       class="nav-link">Games</a>
+      <a href="repertoire.html"  class="nav-link">Repertoire</a>
+      <a href="stats.html"       class="nav-link">Stats</a>
     </nav>
     <div class="top-bar__elo"><span id="elo-display">—</span></div>
   </header>
@@ -134,6 +135,14 @@
         </div>
       </div>
 
+      <!-- Unranked badge (shown when coach intervened) -->
+      <div id="coach-unranked-badge"
+           style="display:none;font-size:12px;color:var(--ink-muted);
+                  padding:4px 10px;background:var(--surface-2,#f5f5f5);
+                  border-radius:4px;margin-top:6px;text-align:center">
+        This game is now unranked — the coach stepped in.
+      </div>
+
       <!-- Result overlay -->
       <div id="result-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;z-index:300">
         <div class="result-card" style="max-width:360px;width:100%">
@@ -149,6 +158,28 @@
             <button class="btn btn--ghost" id="play-again-btn" style="width:100%">Play again</button>
             <a href="index.html" class="btn btn--ghost" style="width:100%;text-align:center">Home</a>
           </div>
+        </div>
+      </div>
+
+      <!-- Coach alert overlay -->
+      <div id="coach-alert-overlay"
+           style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);
+                  align-items:center;justify-content:center;z-index:400"
+           aria-modal="true" role="dialog" aria-labelledby="coach-alert-headline">
+        <div class="result-card" style="max-width:340px;width:90%;text-align:center">
+          <div style="font-size:13px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;
+                      letter-spacing:.06em;margin-bottom:8px" id="coach-alert-kind"></div>
+          <div class="result-card__outcome" id="coach-alert-headline"></div>
+          <div style="font-size:14px;color:var(--ink-muted);margin:8px 0 20px" id="coach-alert-sub"></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <button class="btn btn--primary btn--large" id="coach-btn-correct" style="width:100%">
+              Play book move
+            </button>
+            <button class="btn btn--ghost btn--large" id="coach-btn-keep" style="width:100%">
+              Keep mine
+            </button>
+          </div>
+          <div style="font-size:12px;color:var(--ink-muted);margin-top:12px" id="coach-alert-timer"></div>
         </div>
       </div>
     </div>
