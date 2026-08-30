@@ -1,6 +1,6 @@
 # Traceability matrix — auto-repertoire
 
-**Status:** Phase 34 complete — 2026-08-30; U1/U2/U4/U7/U11 closed  
+**Status:** Phase 35 complete — 2026-08-30; U10 closed  
 All `FR-REP-*` codes from `feature_spec.md`.
 
 | Requirement | Test(s) | File(s) |
@@ -182,3 +182,17 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | U7: `kind` field on drill cards | `includes kind field on each card (U7)` | `tests/unit/routes/puzzles-routes.test.js` |
 | `/challenges` 500 error path | `returns 500 when repo throws` (challenges) | `tests/unit/repertoire/routes.test.js` |
 | `POST /changelog/:id/reverse` 500 error path | `returns 500 when repo throws during reverse` | `tests/unit/repertoire/routes.test.js` |
+
+## Phase 35 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| U10: `createRepertoireScreen` exists and exports correctly | `tui/screens/repertoire.js exists and exports createRepertoireScreen` | `tests/unit/tui-phase10.test.js` |
+| U10: fetches coverage endpoint | `repertoire screen fetches /api/repertoire/coverage` | `tests/unit/tui-phase10.test.js` |
+| U10: fetches changelog endpoint | `repertoire screen fetches /api/repertoire/changelog` | `tests/unit/tui-phase10.test.js` |
+| U10: fetches gaps endpoint | `repertoire screen fetches /api/repertoire/gaps` | `tests/unit/tui-phase10.test.js` |
+| U10: renders coverage bar | `repertoire screen renders coverage bar` | `tests/unit/tui-phase10.test.js` |
+| U10: shows error when API fails | `repertoire screen shows error when API fails` | `tests/unit/tui-phase10.test.js` |
+| U10: renders gap entries | `repertoire screen renders gap entries` | `tests/unit/tui-phase10.test.js` |
+| U10: `chess repertoire` subcommand wired | `bin/chess.js has repertoire subcommand` | `tests/unit/tui-phase10.test.js` |
+| Playwright journey: 10-stage DOM suite | `tests/playwright/journey.spec.js` (10 stages) | `tests/playwright/journey.spec.js` |

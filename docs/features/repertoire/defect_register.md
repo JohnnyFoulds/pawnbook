@@ -410,12 +410,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | low |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 35) |
 | **Evidence** | `tui/screens/` — no repertoire screen |
 | **Description** | The TUI has no way to view or interact with the repertoire. Terminal users cannot access any repertoire feature. |
 | **Closing phase** | Phase 35 |
-| **Test** | TUI screen test (Phase 35) |
-| **Closing note** | — |
+| **Test** | `repertoire TUI screen (U10)` describe block in `tests/unit/tui-phase10.test.js` |
+| **Closing note** | Fixed: `tui/screens/repertoire.js` with `createRepertoireScreen`; fetches coverage, changelog, challenges, gaps; `chess repertoire` subcommand wired in `bin/chess.js`. |
 
 ---
 
