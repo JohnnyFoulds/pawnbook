@@ -17,6 +17,7 @@ import {
   REP_BOOTSTRAP_CONFIRMED_MIN,
   REP_ALERTS_PER_GAME_MAX,
   REP_ALERT_TIMEOUT_SEC,
+  REP_PLY_MAX,
 } from '../../shared/balance.js';
 import { RealTimer } from '../../adapters/scheduler/real-timer.js';
 import { logger } from '../../config.js';
@@ -328,6 +329,8 @@ async function _checkBookAlert(ws, uci, session, deps) {
   const { pendingMoves, alertTimeouts, scheduler } = deps;
 
   if (session.coachEnabled === false) return false;
+  // B12: enforce REP_PLY_MAX — coach is silent beyond the book horizon
+  if (session.moves.length + 1 > REP_PLY_MAX) return false;
   const confirmedCount = deps.repertoireRepo.listNodes().filter(n => n.encounters >= 2).length;
   if (confirmedCount < REP_BOOTSTRAP_CONFIRMED_MIN) return false;
   if (session.alertsInGame >= REP_ALERTS_PER_GAME_MAX) return false;
@@ -427,11 +430,10 @@ async function _applyChoiceMove(ws, session, uci, { resolution, decisionMs, pend
         }
       });
     } catch (err) {
-      log.warn({ err }, 'failed to persist deviation — swallowed');
-      gameRepo.appendMove(session.id, gameMove);
-      if (moveResult.clockUpdate) {
-        gameRepo.updateClock(session.id, moveResult.clockUpdate.whiteMs, moveResult.clockUpdate.blackMs);
-      }
+      // B10 fix: do NOT re-append outside the transaction — if the transaction failed the move
+      // was not committed; retrying outside violates NFR N-2 (atomic deviation record).
+      log.warn({ err }, 'failed to persist deviation — move not applied');
+      return;
     }
   } else {
     gameRepo.appendMove(session.id, gameMove);

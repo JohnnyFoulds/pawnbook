@@ -15,6 +15,34 @@ export function applySchema(db) {
   try { db.exec('ALTER TABLE move_evals ADD COLUMN win_loss_pts REAL'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE games ADD COLUMN coach_enabled INTEGER NOT NULL DEFAULT 1'); } catch { /* already exists */ }
 
+  // Phase 29: extend rep_changelog.kind CHECK to include 'elect' and 'quarantine_exit'.
+  // If the old constraint is in place, rebuild the table (safe: data/chess.db has 0 rows).
+  const _clInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='rep_changelog'").get();
+  if (_clInfo?.sql && !_clInfo.sql.includes('quarantine_exit')) {
+    db.exec(`
+      ALTER TABLE rep_changelog RENAME TO rep_changelog_old;
+      CREATE TABLE rep_changelog (
+        id            TEXT    PRIMARY KEY,
+        at            INTEGER NOT NULL,
+        epd           TEXT    NOT NULL,
+        side          TEXT    NOT NULL CHECK(side IN ('white','black')),
+        kind          TEXT    NOT NULL CHECK(kind IN (
+                        'promote','retire','confirm','refuse','settle','reverse',
+                        'elect','quarantine_exit')),
+        from_uci      TEXT,
+        to_uci        TEXT,
+        challenge_id  TEXT    REFERENCES rep_challenges(id),
+        rule          TEXT,
+        detail_json   TEXT,
+        provenance_id INTEGER NOT NULL REFERENCES rep_provenance(id),
+        book_version  INTEGER NOT NULL
+      );
+      INSERT INTO rep_changelog SELECT * FROM rep_changelog_old;
+      DROP TABLE rep_changelog_old;
+      CREATE INDEX IF NOT EXISTS idx_rep_changelog_epd ON rep_changelog(epd, side);
+    `);
+  }
+
   // Phase 23: add kind column to puzzles and fix UNIQUE(fen) → UNIQUE(fen, kind)
   try { db.exec("ALTER TABLE puzzles ADD COLUMN kind TEXT NOT NULL DEFAULT 'tactical'"); } catch { /* already exists */ }
   const _puzzlesInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='puzzles'").get();
@@ -348,7 +376,8 @@ export function applySchema(db) {
       epd           TEXT    NOT NULL,
       side          TEXT    NOT NULL CHECK(side IN ('white','black')),
       kind          TEXT    NOT NULL CHECK(kind IN (
-                      'promote','retire','confirm','refuse','settle','reverse')),
+                      'promote','retire','confirm','refuse','settle','reverse',
+                      'elect','quarantine_exit')),
       from_uci      TEXT,
       to_uci        TEXT,
       challenge_id  TEXT    REFERENCES rep_challenges(id),
