@@ -467,3 +467,28 @@ xpass is a confirmed or intentional behaviour change.
 
 **DoD:** `make verify` green; `npm run journey` green; B3/B4/B5/B10/B12 closed;
 coverage ≥ 90%; invariant 16 test passes.
+
+## Phase 30 — Changelog UI and Undo
+
+**Status:** Complete — 2026-08-30
+
+**Branch:** `feat/phase-30-changelog-ui`
+
+**Covers:**
+- `src/api/routes/repertoire.js` — GET /changelog now enriches every entry with
+  `fromSan`/`toSan` (chess.js UCI→SAN conversion given the stored EPD), closing U8
+- `public/js/repertoire.js` — changelog renders SAN instead of raw UCI; `promote`/`settle`
+  entries show a "Reverse" button calling `POST /api/repertoire/changelog/:id/reverse`
+  (U3); page connects to the game WebSocket and refreshes coverage/changelog/challenges
+  on `repertoire_update` events (U5)
+- `public/js/play.js` — `repertoire_update` message now handled: appends confirmed count
+  to the analysis label below the result card (U5)
+- `src/shared/balance.js` + `docs/game/balance.md` — `REP_AUTO_PROMOTE = false` kill
+  switch added (Phase 31 gate); flip to `true` once Act II promotion stage is green
+
+**Tests:**
+- `tests/unit/repertoire/routes.test.js` — added SAN enrichment test: e4/d4 moves in
+  starting position produce correct SAN in the changelog response
+
+**DoD:** `make verify` green; 845 tests pass; coverage ≥ 90%; U3, U5, U8 closed;
+`REP_AUTO_PROMOTE` documented and gating Phase 31.
