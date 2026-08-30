@@ -69,7 +69,17 @@ export function makeRepertoireRouter({ repertoireRepo }) {
         d.resolution === 'alerted_corrected' ||
         d.resolution === 'alerted_timeout'
       );
-      res.json({ refusals });
+      const kept = refusals.filter(d => d.resolution === 'alerted_kept');
+      const sideByEpd = new Map(repertoireRepo.listNodes().map(n => [n.epd, n.side]));
+      let keptInBookCount = 0;
+      for (const d of kept) {
+        const side = sideByEpd.get(d.epd);
+        if (!side) continue;
+        const move = repertoireRepo.getMove(d.epd, side, d.playedUci);
+        if (move && (move.role === 'canonical' || move.role === 'alt')) keptInBookCount++;
+      }
+      const hitRatePct = kept.length > 0 ? Math.round((keptInBookCount / kept.length) * 100) : null;
+      res.json({ refusals, keptCount: kept.length, keptInBookCount, hitRatePct });
     } catch (err) {
       log.error({ err }, 'GET /refusals failed');
       res.status(500).json({ error: 'internal_error', message: err.message });
