@@ -453,6 +453,18 @@ export class InMemoryRepertoireRepository {
     return entry ? { ...entry } : null;
   }
 
+  /** @param {{ from?: number, to?: number, cursor?: number, limit?: number }} [opts] @returns {Object[]} */
+  getChangelogRange({ from, to, cursor, limit = 500 } = {}) {
+    let entries = [...this._changelog];
+    if (from   != null) entries = entries.filter(e => (e.at ?? 0) >= from);
+    if (to     != null) entries = entries.filter(e => (e.at ?? 0) <= to);
+    if (cursor != null) entries = entries.filter(e => (e.at ?? 0) > cursor);
+    return entries
+      .sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
+      .slice(0, limit)
+      .map(e => ({ ...e }));
+  }
+
   upsertSuppression(supp) {
     this._suppressions.set(`${supp.epd}:${supp.side}:${supp.moveUci}`, { ...supp });
   }

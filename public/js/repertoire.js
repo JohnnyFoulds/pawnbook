@@ -5,7 +5,7 @@
  */
 
 async function init() {
-  await Promise.all([loadCoverage(), loadTree(), loadGaps(), loadRefusals(), loadChangelog(), loadChallenges()]);
+  await Promise.all([loadCoverage(), loadTree(), loadGaps(), loadRefusals(), loadChangelog(), loadChallenges(), loadJourney()]);
   connectForUpdates();
   document.getElementById('show-candidates').addEventListener('change', renderTree);
   document.getElementById('show-alt').addEventListener('change', renderTree);
@@ -216,6 +216,39 @@ async function loadChallenges() {
     document.getElementById('open-challenges').textContent = challenges.length;
   } catch {
     document.getElementById('open-challenges').textContent = '—';
+  }
+}
+
+async function loadJourney() {
+  try {
+    const r = await fetch('/api/repertoire/journey');
+    const data = await r.json();
+    renderJourney(data);
+  } catch {
+    const el = document.getElementById('journey-milestones');
+    if (el) el.textContent = 'Could not load journey.';
+  }
+}
+
+function renderJourney({ milestones, growthSeries } = {}) {
+  const mEl = document.getElementById('journey-milestones');
+  if (!mEl) return;
+  const lines = [];
+  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString() : '';
+  if (milestones?.firstConfirm)   lines.push(`First confirmed move: ${fmtDate(milestones.firstConfirm.at)}`);
+  if (milestones?.coachWoke)      lines.push(`Coach woke (20 moves): ${fmtDate(milestones.coachWoke.at)}`);
+  if (milestones?.firstPromotion) lines.push(`First promotion: ${fmtDate(milestones.firstPromotion.at)}`);
+  if (milestones?.firstRefusal)   lines.push(`First refusal: ${fmtDate(milestones.firstRefusal.at)}`);
+  if (milestones?.firstReversal)  lines.push(`First reversal: ${fmtDate(milestones.firstReversal.at)}`);
+
+  mEl.innerHTML = lines.length
+    ? lines.map(l => `<div style="margin-bottom:4px">${l}</div>`).join('')
+    : '<span style="color:var(--ink-muted)">No milestones yet — play some games first.</span>';
+
+  const gEl = document.getElementById('journey-growth');
+  if (gEl && growthSeries?.length) {
+    const last = growthSeries[growthSeries.length - 1];
+    gEl.textContent = `${last.total} canonical move${last.total !== 1 ? 's' : ''} as of ${last.date}`;
   }
 }
 
