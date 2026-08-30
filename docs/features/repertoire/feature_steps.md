@@ -8,7 +8,7 @@ deferred until drill integration exists.
 
 ## Phase 17 — Specification (no code)
 
-**Status:** In progress — 2026-08-29
+**Status:** Complete — 2026-08-30
 
 **Branch:** `docs/phase-17-repertoire-spec`  
 **Files:** `docs/features/repertoire/`, `docs/research/`, `docs/game/balance.md`
@@ -360,7 +360,7 @@ analysis: every RQ in preregistration either computable or marked awaiting-data
 
 ## Phase 26 — Production readiness review
 
-**Status:** Not started
+**Status:** Complete — 2026-08-30
 
 **Branch:** `docs/phase-26-repertoire-review`  
 **Files:** `docs/features/repertoire/phase-26-review.md`

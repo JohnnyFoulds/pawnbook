@@ -1,6 +1,6 @@
 # Traceability matrix — auto-repertoire
 
-**Status:** Phase 17 — tests column filled at Phase 18+; implementation column filled per phase  
+**Status:** Complete — all phases 17–26 landed; all FR-REP-* requirements covered  
 All `FR-REP-*` codes from `feature_spec.md`.
 
 | Requirement | Test(s) | File(s) |
@@ -81,4 +81,3 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | FR-REP-API-3 | no-classification test | `src/schemas/messages.js` |
 | FR-REP-API-4 | integration: routes reachable via server | `src/server.js` |
 
-*(Fill implementation column and add test file paths as each phase lands.)*
