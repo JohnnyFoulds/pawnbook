@@ -434,3 +434,36 @@ Format: numbered findings `D1…Dn`, each resolved or explicitly accepted, in th
 
 **DoD:** `npm run journey` green; all xfail defects documented in `defect_register.md`; every
 xpass is a confirmed or intentional behaviour change.
+
+---
+
+## Phase 29 — Book-learning correctness
+
+**Status:** Complete — 2026-08-30
+
+**Branch:** `feat/phase-29-book-maintenance`
+
+**Covers:**
+- `src/api/ws/maintenance-service.js` — `runBookMaintenance` calling `electCanonical` (B3),
+  `candidateExpired` (B4), `reAuditQuarantined` (B5)
+- `src/adapters/sqlite/schema.js` — Phase 29 migration: `rep_changelog.kind` CHECK extended
+  with `'elect'` and `'quarantine_exit'`; existing DBs rebuilt transparently
+- `src/api/ws/handlers.js` B12 fix: `REP_PLY_MAX` guard added to `_checkBookAlert`
+- `src/api/ws/handlers.js` B10 fix: `_applyChoiceMove` catch block no longer re-appends
+  the move outside the failed transaction (now returns without applying)
+- `tests/support/journey/harness.js` — `wireEngine()` added so the FakeEnginePool's moves
+  are applied in the harness; previously only player moves were applied
+- `tests/support/journey/journey-dsl.js` — `advanceDay` now calls `runBookMaintenance`
+  by default instead of a stub
+- `tests/unit/ws/maintenance-service.test.js` — 13 tests covering all maintenance branches
+  plus invariant 16 (idempotence) and error swallowing
+
+**Journey result after Phase 29:**
+- All stages that depended only on engine wiring now correctly simulate 3 unique positions
+- Stage 4 still xfails (3 confirmed nodes vs. 20 required — journey plays only one line;
+  the bootstrap guard is correct, the journey needs more diverse play for Phase 32)
+- Stages 5, 6 still xfail (B2/B3 — coach alerts require deviation.js routing, Phase 32)
+- Stages 8, 9 still xfail (B7/U3 — engineDelta, Phase 31)
+
+**DoD:** `make verify` green; `npm run journey` green; B3/B4/B5/B10/B12 closed;
+coverage ≥ 90%; invariant 16 test passes.

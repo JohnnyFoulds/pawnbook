@@ -148,6 +148,50 @@ export function createJourneyHarness({ dbPath = ':memory:', startMs, cp = 30 } =
   settingsRepo.set('elo', '1200');
 
   /**
+   * Wire engine_turn → FakeEnginePool so engine moves are applied synchronously.
+   * Without this, handlers.js emits engine_turn but no listener processes it,
+   * leaving the board on the opponent's turn after every player move.
+   */
+  function wireEngine(ws) {
+    ws.on('engine_turn', async (session) => {
+      if (!enginePool) return;
+      const result = await enginePool.requestMove(session);
+      if (!result) return;
+      const move = session.applyMove(result.uci);
+      gameRepo.appendMove(session.id, session.moves[session.moves.length - 1]);
+      ws.send(JSON.stringify({
+        type: 'engine_move',
+        uci: result.uci,
+        san: move.san,
+        fen: move.fen,
+        legalMoves: move.legalMoves,
+        check: move.check,
+      }));
+      if (move.gameOver && move.result) {
+        app.gameRepo.save({
+          id: session.id,
+          opponentId: session.opponent.id,
+          opponentElo: session.opponent.elo,
+          playerColor: session.playerColor,
+          ranked: session.ranked,
+          status: 'finished',
+          result: move.result.result,
+          termination: move.result.termination,
+          playedAt: clock.now().getTime(),
+        });
+        ws.send(JSON.stringify({
+          type: 'game_over',
+          result: move.result.result,
+          termination: move.result.termination,
+          eloBefore: null,
+          eloAfter: null,
+        }));
+        ws.emit('game_finished', { session, result: move.result });
+      }
+    });
+  }
+
+  /**
    * Wire game_finished → analyseGame for a specific ws connection.
    * Must be called whenever a new FakeWs is created for a game that
    * should trigger analysis (all ranked or interest games).
@@ -173,11 +217,12 @@ export function createJourneyHarness({ dbPath = ':memory:', startMs, cp = 30 } =
   }
 
   /**
-   * Create a fresh FakeWs, wired for analysis.
+   * Create a fresh FakeWs, wired for engine turns and analysis.
    * Call once per game; don't reuse across games.
    */
   function newWs() {
     const ws = new FakeWs();
+    wireEngine(ws);
     wireAnalysis(ws);
     return ws;
   }

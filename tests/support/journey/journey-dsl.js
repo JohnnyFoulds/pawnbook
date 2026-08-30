@@ -7,6 +7,9 @@
  * returns immediately, and analysis is triggered by game_finished events.
  */
 
+import { runBookMaintenance } from '../../../src/api/ws/maintenance-service.js';
+import { getProvenanceId } from '../../../src/api/ws/repertoire-service.js';
+
 import { advanceDays } from './harness.js';
 
 const DEFAULT_OPPONENT = 'maia-1100';
@@ -118,11 +121,14 @@ export async function advanceDay(harness, gapDays = 1, { maintenance } = {}) {
 
   if (maintenance) {
     await maintenance(harness);
+    return;
   }
-  // Phase 28: maintenance-service.js does not exist yet (B3/B4/B5).
-  // advanceDay deliberately does NOT call maintenance here so the journey
-  // fails loudly at the point where maintenance behaviour is first asserted.
-  // Phase 29 will supply the maintenance parameter when it adds the service.
+
+  // Phase 29: run book maintenance on every day advance
+  const nowMs = harness.clock.now().getTime();
+  const provenanceId = getProvenanceId(harness.repertoireRepo);
+  const bookVersion = harness.repertoireRepo.getCurrentBookVersion();
+  await runBookMaintenance({ repertoireRepo: harness.repertoireRepo, nowMs, provenanceId, bookVersion });
 }
 
 // ─── Snapshot ────────────────────────────────────────────────────────────────
