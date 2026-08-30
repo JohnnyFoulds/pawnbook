@@ -60,6 +60,35 @@ export const STRENGTH_ELO_MAX      = 2900;
 export const STRENGTH_ROLLING_N    = 10;
 export const STRENGTH_COEFF_VERSION = 1;      // = newest calibration/strength-model.json version
 
+// Repertoire — book structure and learning
+export const REP_PLY_MAX = 30;
+export const REP_CONFIRM_OBS = 2;
+export const REP_ADMIT_WIN_PTS = 10;          // = INACCURACY_WIN_PTS
+export const REP_QUARANTINE_WIN_PTS = 20;     // = MISTAKE_WIN_PTS
+export const REP_MIN_ABS_WIN_PCT = 35;
+export const REP_LINE_BUDGET_WIN_PTS = 20;
+export const REP_RECENCY_HALFLIFE_DAYS = 120;
+export const REP_ALT_ALTERNATION_MIN = 3;
+export const REP_ALERTS_PER_GAME_MAX = 3;
+export const REP_ALERT_TIMEOUT_SEC = 60;
+export const REP_COVERAGE_GOAL = 50;
+export const REP_AUDIT_DEPTH = 22;
+export const REP_AUDIT_MULTIPV = 3;
+export const REP_BOOTSTRAP_CONFIRMED_MIN = 20;
+export const REP_CANDIDATE_TTL_ENCOUNTERS = 8;
+
+// Repertoire — challenge resolution (refusal-driven promotion)
+// engine_delta = winPct(challenger) − winPct(incumbent); positive = challenger better
+// neutral band is [−REP_CHALLENGE_ENGINE_TOL, +REP_CHALLENGE_ENGINE_CLEAR) = [−3, +2)
+export const REP_CHALLENGE_REPEAT_CONFIRM = 2;
+export const REP_CHALLENGE_MIN_GAMES = 6;
+export const REP_CHALLENGE_ENGINE_TOL = 3;    // max COST challenger may impose
+export const REP_CHALLENGE_ENGINE_CLEAR = 2;  // min BENEFIT that auto-promotes
+export const REP_CHALLENGE_RESULT_MARGIN = 0.10;
+export const REP_CHALLENGE_TREND_PLIES = [2, 4, 6];
+export const REP_CHALLENGE_TTL_ENCOUNTERS = 8;
+export const REP_REVERSAL_SUPPRESS_ENCOUNTERS = 10;
+
 // Time controls offered (null = untimed)
 export const TIME_CONTROLS = [
   null,

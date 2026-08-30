@@ -7,6 +7,34 @@ import { randomUUID } from 'crypto';
 
 import { GameNotFoundError, PuzzleNotFoundError } from '../../errors.js';
 
+// ─── move-eval normalisation ──────────────────────────────────────────────────
+// B15: SQLite SELECT * returns snake_case column names; the analysis pipeline
+// produces camelCase. The in-memory repo normalises to snake_case on write so
+// build.js (which reads win_loss_pts, win_before, win_after) works identically
+// against both adapters.
+function _normaliseMoveEval(e) {
+  return {
+    game_id:       e.gameId    ?? e.game_id    ?? null,
+    ply:           e.ply,
+    fen:           e.fen,
+    move_uci:      e.moveUci   ?? e.move_uci   ?? null,
+    move_san:      e.moveSan   ?? e.move_san   ?? null,
+    cp_white:      e.cpWhite   ?? e.cp_white   ?? null,
+    mate_in:       e.mateIn    ?? e.mate_in    ?? null,
+    best_move_uci: e.bestMoveUci ?? e.best_move_uci ?? null,
+    pv:            e.pv        ?? null,
+    mover:         e.mover     ?? null,
+    win_before:    e.winBefore  ?? e.win_before  ?? null,
+    win_after:     e.winAfter   ?? e.win_after   ?? null,
+    cp_loss:       e.cpLoss    ?? e.cp_loss    ?? null,
+    // pipeline: winLoss; SQLite column: win_loss_pts — the critical B15 field
+    win_loss_pts:  e.winLoss   ?? e.win_loss_pts ?? e.winLossPts ?? null,
+    classification: e.classification ?? null,
+    move_accuracy: e.moveAccuracy ?? e.move_accuracy ?? null,
+    alt_moves_json: e.altMovesJson ?? e.alt_moves_json ?? null,
+  };
+}
+
 // ─── activity helpers ─────────────────────────────────────────────────────────
 
 function _activityDayKey(timestampMs) {
@@ -114,8 +142,9 @@ export class InMemoryGameRepository {
   saveMoveEval(eval_) {
     if (!this._evals) this._evals = new Map();
     const list = this._evals.get(eval_.gameId) ?? [];
-    const idx = list.findIndex(e => e.ply === eval_.ply);
-    if (idx >= 0) list[idx] = eval_; else list.push(eval_);
+    const row = _normaliseMoveEval(eval_);
+    const idx = list.findIndex(e => e.ply === row.ply);
+    if (idx >= 0) list[idx] = row; else list.push(row);
     this._evals.set(eval_.gameId, list);
   }
 
@@ -123,8 +152,17 @@ export class InMemoryGameRepository {
     if (!this._evals) this._evals = new Map();
     const list = this._evals.get(gameId) ?? [];
     if (list.some(e => e.ply === ply)) return; // INSERT OR IGNORE semantics
-    list.push({ gameId, ply, fen, cpWhite: evalData.cp ?? null, mateIn: evalData.mate ?? null,
-      bestMoveUci: evalData.bestmove ?? null, pv: evalData.pv ?? null });
+    // Pre-evals omit mover/win_* fields; normalise to the same snake_case shape.
+    list.push({
+      game_id: gameId, ply, fen,
+      cp_white: evalData.cp ?? null,
+      mate_in: evalData.mate ?? null,
+      best_move_uci: evalData.bestmove ?? null,
+      pv: evalData.pv ?? null,
+      mover: null,
+      win_before: null, win_after: null, cp_loss: null, win_loss_pts: null,
+      classification: null, move_accuracy: null, alt_moves_json: null,
+    });
     this._evals.set(gameId, list);
   }
 
@@ -174,23 +212,36 @@ export class InMemoryGameRepository {
 
 export class InMemoryPuzzleRepository {
   constructor() {
-    this._puzzles = new Map();  // id → puzzle
-    this._fenIndex = new Map(); // fen → id
-    this._cards = new Map();    // puzzleId → card
+    this._puzzles = new Map();       // id → puzzle
+    this._fenKindIndex = new Map();  // `${fen}|${kind}` → id
+    this._cards = new Map();         // puzzleId → card
   }
 
   save(puzzle) {
-    const existing = this._fenIndex.get(puzzle.fen);
+    const kind = puzzle.kind ?? 'tactical';
+    const key = `${puzzle.fen}|${kind}`;
+    const existing = this._fenKindIndex.get(key);
     if (existing) {
       const p = this._puzzles.get(existing);
       p.timesSeen = (p.timesSeen ?? 1) + 1;
       return existing;
     }
     const id = puzzle.id ?? randomUUID();
-    const stored = { ...puzzle, id, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
+    const stored = { ...puzzle, id, kind, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
     this._puzzles.set(id, stored);
-    this._fenIndex.set(puzzle.fen, id);
+    this._fenKindIndex.set(key, id);
     return id;
+  }
+
+  getByFenAndKind(fen, kind) {
+    const key = `${fen}|${kind}`;
+    const id = this._fenKindIndex.get(key);
+    return id ? { ...this._puzzles.get(id) } : null;
+  }
+
+  updateAcceptedMoves(id, acceptedMovesJson) {
+    const p = this._puzzles.get(id);
+    if (p) p.acceptedMovesJson = acceptedMovesJson;
   }
 
   findById(id) {
@@ -203,7 +254,8 @@ export class InMemoryPuzzleRepository {
     const results = [];
     for (const [puzzleId, card] of this._cards) {
       if (card.due <= now && !card.graduated) {
-        results.push({ ...this._puzzles.get(puzzleId), ...card });
+        const puzzle = this._puzzles.get(puzzleId);
+        results.push({ kind: puzzle?.kind ?? 'tactical', ...puzzle, ...card });
       }
     }
     return results.sort((a, b) => a.due - b.due);
@@ -271,5 +323,175 @@ export class InMemorySettingsRepository {
 
   set(key, value) {
     this._store.set(key, String(value));
+  }
+}
+
+export class InMemoryRepertoireRepository {
+  constructor() {
+    this._observations = [];
+    this._deviations = [];
+    this._audits = new Map();
+    this._challenges = new Map();
+    this._changelog = [];
+    this._suppressions = new Map();
+    this._nodes = new Map();
+    this._moves = new Map();
+    this._policy = new Map();
+    this._provenance = new Map();
+    this._provenanceCounter = 0;
+    this._bookVersion = 0;
+  }
+
+  getOrCreateProvenance(ctx) {
+    const key = `${ctx.balanceHash}|${ctx.schemaVersion}|${ctx.sfVersion ?? ''}|${ctx.sfDepth ?? ''}|${ctx.sfMultipv ?? ''}|${ctx.maiaWeightsId ?? ''}`;
+    if (this._provenance.has(key)) return this._provenance.get(key);
+    const id = ++this._provenanceCounter;
+    this._provenance.set(key, id);
+    return id;
+  }
+
+  getCurrentBookVersion() {
+    return this._bookVersion;
+  }
+
+  incrementBookVersion() {
+    return ++this._bookVersion;
+  }
+
+  appendObservation(obs) {
+    this._observations.push({ ...obs });
+  }
+
+  getObservationsForNode(epd, side) {
+    return this._observations
+      .filter(o => o.epd === epd && o.side === side)
+      .sort((a, b) => (a.playedAt ?? 0) - (b.playedAt ?? 0))
+      .map(o => ({ ...o }));
+  }
+
+  appendDeviation(dev) {
+    this._deviations.push({ ...dev });
+  }
+
+  getDeviationsForGame(gameId) {
+    return this._deviations
+      .filter(d => d.gameId === gameId)
+      .sort((a, b) => (a.ply ?? 0) - (b.ply ?? 0))
+      .map(d => ({ ...d }));
+  }
+
+  getAllDeviations(limit = 200) {
+    return [...this._deviations].reverse().slice(0, limit).map(d => ({ ...d }));
+  }
+
+  appendAudit(audit) {
+    this._audits.set(audit.id, { ...audit });
+  }
+
+  getAudit(id) {
+    const a = this._audits.get(id);
+    return a ? { ...a } : null;
+  }
+
+  openChallenge(challenge) {
+    this._challenges.set(challenge.id, { ...challenge });
+  }
+
+  updateChallenge(id, patch) {
+    const existing = this._challenges.get(id);
+    if (!existing) throw new Error(`Challenge '${id}' not found`);
+    this._challenges.set(id, { ...existing, ...patch });
+  }
+
+  getChallenge(id) {
+    const c = this._challenges.get(id);
+    return c ? { ...c } : null;
+  }
+
+  getOpenChallenge(epd, side) {
+    for (const c of this._challenges.values()) {
+      if (c.epd === epd && c.side === side && c.status === 'open') return { ...c };
+    }
+    return null;
+  }
+
+  listOpenChallenges() {
+    return [...this._challenges.values()]
+      .filter(c => c.status === 'open')
+      .sort((a, b) => (a.openedAt ?? 0) - (b.openedAt ?? 0))
+      .map(c => ({ ...c }));
+  }
+
+  appendChangelog(entry) {
+    this._changelog.push({ ...entry });
+  }
+
+  getChangelog(limit = 50) {
+    return [...this._changelog]
+      .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+      .slice(0, limit)
+      .map(e => ({ ...e }));
+  }
+
+  getChangelogEntry(id) {
+    const entry = this._changelog.find(e => e.id === id);
+    return entry ? { ...entry } : null;
+  }
+
+  upsertSuppression(supp) {
+    this._suppressions.set(`${supp.epd}:${supp.side}:${supp.moveUci}`, { ...supp });
+  }
+
+  getSuppression(epd, side, moveUci) {
+    const s = this._suppressions.get(`${epd}:${side}:${moveUci}`);
+    return s ? { ...s } : null;
+  }
+
+  upsertNode(node) {
+    this._nodes.set(`${node.epd}:${node.side}`, { ...node });
+  }
+
+  getNode(epd, side) {
+    const n = this._nodes.get(`${epd}:${side}`);
+    return n ? { ...n } : null;
+  }
+
+  listNodes() {
+    return [...this._nodes.values()]
+      .sort((a, b) => (a.epd < b.epd ? -1 : a.epd > b.epd ? 1 : a.side < b.side ? -1 : 1))
+      .map(n => ({ ...n }));
+  }
+
+  upsertMove(move) {
+    this._moves.set(`${move.epd}:${move.side}:${move.moveUci}`, { ...move });
+  }
+
+  getMove(epd, side, moveUci) {
+    const m = this._moves.get(`${epd}:${side}:${moveUci}`);
+    return m ? { ...m } : null;
+  }
+
+  getMovesForNode(epd, side) {
+    return [...this._moves.values()]
+      .filter(m => m.epd === epd && m.side === side)
+      .sort((a, b) => {
+        if (a.role < b.role) return -1;
+        if (a.role > b.role) return 1;
+        return (a.moveUci ?? '') < (b.moveUci ?? '') ? -1 : 1;
+      })
+      .map(m => ({ ...m }));
+  }
+
+  upsertPolicy(policy) {
+    this._policy.set(`${policy.epd}:${policy.maiaModel}:${policy.maiaWeightsId}`, { ...policy });
+  }
+
+  getPolicy(epd, maiaModel, maiaWeightsId) {
+    const p = this._policy.get(`${epd}:${maiaModel}:${maiaWeightsId}`);
+    return p ? { ...p } : null;
+  }
+
+  transaction(fn) {
+    return fn();
   }
 }

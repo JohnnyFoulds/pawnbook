@@ -22,6 +22,7 @@ async function api(path, opts) {
 
 let ws = null;
 let gameId = null;
+let currentFen = null; // eslint-disable-line no-unused-vars -- U9: read guard added Phase 32
 let legalMoves = [];
 let youPlay = null;
 let selectedOpponentId = null;
@@ -31,6 +32,8 @@ let ranked = true;
 let board = null;
 let isRanked = true;
 let analysisRunning = false;
+let coachAlertPending = false; // eslint-disable-line no-unused-vars -- U9: consulted in handlePlayerMove Phase 32
+let coachAlertTimer = null;
 
 // Resolved when the board DOM is initialised and ready to receive setPosition calls.
 // Prevents engine_move updates being lost when player is black and the engine
@@ -174,6 +177,12 @@ function startGame() {
   document.getElementById('game-area').style.display = 'block';
   isRanked = ranked;
 
+  // Reset coach state from any previous game
+  _dismissCoachAlert();
+  coachAlertPending = false;
+  const coachBadge = document.getElementById('coach-unranked-badge');
+  if (coachBadge) coachBadge.style.display = 'none';
+
   connectWS(() => {
     ws.send(JSON.stringify({
       type: 'new_game',
@@ -234,6 +243,15 @@ function handleMessage(msg) {
       break;
     case 'analysis_done':
       onAnalysisDone(msg);
+      break;
+    case 'move_accepted':
+      onMoveAccepted(msg);
+      break;
+    case 'repertoire_alert':
+      onRepertoireAlert(msg);
+      break;
+    case 'ranked_changed':
+      onRankedChanged(msg);
       break;
     case 'error':
       console.error('Server error:', msg.message);
@@ -327,6 +345,9 @@ function onGameOver(msg) {
     analysisRunning = false;
     plyCount = 0;
     document.getElementById('move-list').innerHTML = '';
+    _dismissCoachAlert();
+    const coachBadge = document.getElementById('coach-unranked-badge');
+    if (coachBadge) coachBadge.style.display = 'none';
     if (ws && ws.readyState !== WebSocket.CLOSED) ws.close();
   });
 }
@@ -452,6 +473,94 @@ document.getElementById('resign-btn').addEventListener('click', () => {
   if (!confirm('Resign this game?')) return;
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resign' }));
 });
+
+document.getElementById('coach-btn-correct').addEventListener('click', () => _sendCoachChoice('correct'));
+document.getElementById('coach-btn-keep').addEventListener('click', () => _sendCoachChoice('keep'));
+
+// ── Coach alert ─────────────────────────────────────────────────────────────
+
+function onMoveAccepted(msg) {
+  currentFen = msg.fen;
+  legalMoves = msg.legalMoves ?? [];
+  if (board) {
+    board.clearMarkers();
+    board.setPosition(msg.fen);
+  }
+  if (msg.clockUpdate) onClockUpdate(msg.clockUpdate);
+}
+
+function onRepertoireAlert(msg) {
+  coachAlertPending = true;
+
+  const overlay = document.getElementById('coach-alert-overlay');
+  const kindEl = document.getElementById('coach-alert-kind');
+  const headlineEl = document.getElementById('coach-alert-headline');
+  const subEl = document.getElementById('coach-alert-sub');
+  const timerEl = document.getElementById('coach-alert-timer');
+  const btnCorrect = document.getElementById('coach-btn-correct');
+  const btnKeep = document.getElementById('coach-btn-keep');
+
+  const kindLabels = {
+    order_slip: 'Move order',
+    lapse: 'Book move',
+    novelty: 'New move',
+    refused_repeat: 'Refused move',
+  };
+  const headlineCopy = {
+    order_slip: `You usually play ${msg.bookSan ?? msg.bookUci} first here`,
+    lapse: `Your book move here is ${msg.bookSan ?? msg.bookUci}`,
+    novelty: `New move — your book says ${msg.bookSan ?? msg.bookUci}`,
+    refused_repeat: `Your book won't play ${msg.playerSan ?? msg.playerUci}`,
+  };
+  const costText = msg.costWinPts != null && msg.costWinPts > 0
+    ? `Cost vs your usual: ${msg.costWinPts.toFixed(1)} win%`
+    : '';
+
+  kindEl.textContent = kindLabels[msg.kind] ?? msg.kind;
+  headlineEl.textContent = headlineCopy[msg.kind] ?? `Book: ${msg.bookSan ?? msg.bookUci}`;
+  subEl.textContent = costText;
+
+  btnCorrect.textContent = msg.bookSan ? `Play ${msg.bookSan}` : 'Play book move';
+  btnKeep.textContent = msg.playerSan ? `Keep ${msg.playerSan}` : 'Keep mine';
+
+  let secsLeft = msg.timeoutSec ?? 60;
+  timerEl.textContent = `Auto-keeps in ${secsLeft}s`;
+  if (coachAlertTimer) clearInterval(coachAlertTimer);
+  coachAlertTimer = setInterval(() => {
+    secsLeft--;
+    if (secsLeft <= 0) {
+      clearInterval(coachAlertTimer);
+      coachAlertTimer = null;
+      timerEl.textContent = '';
+      _dismissCoachAlert();
+    } else {
+      timerEl.textContent = `Auto-keeps in ${secsLeft}s`;
+    }
+  }, 1000);
+
+  overlay.style.display = 'flex';
+}
+
+function _dismissCoachAlert() {
+  coachAlertPending = false;
+  const overlay = document.getElementById('coach-alert-overlay');
+  if (overlay) overlay.style.display = 'none';
+  if (coachAlertTimer) { clearInterval(coachAlertTimer); coachAlertTimer = null; }
+}
+
+function _sendCoachChoice(choice) {
+  _dismissCoachAlert();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'repertoire_choice', choice }));
+  }
+}
+
+function onRankedChanged(msg) {
+  if (!msg.ranked) {
+    const badge = document.getElementById('coach-unranked-badge');
+    if (badge) badge.style.display = '';
+  }
+}
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 

@@ -10,7 +10,7 @@ import { dirname, join } from 'path';
 
 import express from 'express';
 
-import { openDb, SqliteGameRepository, SqlitePuzzleRepository, SqliteSettingsRepository } from './adapters/sqlite/repositories.js';
+import { openDb, SqliteGameRepository, SqlitePuzzleRepository, SqliteSettingsRepository, SqliteRepertoireRepository } from './adapters/sqlite/repositories.js';
 import { SystemClock } from './adapters/clock/system-clock.js';
 import { FsrsScheduler } from './adapters/scheduler/fsrs-scheduler.js';
 import { errorMiddleware } from './api/error-middleware.js';
@@ -19,9 +19,11 @@ import { gamesRouter } from './api/routes/games.js';
 import { puzzlesRouter } from './api/routes/puzzles.js';
 import { statsRouter } from './api/routes/stats.js';
 import { stateRouter } from './api/routes/state.js';
+import { makeRepertoireRouter } from './api/routes/repertoire.js';
 import { attachWebSocketServer } from './api/ws/connection.js';
 import { createEnginePool } from './adapters/engine/engine-pool.js';
-import { PORT, BIND_ADDR, DB_PATH, NODE_ENV, logger } from './config.js';
+import { createFakeEnginePool } from './adapters/engine/fake-engine-pool.js';
+import { PORT, BIND_ADDR, DB_PATH, NODE_ENV, ENGINE_MODE, logger } from './config.js';
 import { initTelemetry } from './telemetry.js';
 
 const log = logger.child({ mod: 'server' });
@@ -32,9 +34,10 @@ async function start() {
 
   // ── Adapters ──────────────────────────────────────────────────────────────
   const db          = openDb(DB_PATH);
-  const gameRepo    = new SqliteGameRepository(db);
-  const puzzleRepo  = new SqlitePuzzleRepository(db);
-  const settingsRepo = new SqliteSettingsRepository(db);
+  const gameRepo       = new SqliteGameRepository(db);
+  const puzzleRepo     = new SqlitePuzzleRepository(db);
+  const settingsRepo   = new SqliteSettingsRepository(db);
+  const repertoireRepo = new SqliteRepertoireRepository(db);
   const clock       = new SystemClock();
   const scheduler   = new FsrsScheduler();
 
@@ -60,7 +63,7 @@ async function start() {
   }
 
   // ── Engine pool (created before routes so /analyse can use it) ───────────
-  const enginePool = createEnginePool();
+  const enginePool = ENGINE_MODE === 'fake' ? createFakeEnginePool() : createEnginePool();
 
   // ── Express app ───────────────────────────────────────────────────────────
   const app = express();
@@ -80,6 +83,7 @@ async function start() {
   app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }));
   app.use('/api/stats',     statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }));
   app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }));
+  app.use('/api/repertoire', makeRepertoireRouter({ repertoireRepo }));
 
   if (NODE_ENV === 'test') {
     const { debugRouter } = await import('./api/routes/debug.js');
@@ -92,7 +96,7 @@ async function start() {
   // ── HTTP + WS server ─────────────────────────────────────────────────────
   const httpServer = createServer(app);
 
-  attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool });
+  attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool, repertoireRepo });
 
   httpServer.listen(PORT, BIND_ADDR, () => {
     log.info({ port: PORT, bind: BIND_ADDR }, 'pawnbook listening');

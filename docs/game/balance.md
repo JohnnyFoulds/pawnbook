@@ -50,7 +50,48 @@ All parameters live in `src/shared/balance.js`. A balance change requires a `doc
 | `STRENGTH_ELO_MAX` | 2900 | Upper clamp on the displayed estimate |
 | `STRENGTH_ROLLING_N` | 10 | Number of recent games in the inverse-variance rolling aggregate |
 | `STRENGTH_COEFF_VERSION` | 1 | Must equal the version of the newest entry in `calibration/strength-model.json`; enforced by a test |
+## Repertoire constants (`REP_*`) — added Phase 17
 
+All constants below are in `src/shared/balance.js`. A `docs(balance):` commit is required to change
+any of them.
+
+| Parameter | Default | Units | Objective served | If wrong |
+|---|---|---|---|---|
+| `REP_PLY_MAX` | 30 | plies | Book bounds | Too low: book stops early. Too high: wasteful; reach probability is the real limiter |
+| `REP_CONFIRM_OBS` | 2 | self-directed observations | Keep bad moves out | 1: misclicks enter the book. 3+: genuine repeats fail to confirm |
+| `REP_ADMIT_WIN_PTS` | 10 | win% pts lost | Keep bad moves out | = INACCURACY_WIN_PTS; deviating breaks comparability |
+| `REP_QUARANTINE_WIN_PTS` | 20 | win% pts lost | Keep bad moves out | = MISTAKE_WIN_PTS; deviating breaks comparability |
+| `REP_MIN_ABS_WIN_PCT` | 35 | win% | Keep bad moves out | Too high: refuses everything in an already-bad position. Too low: allows positions near losing |
+| `REP_LINE_BUDGET_WIN_PTS` | 20 | cumulative win% pts | Keep bad moves out | Too high: compound losses not caught. Too low: refuses all but the sharpest prep |
+| `REP_RECENCY_HALFLIFE_DAYS` | 120 | days | Let in moves he likes | Too short: book forgets recent changes. Too long: book never follows his development |
+| `REP_ALT_ALTERNATION_MIN` | 3 | observations | Let in moves he likes | Too high: genuine alternation triggers spurious challenges. Too low: every two-game sequence opens a challenge |
+| `REP_ALERTS_PER_GAME_MAX` | 3 | count | Let in moves he likes | Too high: game interrupted too often. Too low: deviations go unrecorded |
+| `REP_ALERT_TIMEOUT_SEC` | 60 | seconds | Interaction cost | Too short: penalises slow players. Too long: game clock drains |
+| `REP_COVERAGE_GOAL` | 50 | games (1-in-X) | Coverage reporting | Changes the definition of "worth covering"; tune to his actual play frequency |
+| `REP_AUDIT_DEPTH` | 22 | plies | Keep bad moves out | Matches pass-2 depth; changing it invalidates existing audits — rebuild required |
+| `REP_AUDIT_MULTIPV` | 3 | count | Keep bad moves out | Matches pass-2 multipv |
+| `REP_BOOTSTRAP_CONFIRMED_MIN` | 20 | confirmed nodes | Interaction cost | Too low: coach fires before the book knows anything. Too high: coach never activates |
+| `REP_CANDIDATE_TTL_ENCOUNTERS` | 8 | node encounters | Let in moves he likes | Too low: rare nodes never confirm. Too high: misclicks linger |
+| `REP_CHALLENGE_REPEAT_CONFIRM` | 2 | challenger plays | Let in moves he likes | Too low: a misclick might promote. Too high: delays adoption of genuine preference |
+| `REP_CHALLENGE_MIN_GAMES` | 6 | games | Sound outcomes | Too low: noise promotes prematurely. Too high: delays on trend/result signals |
+| `REP_CHALLENGE_ENGINE_TOL` | 3 | win% pts cost | Sound outcomes | The **cost** the challenger may impose. Sign: positive = challenger worse. Too high: accepts blunders. Too low: rejects style moves |
+| `REP_CHALLENGE_ENGINE_CLEAR` | 2 | win% pts benefit | Sound outcomes | The **advantage** that auto-promotes. Sign: positive = challenger better. Note: CLEAR < TOL is intentional — see note below |
+| `REP_CHALLENGE_RESULT_MARGIN` | 0.10 | Elo-adj performance | Sound outcomes | Too low: noise promotes. Too high: never activates style-call rule |
+| `REP_CHALLENGE_TREND_PLIES` | [2,4,6] | plies forward | Sound outcomes | Must be forward-only (not ±). Changing these changes which move_evals rows are joined |
+| `REP_CHALLENGE_TTL_ENCOUNTERS` | 8 | node encounters | Sound outcomes | Too low: challenges close before evidence accumulates. Too high: node stays contested forever |
+| `REP_REVERSAL_SUPPRESS_ENCOUNTERS` | 10 | node encounters | User control | Too low: reversal undone by next learning pass. Too high: suppresses legitimate re-promotion |
+
+### Note on CLEAR vs TOL asymmetry
+
+`REP_CHALLENGE_ENGINE_CLEAR` (2) < `REP_CHALLENGE_ENGINE_TOL` (3). They measure opposite directions:
+- CLEAR = the engine *advantage* that auto-promotes the challenger with no results needed.
+- TOL = the engine *cost* the challenger may impose and still be eligible for style-call promotion.
+
+The asymmetry is intentional: two win% points of engine advantage is enough to adopt a move;
+three win% points of engine disadvantage is still tolerated if the player keeps playing it and
+the results support it. Getting the sign backwards silently inverts the feature.
+
+The neutral band where neither rule fires immediately is `engine_delta ∈ [−3, +2)`.
 ## Changelog
 
 <!-- Format: YYYY-MM-DD  parameter  old→new  observation (cite playtest_log.md entry) -->

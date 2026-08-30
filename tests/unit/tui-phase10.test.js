@@ -382,7 +382,7 @@ describe('clock: TUI displays server clock, never decides flag-fall', () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const ESC = '\x1b'; // eslint-disable-line no-control-regex
+const ESC = '\x1b';  
 const ANSI_ESCAPE = new RegExp(ESC + '\\[[0-9;]*m', 'g');
 
 /** Strip ANSI escape sequences for visible-character counting. */

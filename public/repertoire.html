@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repertoire — pawnbook</title>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+<div class="app-shell">
+  <header class="top-bar">
+    <a href="index.html" class="top-bar__brand">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2a2 2 0 0 1 2 2c0 .74-.4 1.38-1 1.73V7h1.5l.5 1H13l1 3H4l1-3h1l.5-1H8V5.73A2 2 0 0 1 7 4a2 2 0 0 1 2-2zm-3 11h6v1H6v-1zm-1 2h8v1H5v-1z"/></svg>
+      pawnbook
+    </a>
+    <nav class="top-bar__nav">
+      <a href="index.html"       class="nav-link">Home</a>
+      <a href="play.html"        class="nav-link">Play</a>
+      <a href="puzzles.html"     class="nav-link">Drill <span class="due-badge" id="due-count">0</span></a>
+      <a href="games.html"       class="nav-link">Games</a>
+      <a href="repertoire.html"  class="nav-link nav-link--active">Repertoire</a>
+      <a href="stats.html"       class="nav-link">Stats</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:24px">Your opening repertoire</h1>
+
+    <!-- Coverage summary -->
+    <div class="card" style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Coverage</div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:28px;font-weight:700" id="coverage-pct">—</div>
+          <div style="font-size:12px;color:var(--ink-muted)">covered</div>
+        </div>
+        <div>
+          <div style="font-size:28px;font-weight:700" id="canonical-count">—</div>
+          <div style="font-size:12px;color:var(--ink-muted)">book moves</div>
+        </div>
+        <div>
+          <div style="font-size:28px;font-weight:700" id="candidate-count">—</div>
+          <div style="font-size:12px;color:var(--ink-muted)">candidates</div>
+        </div>
+        <div>
+          <div style="font-size:28px;font-weight:700" id="total-nodes">—</div>
+          <div style="font-size:12px;color:var(--ink-muted)">positions</div>
+        </div>
+        <div>
+          <div style="font-size:28px;font-weight:700" id="open-challenges">—</div>
+          <div style="font-size:12px;color:var(--ink-muted)">open challenges</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- What changed in your book -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">
+        What changed in your book
+      </div>
+      <ul id="changelog-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px">
+        <li style="color:var(--ink-muted);font-size:13px">Loading…</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/repertoire.js"></script>
+</body>
+</html>

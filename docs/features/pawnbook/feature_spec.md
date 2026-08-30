@@ -22,6 +22,11 @@ RFC 2119 vocabulary is used throughout: MUST, SHOULD, MAY, MUST NOT, SHOULD NOT.
 - FR-PLAY-9: The system MUST support resignation.
 - FR-PLAY-10: The system MUST detect and record all draw conditions (stalemate, threefold, fifty-move, insufficient material) via chess.js.
 - FR-PLAY-11: A ranked game MUST NOT expose eval or hints; `HintNotAllowedError` MUST be raised.
+  *Reconciliation with repertoire coach (added Phase 17):* a repertoire alert reveals the existence
+  of a book move but does not expose a numerical eval. This is permitted because the game is flipped
+  to `ranked = 0` before the alert is visible to the client (FR-REP-COACH-4 in
+  `docs/features/repertoire/feature_spec.md`). The constraint is satisfied: the alert is shown only
+  in an already-unranked game.
 
 ### FR-ROSTER: Opponent roster
 

@@ -144,3 +144,219 @@
  * @name SettingsRepository#getEloHistory
  * @returns {Object[]}
  */
+
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * @interface RepertoireRepository
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getOrCreateProvenance
+ * @param {{ schemaVersion: string, balanceHash: string, appGitSha?: string, sfVersion?: string, sfDepth?: number, sfMultipv?: number, maiaWeightsId?: string }} ctx
+ * @returns {number} provenance row id
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getCurrentBookVersion
+ * @returns {number}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#incrementBookVersion
+ * @returns {number} new version
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#appendObservation
+ * @param {Object} obs
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getObservationsForNode
+ * @param {string} epd
+ * @param {string} side
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#appendDeviation
+ * @param {Object} dev
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getDeviationsForGame
+ * @param {string} gameId
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#appendAudit
+ * @param {Object} audit
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getAudit
+ * @param {string} id
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#openChallenge
+ * @param {Object} challenge
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#updateChallenge
+ * @param {string} id
+ * @param {Object} patch
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getChallenge
+ * @param {string} id
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getOpenChallenge
+ * @param {string} epd
+ * @param {string} side
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#listOpenChallenges
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#appendChangelog
+ * @param {Object} entry
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getChangelog
+ * @param {number} [limit]
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getChangelogEntry
+ * @param {string} id
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getAllDeviations
+ * @param {number} [limit]
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#upsertSuppression
+ * @param {Object} supp
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getSuppression
+ * @param {string} epd
+ * @param {string} side
+ * @param {string} moveUci
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#upsertNode
+ * @param {Object} node
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getNode
+ * @param {string} epd
+ * @param {string} side
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#listNodes
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#upsertMove
+ * @param {Object} move
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getMove
+ * @param {string} epd
+ * @param {string} side
+ * @param {string} moveUci
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getMovesForNode
+ * @param {string} epd
+ * @param {string} side
+ * @returns {Object[]}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#upsertPolicy
+ * @param {Object} policy
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#getPolicy
+ * @param {string} epd
+ * @param {string} maiaModel
+ * @param {string} maiaWeightsId
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name RepertoireRepository#transaction
+ * @param {Function} fn
+ * @returns {any}
+ */
