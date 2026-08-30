@@ -408,6 +408,14 @@ export class InMemoryRepertoireRepository {
       .map(n => ({ ...n }));
   }
 
+  countCanonicalNodes() {
+    const seen = new Set();
+    for (const m of this._moves.values()) {
+      if (m.role === 'canonical') seen.add(`${m.epd}|${m.side}`);
+    }
+    return seen.size;
+  }
+
   upsertMove(move) {
     this._moves.set(`${move.epd}:${move.side}:${move.moveUci}`, { ...move });
   }

@@ -157,6 +157,7 @@ export function createJourneyHarness({ dbPath = ':memory:', startMs, cp = 30 } =
       if (!enginePool) return;
       const result = await enginePool.requestMove(session);
       if (!result) return;
+      if (session.isOver) return; // game may have ended (resigned) while awaiting engine response
       const move = session.applyMove(result.uci);
       gameRepo.appendMove(session.id, session.moves[session.moves.length - 1]);
       ws.send(JSON.stringify({

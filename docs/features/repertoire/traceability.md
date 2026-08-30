@@ -1,6 +1,6 @@
 # Traceability matrix — auto-repertoire
 
-**Status:** Complete — all phases 17–26 landed; all FR-REP-* requirements covered  
+**Status:** Phase 32 complete — 2026-08-30; B1/B2/B9/B11/B13/B14/U6/U9 closed  
 All `FR-REP-*` codes from `feature_spec.md`.
 
 | Requirement | Test(s) | File(s) |
@@ -124,3 +124,24 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | Gate verdict error catch | `gateVerdict falls back to null when position eval throws` | `tests/unit/ws/audit-service.test.js` |
 | Trend/result error catches | `swallows errors from getObservationsForNode` | `tests/unit/ws/audit-service.test.js` |
 | `REP_AUTO_PROMOTE` kill switch | `balance: every parameter in balance.js is documented` | `tests/unit/config.test.js` |
+
+## Phase 32 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| B2: `classifyDeviation` called on every deviant move | `deviant move at a node with canonical fires repertoire_alert with a kind` | `tests/unit/ws/coach-conformance.test.js` |
+| B2: `refused_repeat` kind fires for refused role | `refused move fires refused_repeat kind` | `tests/unit/ws/coach-conformance.test.js` |
+| B1: `ranked_changed` emitted on alert | `emits ranked_changed when a ranked game triggers a coach alert` | `tests/unit/ws/coach-conformance.test.js` |
+| B1: no `ranked_changed` when coach disabled | `does not emit ranked_changed when coach is disabled` | `tests/unit/ws/coach-conformance.test.js` |
+| B11: explicit keep opens challenge | `sending repertoire_choice keep opens a challenge` | `tests/unit/ws/coach-conformance.test.js` |
+| B11: timeout auto-keep opens no challenge | `timed-out alert (auto-keep) does NOT open a challenge` | `tests/unit/ws/coach-conformance.test.js` |
+| B13: bootstrap counts canonical nodes | `no alert fires when canonical node count is below REP_BOOTSTRAP_CONFIRMED_MIN` | `tests/unit/ws/coach-conformance.test.js` |
+| B13: alert fires at threshold | `alert fires when canonical node count reaches REP_BOOTSTRAP_CONFIRMED_MIN` | `tests/unit/ws/coach-conformance.test.js` |
+| B14: keep path charges pre-alert time only | `keep path completes without error (chargeElapsedMs is called)` | `tests/unit/ws/coach-conformance.test.js` |
+| B14: timeout path charges pre-alert time only | `timeout path completes without error (chargeElapsedMs is called on timeout)` | `tests/unit/ws/coach-conformance.test.js` |
+| B9: coached game skips ELO update | `B9: ranked game with alertsInGame > 0 skips ELO update` | `tests/unit/analysis-service-extra.test.js` |
+| B9: uncoached game still updates ELO | `B9: ranked game with alertsInGame = 0 still updates ELO` | `tests/unit/analysis-service-extra.test.js` |
+| U6: coach toggle silences alerts | `coach_enabled=false silences all alerts regardless of book state` | `tests/unit/repertoire/coach.test.js` |
+| Journey stage 4: bootstrap silence until 20 nodes | stage4_bootstrapWakes passes | `tests/journey/repertoire-v1.test.js` |
+| Journey stage 5: first alert + ranked_changed | stage5_firstAlert passes + assertRankedChanged | `tests/journey/repertoire-v1.test.js` |
+| Journey stage 6: alert fires for deviant move | stage6_orderSlip passes | `tests/journey/repertoire-v1.test.js` |

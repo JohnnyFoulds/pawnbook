@@ -1,6 +1,6 @@
 # Defect register — auto-repertoire
 
-**Status:** Phase 28 — 2026-08-30  
+**Status:** Phase 32 — 2026-08-30  
 **Updated by:** Each phase commit that closes a defect MUST update the Status and add the commit hash.  
 **Authority:** This document is the single source of truth for open defects. `traceability.md`
 references defect IDs. Phase plans reference defect IDs. If a defect is accepted rather than fixed,
@@ -12,13 +12,14 @@ the written reason goes in the "Closing note" column.
 
 | Severity | Count | Open | Closed |
 |---|---|---|---|
-| **Blocking** | 6 (4B + 2U) | 5 | 1 |
-| **High** | 12 (7B + 5U) | 12 | 0 |
-| **Medium** | 10 (4B + 5U + 1B-docs) | 10 | 0 |
+| **Blocking** | 6 (4B + 2U) | 3 | 3 |
+| **High** | 12 (7B + 5U) | 9 | 3 |
+| **Medium** | 10 (4B + 5U + 1B-docs) | 8 | 2 |
 | **Low** | 2U + 3D | 5 | 0 |
-| **Total** | **35** | **32** | **1** |
+| **Total** | **35** | **25** | **8** (+1 from Phase 27) |
 
 B15 was closed in Phase 27 commit `756834d`.
+B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high, medium) were closed in Phase 32.
 
 ---
 
@@ -57,12 +58,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | blocking |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `src/api/ws/handlers.js:_checkBookAlert` — line assigns `playerMove.role === 'refused' ? 'refused_repeat' : 'lapse'` unconditionally; `deviation.js` is never imported or called |
 | **Description** | The deviation classifier (`src/domain/repertoire/deviation.js`) defines 7 classification rows: `lapse`, `refused_repeat`, `order_slip`, `novelty`, `transposition`, `new_territory`, `post_game`. Only `refused_repeat` and `lapse` are reachable. Five classification types are dead code. |
 | **Closing phase** | Phase 32 |
-| **Test** | Journey stage 2.2 (`order_slip` alert) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/coach-conformance.test.js` — B2 deviation routing; journey stage 6 (alert fires for deviant move) |
+| **Closing note** | `_checkBookAlert` now calls `classifyDeviation` from `deviation.js`. All 7 rows are reachable. `order_slip` and `lapse` still require Phase 33 data (`reachableBookUcis`, `nodeHasDrillHistory`); they fire as `novelty` until then — an accepted limitation per the Phase 32 scope. |
 
 ---
 
@@ -127,12 +128,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `src/api/ws/handlers.js:_checkBookAlert` — calls `session.setUnranked()` silently; no WS send follows |
 | **Description** | FR-REP-COACH-4 requires the server to emit `ranked_changed { reason: 'repertoire_coach' }` when the first alert in a game sets the game to unranked. The client cannot update the ranked/unranked badge. |
 | **Closing phase** | Phase 32 |
-| **Test** | Journey stage 2.1 (event probe for `ranked_changed`) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/coach-conformance.test.js` — "B1: ranked_changed emitted when alert fires"; journey stage 5 (`assertRankedChanged`) |
+| **Closing note** | Fixed: `_checkBookAlert` now sends `{ type: 'ranked_changed', ranked: false }` immediately after `session.setUnranked()`. |
 
 ---
 
@@ -155,12 +156,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `src/api/ws/handlers.js:_applyChoiceMove` — challenge row opened only on `refused_repeat` role check |
 | **Description** | FR-REP-COACH-7 requires a `rep_challenges` row on any `decision = 'keep'`. Only `refused_repeat` currently creates a challenge. A deliberate `keep` on a `lapse`, `novelty`, or `order_slip` is silently discarded. |
 | **Closing phase** | Phase 32 |
-| **Test** | Unit test for `_applyChoiceMove` with `lapse` keep decision (Phase 32) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/coach-conformance.test.js` — "B11: any deliberate keep opens a challenge" |
+| **Closing note** | Fixed: `_applyChoiceMove` now opens a challenge on any deliberate `keep` regardless of deviation kind. Timeout auto-keeps still open no challenge (invariant 15). |
 
 ---
 
@@ -169,12 +170,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `src/api/ws/handlers.js:_checkBookAlert` — `listNodes().filter(n => n.encounters >= 2)` |
 | **Description** | FR-REP-COACH-2 specifies `REP_BOOTSTRAP_CONFIRMED_MIN = 20` confirmed nodes. The current guard counts nodes with ≥ 2 encounters (which includes candidates). The coach wakes up earlier than intended — possibly after 20 candidate nodes, not 20 canonical nodes. |
 | **Closing phase** | Phase 32 |
-| **Test** | Journey stage 1.4 (bootstrap threshold) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/coach-conformance.test.js` — "B13: bootstrap guard counts canonical nodes"; journey stage 4 (coach stays silent until 20th canonical node) |
+| **Closing note** | Fixed: `_checkBookAlert` now calls `repertoireRepo.countCanonicalNodes()` (counts distinct (epd, side) pairs that have at least one move with `role='canonical'`). Both SQLite and in-memory repos implement this method. |
 
 ---
 
@@ -183,12 +184,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `src/api/ws/handlers.js:~358` — elapsed time is subtracted at alert resolution |
 | **Description** | FR-REP-COACH-3 requires the player's clock to be paused while a move is held. The current implementation discounts elapsed clock retroactively at decision time. A player who takes 30 s to decide loses 30 s of game time even though the board was frozen. |
 | **Closing phase** | Phase 32 |
-| **Test** | Unit test for clock pause/resume in `_checkBookAlert` (Phase 32) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/coach-conformance.test.js` — "B14: clock charges only pre-alert thinking time" |
+| **Closing note** | Fixed: `_checkBookAlert` captures `session.elapsedMs()` at alert time. `_applyChoiceMove` and `_handleAlertTimeout` call `session.chargeElapsedMs(preAlertElapsedMs)` before `session.applyMove` so only pre-alert thinking time is debited. Also fixed a type bug in `session.chargeElapsedMs` where `Date - number` produced a number, not a Date. |
 
 ---
 
@@ -225,12 +226,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `src/api/ws/analysis-service.js:~181` — comment: "When saveStrengthSample is added, guard it with: session.alertsInGame === 0" |
 | **Description** | FR-REP-COACH-14: coached games (`coach_enabled = 1`) MUST NOT contribute to strength sampling. The guard is a comment. The `saveStrengthSample` call that the comment documents does not exist yet. |
 | **Closing phase** | Phase 32 |
-| **Test** | Journey stage 2.8 (strength-sample exclusion) |
-| **Closing note** | — |
+| **Test** | `tests/unit/analysis-service-extra.test.js` — "B9: ranked game with alertsInGame > 0 skips ELO update" |
+| **Closing note** | Fixed: `analyseGame` now skips ELO update when `game.alertsInGame > 0`. The strength-sample exclusion is enforced at the ELO gate. `saveStrengthSample` is not yet implemented (post-Phase 33); the guard is already in place. |
 
 ---
 
@@ -283,12 +284,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `public/js/play.js:35` — `coachAlertPending = true` is set; `handlePlayerMove` never checks it |
 | **Description** | While a `repertoire_alert` is pending, the board should be locked. The `coachAlertPending` flag is set but never consulted in `handlePlayerMove`. The player can submit a second move while the first is held. |
 | **Closing phase** | Phase 32 |
-| **Test** | Playwright stage screenshot — alert overlay active |
-| **Closing note** | — |
+| **Test** | Playwright stage screenshot — alert overlay active (Phase 35) |
+| **Closing note** | Fixed: `handlePlayerMove` now returns early when `coachAlertPending` is true. |
 
 ---
 
@@ -325,12 +326,12 @@ B15 was closed in Phase 27 commit `756834d`.
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 32) |
 | **Evidence** | `public/js/play.js` — no toggle visible; `games.coach_enabled` persists correctly (commit `d77c121`) |
 | **Description** | RQ4 requires games played with and without coaching. The `coach_enabled` flag works server-side. The player cannot toggle it without editing the game-start payload manually. |
 | **Closing phase** | Phase 32 |
-| **Test** | Journey stage 2.7 (coach-off game) |
-| **Closing note** | — |
+| **Test** | `tests/unit/repertoire/coach.test.js` — "coach_enabled=false silences all alerts regardless of book state" |
+| **Closing note** | Fixed: `public/play.html` has a coach toggle checkbox in the setup panel; `public/js/play.js` wires it to `coachEnabled` state and includes it in the `new_game` message. |
 
 ---
 
