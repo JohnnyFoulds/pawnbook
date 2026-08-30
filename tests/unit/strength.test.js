@@ -12,7 +12,6 @@ import Database from 'better-sqlite3';
 import { describe, it, expect } from 'vitest';
 
 import { applySchema } from '../../src/adapters/sqlite/schema.js';
-
 import { scaledError, playingStrength } from '../../src/domain/analysis/grade.js';
 import {
   STRENGTH_ANCHOR_ELO, STRENGTH_ANCHOR_ASE, STRENGTH_ELO_PER_ASE,
@@ -263,7 +262,7 @@ describe('calibration: refit-strength', () => {
     try {
       execFileSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), '../../scripts/refit-strength.js'),
         '--db', dbPath, '--dry-run'], { encoding: 'utf8', env: { ...process.env, STRENGTH_MODEL_PATH: modelPath } });
-    } catch (e) {
+    } catch {
       threw = true;
     } finally { rmSync(dir, { recursive: true, force: true }); }
     expect(threw).toBe(false);
@@ -275,16 +274,13 @@ describe('calibration: refit-strength', () => {
     for (let i = 0; i < 7; i++) rows.push({ gameId: `gb-${i}`, opponentElo: 1600, n: 20, ase: 0.26, sd: 0.05, side: 'opponent' });
     for (let i = 0; i < 7; i++) rows.push({ gameId: `gc-${i}`, opponentElo: 1900, n: 20, ase: 0.20, sd: 0.05, side: 'opponent' });
     const { dbPath, dir } = makeTmpDb(rows);
-    const modelPath = makeTmpModelJson(dir);
-    // The script reads STRENGTH_COEFF_VERSION from balance.js (current), so next version = VER+1
-    // Pass the model path via the environment variable the script uses
     // NOTE: since the script hard-codes calibration/strength-model.json relative to ROOT,
     // this test uses --dry-run to verify the logic runs without hitting the file.
     let threw = false, output = '';
     try {
       output = execFileSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), '../../scripts/refit-strength.js'),
         '--db', dbPath, '--dry-run'], { encoding: 'utf8', env: { ...process.env } });
-    } catch (e) {
+    } catch {
       threw = true;
     } finally { rmSync(dir, { recursive: true, force: true }); }
     expect(threw).toBe(false);

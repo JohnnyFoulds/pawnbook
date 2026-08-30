@@ -360,8 +360,8 @@ export const V1_JOURNEY = [
   {
     name: 'Stage 2: First confirmations (days 3-4)',
     fn: stage2_firstConfirmations,
-    expectFail: true,  // B3 prevents confirmation until Phase 29
-    failDefects: ['B3'],
+    expectFail: false,  // B3 fixed in Phase 29
+
   },
   {
     name: 'Stage 3: Bootstrap silence (days 5-8)',

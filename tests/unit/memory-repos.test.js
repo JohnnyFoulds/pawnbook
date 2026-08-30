@@ -45,9 +45,9 @@ describe('InMemoryGameRepository — listRecent and savePreEval branch coverage'
     const repo = new InMemoryGameRepository();
     repo.savePreEval('g1', 0, 'fen1', {});
     const evals = repo.getEvals('g1');
-    expect(evals[0].cpWhite).toBeNull();
-    expect(evals[0].mateIn).toBeNull();
-    expect(evals[0].bestMoveUci).toBeNull();
+    expect(evals[0].cp_white).toBeNull();
+    expect(evals[0].mate_in).toBeNull();
+    expect(evals[0].best_move_uci).toBeNull();
     expect(evals[0].pv).toBeNull();
   });
 });
