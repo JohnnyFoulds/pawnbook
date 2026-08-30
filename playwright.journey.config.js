@@ -17,7 +17,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const JOURNEY_PORT = 3002;
-const JOURNEY_DB   = process.env.JOURNEY_DB ?? '/tmp/pawnbook-journey.db';
+// JOURNEY_DB is the path to the SQLite file; DATA_DIR is its parent directory.
+const JOURNEY_DB   = process.env.JOURNEY_DB ?? '/tmp/pawnbook-journey/chess.db';
+const JOURNEY_DIR  = JOURNEY_DB.replace(/\/[^/]+$/, '');
 
 export default defineConfig({
   testDir: './tests/playwright',
@@ -40,7 +42,7 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       PORT:         String(JOURNEY_PORT),
-      DATA_DIR:     JOURNEY_DB,
+      DATA_DIR:     JOURNEY_DIR,
       ENGINE_MODE:  'fake',
       NODE_ENV:     'test',
     },
