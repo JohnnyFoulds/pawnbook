@@ -714,3 +714,30 @@ to the Phase 26 review explaining what its review method missed.
 - `docs/features/repertoire/feature_steps.md` — Phase 37 entry (this section)
 
 **DoD:** `make verify` green; no OPEN defects in the register (one ACCEPTED); D1/D2/D3 all CLOSED; Phase 26 review amended; traceability.md accurate.
+
+---
+
+## Phase 38 — B7 journey end-to-end
+
+Branch: `feat/phase-38-b7-challenger-promotion`
+
+### Objective
+
+The Phase 37 reconciliation marked B7 CLOSED (Phase 31). The longitudinal journey harness (Stage 8) proved it was not: the promotion transaction silently rolled back on every run. Three defects were present simultaneously in the journey path — none visible from unit tests alone.
+
+### Root causes fixed
+
+1. **`hasAlert` detection in `journey-dsl.js`** — for a 3-move divergence (e4, Nf3, Bb5), prior `move_accepted` messages for e4 and Nf3 sat in `ws._messages`. The original condition evaluated `lastOfType('move_accepted')` (returns the Nf3 message, truthy) so `!truthy = false` — the alert was never acted on. Fixed: check `ws._messages[ws._messages.length - 1]?.type === 'repertoire_alert'` (chronologically last message).
+
+2. **Rule 9 alternation firing before Rule 3** — Stage 5 used `alertAction:'timeout'` which recorded a Bb5 observation. After Stage 7 (`keep`) and Stage 8 (second observation), `challengerRecentCount = 3 >= REP_ALT_ALTERNATION_MIN(3)` → Rule 9 (`settled_both`) fired instead of Rule 3. Fixed: Stage 5 uses `alertAction:'book'` so the player accepts Bc4 and no Bb5 observation is recorded. `challengerRecentCount = 2 < 3` → Rule 9 skipped → Rule 3 fires.
+
+3. **FOREIGN KEY constraint in promotion transaction** — `upsertSuppression` was called before `appendChangelog`. `rep_suppressions.changelog_id` is a FOREIGN KEY on `rep_changelog(id)`; SQLite checks it at statement execution time. The insert failed immediately, the outer `log.warn` catch in `_resolveOne` swallowed it with "single challenge resolution failed", and the challenge remained `status='open'`. Fixed: `appendChangelog` moved before `upsertSuppression` in `challenge-service.js`.
+
+### Files changed
+
+- `src/api/ws/challenge-service.js` — reordered `appendChangelog` before `upsertSuppression` in promotion transaction
+- `src/api/ws/handlers.js` — threaded `clock` into `deps`, `handleRepertoireChoice`, `_applyChoiceMove`; added `session.isOver` guard; fixed `openedAt` to use `clock.now().getTime()`
+- `tests/support/journey/journey-dsl.js` — fixed `hasAlert` to check chronologically last message; added `alertAction` option with `'timeout'`/`'keep'`/`'book'` semantics; added microtask drain after `scheduler.fireAll()`
+- `tests/support/journey/journeys/v1.js` — `DIVERGENT_MOVE_WHITE` changed to 3-move Ruy Lopez; Stage 5 `alertAction:'book'`; Stage 7 `alertAction:'keep'`; Stage 8 `alertAction:'timeout'`; Stages 8 and 9 `expectFail:false`
+
+**DoD:** `make verify` green; 1235 tests pass; 91.95% branch coverage; `npm run journey` 15/15 stages; B7 register entry updated to Phase 38; all 35 defects CLOSED or ACCEPTED.

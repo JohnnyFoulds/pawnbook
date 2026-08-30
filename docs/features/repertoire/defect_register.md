@@ -1,6 +1,6 @@
 # Defect register — auto-repertoire
 
-**Status:** Phase 37 — 2026-08-30 (final reconciliation)  
+**Status:** Phase 38 — 2026-08-30 (B7 journey-verified)  
 **Updated by:** Each phase commit that closes a defect MUST update the Status and add the commit hash.  
 **Authority:** This document is the single source of truth for open defects. `traceability.md`
 references defect IDs. Phase plans reference defect IDs. If a defect is accepted rather than fixed,
@@ -12,14 +12,13 @@ the written reason goes in the "Closing note" column.
 
 | Severity | Count | Open | Closed |
 |---|---|---|---|
-| **Blocking** | 6 (4B + 2U) | 3 | 3 |
-| **High** | 12 (7B + 5U) | 9 | 3 |
-| **Medium** | 10 (4B + 5U + 1B-docs) | 8 | 2 |
-| **Low** | 2U + 3D | 5 | 0 |
-| **Total** | **35** | **25** | **8** (+1 from Phase 27) |
+| **Blocking** | 6 (4B + 2U) | 0 | 6 |
+| **High** | 12 (7B + 5U) | 0 | 12 |
+| **Medium** | 10 (4B + 5U + 1B-docs) | 0 | 10 (U12 accepted) |
+| **Low** | 2U + 3D | 0 | 5 |
+| **Total** | **35** | **0** | **35** |
 
-B15 was closed in Phase 27 commit `756834d`.
-B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high, medium) were closed in Phase 32.
+B15 closed Phase 27 (`756834d`). B3/B4/B5/B10/B12 closed Phase 29 (`803a0b0`). U3/U5/U8 closed Phase 30. B6/B7 closed Phase 31 (audit evidence wired). B2/B1/B11/B13/B14/B9 + U9/U6 closed Phase 32. U4/B8/U7/U2/U1 closed Phases 33–34. U10 closed Phase 35. U13 closed Phase 36. D1/D2/D3/U12 closed Phase 37. B7 journey end-to-end confirmed Phase 38 (`e0af250`) — the Phase 31 fix was incomplete: `hasAlert` detection missed multi-move divergence, Rule 9 alternation fired before Rule 3, and a FOREIGN KEY constraint silently rolled back the promotion transaction.
 
 ---
 
@@ -30,12 +29,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | blocking |
-| **Status** | **CLOSED** (Phase 31, commit `c5a658f`) |
+| **Status** | **CLOSED** (Phase 38, commit `e0af250`) |
 | **Evidence** | `src/api/ws/challenge-service.js:_gatherEvidence`; search for `engine_delta_win_pts` — zero writers in the codebase |
 | **Description** | `_gatherEvidence` supplied `challenge.engineDeltaWinPts ?? null`. The `engine_delta_win_pts` column was never written anywhere. All challenges therefore fell through to rule 6 (incumbent wins) or rule 7 (abandoned). No refused move could ever be adopted. |
-| **Closing phase** | Phase 31 |
-| **Test** | `tests/unit/ws/audit-service.test.js` — 16 tests covering engine evidence writes, null engineDelta path, gate verdict error catch, trend/result error catches |
-| **Closing note** | Fixed: `audit-service.js` runs depth-22 A/B eval of challenger vs incumbent; `engineDeltaWinPts`, `gateVerdict`, trend at +[2,4,6] plies, and Elo-adjusted result performance computed and persisted. `_resolveOne` now async, calls `runChallengeAudit` before `resolveChallenge`. Rules 2–5 reachable. |
+| **Closing phase** | Phase 38 |
+| **Test** | `tests/unit/ws/audit-service.test.js` — 16 tests covering engine evidence writes, null engineDelta path, gate verdict error catch, trend/result error catches; `tests/journey/repertoire-v1.test.js` stage 8 — Rule 3 fires end-to-end with promotion changelog entry written |
+| **Closing note** | Phase 31 wired `audit-service.js` for engine evidence (`engineDeltaWinPts`, `gateVerdict`, trends, result performance) and made rules 1–5 reachable in unit tests. Phase 38 confirmed the promotion path end-to-end via the longitudinal journey harness, fixing three additional defects the unit tests could not see: (1) `hasAlert` detection in `journey-dsl.js` evaluated `lastOfType('move_accepted')` for multi-move divergence instead of checking the chronologically last message type; (2) Rule 9 alternation fired before Rule 3 because prior `alertAction:'timeout'` games accumulated 3 challenger observations in the recency window — fixed by using `alertAction:'book'` for the coach-wakeup game so Bb5 gets no pre-challenge observation; (3) `upsertSuppression` was called before `appendChangelog` inside the promotion transaction, causing a FOREIGN KEY constraint failure that the outer `log.warn` catch silently swallowed — fixed by reordering `appendChangelog` first. |
 
 ---
 
