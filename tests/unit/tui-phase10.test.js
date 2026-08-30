@@ -380,9 +380,83 @@ describe('clock: TUI displays server clock, never decides flag-fall', () => {
   });
 });
 
+// ── Repertoire TUI screen (U10) ───────────────────────────────────────────────
+
+describe('repertoire TUI screen (U10)', () => {
+  it('tui/screens/repertoire.js exists and exports createRepertoireScreen', () => {
+    const src = readSrc('tui/screens/repertoire.js');
+    expect(src).toMatch(/createRepertoireScreen/);
+    expect(src).toMatch(/export function createRepertoireScreen/);
+  });
+
+  it('repertoire screen fetches /api/repertoire/coverage', () => {
+    const src = readSrc('tui/screens/repertoire.js');
+    expect(src).toMatch(/\/api\/repertoire\/coverage/);
+  });
+
+  it('repertoire screen fetches /api/repertoire/changelog', () => {
+    const src = readSrc('tui/screens/repertoire.js');
+    expect(src).toMatch(/\/api\/repertoire\/changelog/);
+  });
+
+  it('repertoire screen fetches /api/repertoire/gaps', () => {
+    const src = readSrc('tui/screens/repertoire.js');
+    expect(src).toMatch(/\/api\/repertoire\/gaps/);
+  });
+
+  it('repertoire screen renders coverage bar', async () => {
+    const { createRepertoireScreen } = await import('../../tui/screens/repertoire.js');
+    const mockApiCall = async (_host, path) => {
+      if (path.includes('/coverage')) return { coveragePct: 75, coveredNodes: 15, canonicalCount: 12, candidateCount: 4, totalNodes: 20 };
+      if (path.includes('/changelog')) return { entries: [] };
+      if (path.includes('/challenges')) return { challenges: [] };
+      if (path.includes('/gaps')) return { gaps: [] };
+      return {};
+    };
+    const screen = createRepertoireScreen({ host: 'localhost:3000', apiCall: mockApiCall });
+    await screen.boot();
+    const output = screen.render();
+    expect(output).toMatch(/75%/);
+    expect(output).toMatch(/12 book moves/);
+    expect(output).toMatch(/\[█+░+\]/);
+  });
+
+  it('repertoire screen shows error when API fails', async () => {
+    const { createRepertoireScreen } = await import('../../tui/screens/repertoire.js');
+    const failApiCall = async () => { throw new Error('connection refused'); };
+    const screen = createRepertoireScreen({ host: 'localhost:3000', apiCall: failApiCall });
+    await screen.boot();
+    const output = screen.render();
+    expect(output).toMatch(/Error:/);
+    expect(output).toMatch(/connection refused/);
+  });
+
+  it('repertoire screen renders gap entries', async () => {
+    const { createRepertoireScreen } = await import('../../tui/screens/repertoire.js');
+    const mockApiCall = async (_host, path) => {
+      if (path.includes('/coverage')) return { coveragePct: 60, coveredNodes: 12, canonicalCount: 10, candidateCount: 2, totalNodes: 20 };
+      if (path.includes('/changelog')) return { entries: [] };
+      if (path.includes('/challenges')) return { challenges: [] };
+      if (path.includes('/gaps')) return { gaps: [{ opponentReplyUci: 'e7e5', reachProb: 0.35 }] };
+      return {};
+    };
+    const screen = createRepertoireScreen({ host: 'localhost:3000', apiCall: mockApiCall });
+    await screen.boot();
+    const output = screen.render();
+    expect(output).toMatch(/e7e5/);
+    expect(output).toMatch(/35\.0%/);
+  });
+
+  it('bin/chess.js has repertoire subcommand', () => {
+    const src = readSrc('bin/chess.js');
+    expect(src).toMatch(/createRepertoireScreen/);
+    expect(src).toMatch(/subcommand.*===.*repertoire|repertoire.*subcommand/);
+  });
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const ESC = '\x1b';  
+const ESC = '\x1b';
 const ANSI_ESCAPE = new RegExp(ESC + '\\[[0-9;]*m', 'g');
 
 /** Strip ANSI escape sequences for visible-character counting. */
