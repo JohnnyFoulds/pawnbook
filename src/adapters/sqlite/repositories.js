@@ -772,6 +772,7 @@ export class SqliteRepertoireRepository {
       resultIncumbentPerf: 'result_incumbent_perf', resultIncumbentN: 'result_incumbent_n',
       status: 'status', resolutionRule: 'resolution_rule',
       resolvedAt: 'resolved_at', resolvedBy: 'resolved_by', gateReason: 'gate_reason',
+      gateVerdict: 'gate_verdict',
     };
     const sets = [];
     const params = {};
@@ -1000,7 +1001,8 @@ function _challengeRow(r) {
     resultChallengerPerf: r.result_challenger_perf, resultChallengerN: r.result_challenger_n,
     resultIncumbentPerf: r.result_incumbent_perf, resultIncumbentN: r.result_incumbent_n,
     status: r.status, resolutionRule: r.resolution_rule,
-    resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, gateReason: r.gate_reason,
+    resolvedAt: r.resolved_at, resolvedBy: r.resolved_by,
+    gateReason: r.gate_reason, gateVerdict: r.gate_verdict ?? null,
     provenanceId: r.provenance_id, bookVersion: r.book_version,
   };
 }

@@ -492,3 +492,42 @@ coverage ≥ 90%; invariant 16 test passes.
 
 **DoD:** `make verify` green; 845 tests pass; coverage ≥ 90%; U3, U5, U8 closed;
 `REP_AUTO_PROMOTE` documented and gating Phase 31.
+
+---
+
+## Phase 31 — Audits and challenge evidence
+
+**Status:** Complete — 2026-08-30
+
+**Branch:** `feat/phase-31-audit-evidence`
+
+**Covers:**
+- `src/api/ws/audit-service.js` — new module: depth-22 MultiPV-3 A/B eval of challenger and
+  incumbent, `engineDeltaWinPts` computation (B7 headline fix), `gateVerdict` via `runGates`
+  (B6), trend at +[2,4,6] plies from `move_evals`, Elo-adjusted result performance
+- `src/api/ws/challenge-service.js` — `_resolveOne` is now `async`, calls `runChallengeAudit`
+  before resolution; re-reads fresh challenge after audit so `_gatherEvidence` sees updated
+  evidence; `gateVerdict` plumbed through from challenge row
+- `src/api/ws/repertoire-service.js` — passes `enginePool` and `gameRepo` through to
+  `resolveOpenChallenges`
+- `src/api/ws/analysis-service.js` — passes `enginePool` to `updateRepertoire`
+- `src/adapters/sqlite/repositories.js` — `gateVerdict: 'gate_verdict'` added to
+  `updateChallenge` colMap; `_challengeRow` maps `gate_verdict`
+- `src/adapters/sqlite/schema.js` — `gate_verdict TEXT` added to `CREATE TABLE rep_challenges`
+  DDL and Phase 31 `ALTER TABLE` migration for existing databases
+- `src/shared/balance.js` — `REP_AUTO_PROMOTE` flipped to `true` (engine evidence now live)
+- `docs/game/balance.md` — `REP_AUTO_PROMOTE` row updated to reflect `true` and flip condition
+
+**Tests:**
+- `tests/unit/ws/audit-service.test.js` — 16 tests covering: engine evidence writes, null
+  enginePool skip, already-set skip, delta near-zero for fake engine, error swallowing,
+  null engineDelta when cp=null, gate verdict error catch, trend/result error catches,
+  draw result perf, incumbent result perf, trend at plies
+
+**Journey result after Phase 31:**
+- Stage 8 (engine evidence computed) — now passes
+- Stage 9 (auto-promotion from engine evidence) — now passes
+- B6 and B7 closed
+
+**DoD:** `make verify` green; 861 tests pass; coverage ≥ 90%; B6, B7 closed;
+`REP_AUTO_PROMOTE = true` with engine audit evidence live.
