@@ -341,6 +341,49 @@ describe('InMemoryRepertoireRepository — extended branches', () => {
     expect(open).toHaveLength(2);
   });
 
+  it('getChangelogRange: returns all entries ascending when no filters', () => {
+    const repo = new InMemoryRepertoireRepository();
+    const D1 = 1_000_000;
+    const D2 = 2_000_000;
+    repo.appendChangelog({ id: 'cl1', kind: 'confirm', at: D2, epd: EPD, side: 'white', bookVersion: 1, provenanceId: 1 });
+    repo.appendChangelog({ id: 'cl2', kind: 'promote', at: D1, epd: EPD, side: 'white', bookVersion: 2, provenanceId: 1 });
+    const result = repo.getChangelogRange();
+    expect(result).toHaveLength(2);
+    expect(result[0].at).toBe(D1);
+    expect(result[1].at).toBe(D2);
+  });
+
+  it('getChangelogRange: filters by from/to', () => {
+    const repo = new InMemoryRepertoireRepository();
+    const D1 = 1_000; const D2 = 2_000; const D3 = 3_000;
+    repo.appendChangelog({ id: 'a', kind: 'confirm', at: D1, epd: EPD, side: 'white', bookVersion: 1, provenanceId: 1 });
+    repo.appendChangelog({ id: 'b', kind: 'confirm', at: D2, epd: EPD, side: 'white', bookVersion: 2, provenanceId: 1 });
+    repo.appendChangelog({ id: 'c', kind: 'confirm', at: D3, epd: EPD, side: 'white', bookVersion: 3, provenanceId: 1 });
+    const result = repo.getChangelogRange({ from: D1, to: D2 });
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe('a');
+    expect(result[1].id).toBe('b');
+  });
+
+  it('getChangelogRange: cursor is exclusive lower bound', () => {
+    const repo = new InMemoryRepertoireRepository();
+    const D1 = 1_000; const D2 = 2_000;
+    repo.appendChangelog({ id: 'a', kind: 'confirm', at: D1, epd: EPD, side: 'white', bookVersion: 1, provenanceId: 1 });
+    repo.appendChangelog({ id: 'b', kind: 'confirm', at: D2, epd: EPD, side: 'white', bookVersion: 2, provenanceId: 1 });
+    const result = repo.getChangelogRange({ cursor: D1 });
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('b');
+  });
+
+  it('getChangelogRange: respects limit', () => {
+    const repo = new InMemoryRepertoireRepository();
+    for (let i = 0; i < 5; i++) {
+      repo.appendChangelog({ id: `e${i}`, kind: 'confirm', at: i * 1000, epd: EPD, side: 'white', bookVersion: i, provenanceId: 1 });
+    }
+    const result = repo.getChangelogRange({ limit: 3 });
+    expect(result).toHaveLength(3);
+  });
+
   it('getChangelog: null at sorts as 0 (covers ?? 0 branches)', () => {
     const repo = new InMemoryRepertoireRepository();
     repo.appendChangelog({ id: 'cl1', kind: 'promote', at: null, epd: EPD, side: 'white',

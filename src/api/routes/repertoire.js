@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { REP_REVERSAL_SUPPRESS_ENCOUNTERS } from '../../shared/balance.js';
 import { logger } from '../../config.js';
 import { computeCoverage, computeGapReport } from '../ws/reach-service.js';
+import { buildTimeline, buildGrowthSeries, buildMilestones } from '../../domain/repertoire/history.js';
 
 const log = logger.child({ mod: 'repertoire-routes' });
 
@@ -223,6 +224,21 @@ export function makeRepertoireRouter({ repertoireRepo }) {
       res.json(result);
     } catch (err) {
       log.error({ err }, 'GET /coverage failed');
+      res.status(500).json({ error: 'internal_error', message: err.message });
+    }
+  });
+
+  /** GET /api/repertoire/journey — timeline, growth series and milestones derived from the changelog */
+  r.get('/journey', (_req, res) => {
+    try {
+      const entries = repertoireRepo.getChangelogRange({ limit: 500 });
+      res.json({
+        timeline:     buildTimeline(entries),
+        growthSeries: buildGrowthSeries(entries),
+        milestones:   buildMilestones(entries),
+      });
+    } catch (err) {
+      log.error({ err }, 'GET /journey failed');
       res.status(500).json({ error: 'internal_error', message: err.message });
     }
   });

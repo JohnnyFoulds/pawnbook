@@ -224,6 +224,58 @@ describe('invariant 16: maintenance idempotence', () => {
   });
 });
 
+// ─── SqliteRepertoireRepository.getChangelogRange ─────────────────────────────
+
+describe('SqliteRepertoireRepository.getChangelogRange', () => {
+  const PROV = 1; // provenance id=1 created by beforeEach
+  function clEntry(id, at, bv) {
+    return { id, kind: 'confirm', at, epd: EPD, side: SIDE, toUci: 'e2e4',
+      bookVersion: bv, provenanceId: PROV };
+  }
+
+  it('returns all entries in ascending at order with no filters', () => {
+    upsertNode();
+    repo.appendChangelog(clEntry('x1', 2_000_000, 1));
+    repo.appendChangelog(clEntry('x2', 1_000_000, 2));
+    const result = repo.getChangelogRange();
+    expect(result.length).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < result.length; i++) {
+      expect(result[i].at).toBeGreaterThanOrEqual(result[i - 1].at);
+    }
+  });
+
+  it('filters by from and to', () => {
+    upsertNode();
+    repo.appendChangelog(clEntry('y1', 10, 10));
+    repo.appendChangelog(clEntry('y2', 20, 11));
+    repo.appendChangelog(clEntry('y3', 30, 12));
+    const result = repo.getChangelogRange({ from: 10, to: 20 });
+    const ids = result.map(r => r.id);
+    expect(ids).toContain('y1');
+    expect(ids).toContain('y2');
+    expect(ids).not.toContain('y3');
+  });
+
+  it('cursor acts as exclusive lower bound', () => {
+    upsertNode();
+    repo.appendChangelog(clEntry('z1', 100, 20));
+    repo.appendChangelog(clEntry('z2', 200, 21));
+    const result = repo.getChangelogRange({ cursor: 100 });
+    const ids = result.map(r => r.id);
+    expect(ids).toContain('z2');
+    expect(ids).not.toContain('z1');
+  });
+
+  it('respects limit', () => {
+    upsertNode();
+    for (let i = 0; i < 5; i++) {
+      repo.appendChangelog(clEntry(`lim${i}`, 1000 + i, 100 + i));
+    }
+    const result = repo.getChangelogRange({ limit: 2 });
+    expect(result.length).toBeLessThanOrEqual(2);
+  });
+});
+
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 describe('error handling', () => {

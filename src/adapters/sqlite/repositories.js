@@ -853,6 +853,18 @@ export class SqliteRepertoireRepository {
     return row ? _changelogRow(row) : null;
   }
 
+  /** @param {{ from?: number, to?: number, cursor?: number, limit?: number }} [opts] @returns {Object[]} */
+  getChangelogRange({ from, to, cursor, limit = 500 } = {}) {
+    let query = 'SELECT * FROM rep_changelog WHERE 1=1';
+    const params = [];
+    if (from != null)   { query += ' AND at >= ?'; params.push(from); }
+    if (to != null)     { query += ' AND at <= ?'; params.push(to); }
+    if (cursor != null) { query += ' AND at > ?';  params.push(cursor); }
+    query += ' ORDER BY at ASC LIMIT ?';
+    params.push(limit);
+    return this._db.prepare(query).all(...params).map(_changelogRow);
+  }
+
   /** @param {Object} supp @returns {void} */
   upsertSuppression(supp) {
     this._db.prepare(`
