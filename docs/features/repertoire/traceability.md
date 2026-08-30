@@ -107,4 +107,20 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | U8: changelog renders SAN | `enriches entries with fromSan/toSan SAN fields` | `tests/unit/repertoire/routes.test.js` |
 | U3: Reverse button reachable | render test + reverse route coverage | `public/js/repertoire.js`, `src/api/routes/repertoire.js` |
 | U5: `repertoire_update` handled in clients | play.js handler + repertoire.js WS listener | `public/js/play.js`, `public/js/repertoire.js` |
+
+## Phase 31 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| B6: `rep_audits` rows written per challenge | `writes two audit rows — one per move` | `tests/unit/ws/audit-service.test.js` |
+| B7: `engineDeltaWinPts` computed and persisted | `writes engineDeltaWinPts to the challenge row` | `tests/unit/ws/audit-service.test.js` |
+| B7: `gateVerdict` computed and persisted | `writes gateVerdict to the challenge row` | `tests/unit/ws/audit-service.test.js` |
+| B7: null delta when engine returns null cp | `writes engineDelta null when engine returns cp: null, mate: null` | `tests/unit/ws/audit-service.test.js` |
+| B7: trend at +[2,4,6] plies | `populates trendChallenger when game evals exist at trend plies` | `tests/unit/ws/audit-service.test.js` |
+| B7: result performance — challenger | `computes resultChallengerPerf from finished games` | `tests/unit/ws/audit-service.test.js` |
+| B7: result performance — incumbent | `computes resultIncumbentPerf from incumbent games` | `tests/unit/ws/audit-service.test.js` |
+| B7: draw result perf | `draw result produces a non-null perf between 0 and 1` | `tests/unit/ws/audit-service.test.js` |
+| Audit error swallowing | `swallows errors and returns without throwing` | `tests/unit/ws/audit-service.test.js` |
+| Gate verdict error catch | `gateVerdict falls back to null when position eval throws` | `tests/unit/ws/audit-service.test.js` |
+| Trend/result error catches | `swallows errors from getObservationsForNode` | `tests/unit/ws/audit-service.test.js` |
 | `REP_AUTO_PROMOTE` kill switch | `balance: every parameter in balance.js is documented` | `tests/unit/config.test.js` |

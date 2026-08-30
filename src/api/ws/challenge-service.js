@@ -12,8 +12,11 @@ import {
   REP_REVERSAL_SUPPRESS_ENCOUNTERS,
   REP_ALT_ALTERNATION_MIN,
   REP_RECENCY_HALFLIFE_DAYS,
+  REP_AUTO_PROMOTE,
 } from '../../shared/balance.js';
 import { logger } from '../../config.js';
+
+import { runChallengeAudit } from './audit-service.js';
 
 const log = logger.child({ mod: 'challenge-service' });
 
@@ -22,22 +25,36 @@ const log = logger.child({ mod: 'challenge-service' });
  * Called after each game's rep_observations are written.
  * Always resolves — errors logged and swallowed.
  *
- * @param {{ repertoireRepo: object, bookVersion: number, provenanceId: number, nowMs?: number }} opts
+ * @param {{
+ *   repertoireRepo: object,
+ *   bookVersion: number,
+ *   provenanceId: number,
+ *   nowMs?: number,
+ *   enginePool?: object|null,
+ *   gameRepo?: object|null,
+ * }} opts
  */
-export async function resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId, nowMs = Date.now() }) {
+export async function resolveOpenChallenges({
+  repertoireRepo, bookVersion, provenanceId, nowMs = Date.now(),
+  enginePool = null, gameRepo = null,
+}) {
   try {
     const challenges = repertoireRepo.listOpenChallenges();
     for (const challenge of challenges) {
-      _resolveOne(challenge, repertoireRepo, bookVersion, provenanceId, nowMs);
+      await _resolveOne(challenge, repertoireRepo, bookVersion, provenanceId, nowMs, enginePool, gameRepo);
     }
   } catch (err) {
     log.warn({ err }, 'challenge resolution failed');
   }
 }
 
-function _resolveOne(challenge, repo, bookVersion, provenanceId, nowMs = Date.now()) {
+async function _resolveOne(challenge, repo, bookVersion, provenanceId, nowMs = Date.now(), enginePool = null, gameRepo = null) {
   try {
-    const evidence = _gatherEvidence(challenge, repo, nowMs);
+    await runChallengeAudit({ challenge, enginePool, repertoireRepo: repo, gameRepo, provenanceId, bookVersion });
+
+    // Re-read the challenge after audit writes so _gatherEvidence sees the updated evidence.
+    const fresh = repo.getChallenge(challenge.id) ?? challenge;
+    const evidence = _gatherEvidence(fresh, repo, nowMs);
     const { status, rule } = resolveChallenge(evidence);
 
     // Always update the running counters so the data is current
@@ -48,6 +65,12 @@ function _resolveOne(challenge, repo, bookVersion, provenanceId, nowMs = Date.no
     });
 
     if (status === 'open') return;
+
+    // Kill switch: hold all auto-promotions until Phase 31 engine evidence is confirmed live.
+    if (status === 'promoted' && !REP_AUTO_PROMOTE) {
+      log.info({ challengeId: challenge.id, rule }, 'promotion suppressed (REP_AUTO_PROMOTE=false)');
+      return;
+    }
 
     // Resolved — write all state changes atomically
     repo.transaction(() => {
@@ -179,7 +202,7 @@ function _gatherEvidence(challenge, repo, nowMs = Date.now()) {
     encountersSinceOpen,
     challengerObservations,
     engineDelta: challenge.engineDeltaWinPts ?? null,
-    gateVerdict: null, // Phase 26: depth-22 A/B audit
+    gateVerdict: challenge.gateVerdict ?? null,
     trendChallenger: challenge.trendChallenger ?? null,
     trendIncumbent: challenge.trendIncumbent ?? null,
     resultChallengerPerf: challenge.resultChallengerPerf ?? null,
