@@ -101,16 +101,8 @@ async function _resolveOne(challenge, repo, bookVersion, provenanceId, nowMs = D
         const node = repo.getNode(challenge.epd, challenge.side);
         const untilEncounters = (node?.encounters ?? 0) + REP_REVERSAL_SUPPRESS_ENCOUNTERS;
 
-        // Suppress the retired incumbent to prevent immediate re-promotion
-        repo.upsertSuppression({
-          epd: challenge.epd,
-          side: challenge.side,
-          moveUci: challenge.incumbentUci,
-          untilEncounters,
-          createdAt: now,
-          changelogId,
-        });
-
+        // appendChangelog MUST come before upsertSuppression — the suppression row has
+        // a FOREIGN KEY on changelog_id, so the changelog entry must exist first.
         repo.appendChangelog({
           id: changelogId,
           at: now,
@@ -128,6 +120,16 @@ async function _resolveOne(challenge, repo, bookVersion, provenanceId, nowMs = D
           }),
           provenanceId,
           bookVersion: newBookVersion,
+        });
+
+        // Suppress the retired incumbent to prevent immediate re-promotion
+        repo.upsertSuppression({
+          epd: challenge.epd,
+          side: challenge.side,
+          moveUci: challenge.incumbentUci,
+          untilEncounters,
+          createdAt: now,
+          changelogId,
         });
 
       } else if (status === 'settled_both') {
