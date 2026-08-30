@@ -400,7 +400,7 @@ describe('routes: GET /api/games/:id/review — strength fields', () => {
 
   it('the rolling aggregate is inverse-variance weighted, not a plain mean', async () => {
     const { app, gameRepo } = buildApp();
-    const { STRENGTH_ELO_PER_ASE: RATE, STRENGTH_ANCHOR_ELO: AEL, STRENGTH_ANCHOR_ASE: AAS, STRENGTH_ELO_MIN: EMIN, STRENGTH_ELO_MAX: EMAX } = await import('../../src/shared/balance.js');
+    const { STRENGTH_ANCHOR_ELO: AEL, STRENGTH_ANCHOR_ASE: AAS } = await import('../../src/shared/balance.js');
     // Two games: same ase (same point estimate) but different se (different weights)
     const g1 = addFinishedGame(gameRepo, { startedAt: NOW - 2000 });
     const g2 = addFinishedGame(gameRepo, { startedAt: NOW - 1000 });
@@ -869,7 +869,6 @@ describe('GET /api/stats - additional branch coverage', () => {
     // save directly without createdAt so it stays undefined (save() sets createdAt = Date.now(),
     // but we override by saving a puzzle without those fields via a custom puzzleRepo call)
     puzzleRepo._puzzles.set(pid, { id: pid, fen: `fen-null-ts-${pid}`, phase: 'opening' });
-    puzzleRepo._fenIndex.set(`fen-null-ts-${pid}`, pid);
     const res = await request(app).get('/api/stats');
     expect(res.status).toBe(200);
     const entry = res.body.mistakesByPhase.find(p => p.phase === 'opening');

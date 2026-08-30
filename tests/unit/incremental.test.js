@@ -154,7 +154,7 @@ describe('incremental: the queued job stores the result in move_evals(game_id, p
 
     const evals = gameRepo.getEvals(gameId);
     expect(evals).toHaveLength(1);
-    expect(evals[0]).toMatchObject({ gameId, ply, fen });
+    expect(evals[0]).toMatchObject({ game_id: gameId, ply, fen });
   });
 });
 
@@ -183,8 +183,8 @@ describe('incremental: pre-evaluated rows are indistinguishable from post-game p
     // Required fields for pipeline skip logic
     expect(row).toHaveProperty('ply');
     expect(row).toHaveProperty('fen');
-    expect(row).toHaveProperty('cpWhite');
-    expect(row).toHaveProperty('bestMoveUci');
+    expect(row).toHaveProperty('cp_white');
+    expect(row).toHaveProperty('best_move_uci');
   });
 });
 
@@ -217,7 +217,7 @@ describe('incremental: savePreEval uses INSERT OR IGNORE semantics', () => {
 
     const evals = gameRepo.getEvals(gameId);
     expect(evals.filter(e => e.ply === 1)).toHaveLength(1);
-    expect(evals[0].cpWhite).toBe(10); // first value preserved
+    expect(evals[0].cp_white).toBe(10); // first value preserved
   });
 });
 
