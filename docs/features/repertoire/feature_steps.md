@@ -531,3 +531,53 @@ coverage ≥ 90%; invariant 16 test passes.
 
 **DoD:** `make verify` green; 861 tests pass; coverage ≥ 90%; B6, B7 closed;
 `REP_AUTO_PROMOTE = true` with engine audit evidence live.
+
+---
+
+## Phase 32 — Coach conformance
+
+**Status:** Complete — 2026-08-30
+
+**Branch:** `feat/phase-32-coach-conformance`
+
+**Covers:**
+- `src/api/ws/handlers.js` — `_checkBookAlert` now calls `classifyDeviation` from
+  `src/domain/repertoire/deviation.js` (B2); emits `ranked_changed { ranked: false }` after
+  `session.setUnranked()` (B1); captures `preAlertElapsedMs` before pending and passes it to
+  both `_applyChoiceMove` and `_handleAlertTimeout` (B14); `countCanonicalNodes()` replaces
+  `listNodes().filter(...)` for bootstrap guard (B13); `_applyChoiceMove` opens a challenge on
+  any deliberate `keep` regardless of deviation kind (B11)
+- `src/domain/game/session.js` — fixed type bug in `chargeElapsedMs`: `new Date(now - ms)` 
+  instead of `now - ms` (raw number caused `_lastMoveAt.getTime is not a function` in B14)
+- `src/api/ws/analysis-service.js` — `analyseGame` skips ELO update when
+  `game.alertsInGame > 0` (B9 strength-sample exclusion)
+- `src/adapters/memory/repositories.js` — `countCanonicalNodes()` added to
+  `InMemoryRepertoireRepository`
+- `src/adapters/sqlite/repositories.js` — `countCanonicalNodes()` added to
+  `SqliteRepertoireRepository`
+- `public/play.html` — coach toggle checkbox added to setup panel (U6)
+- `public/js/play.js` — `coachEnabled` state variable wired to toggle; passed in `new_game`;
+  `handlePlayerMove` returns early when `coachAlertPending` is true (U9)
+- `tests/support/journey/journeys/v1.js` — `LONG_LINE_1` (10 moves) and `LONG_LINE_2`
+  (11 moves) added; Stage 3 plays both lines 3× each to reach 20 confirmed nodes for
+  bootstrap; Stages 4–6 `expectFail` set to `false`; Stage 5 asserts `ranked_changed`
+  (B1); Stage 6 asserts alert fires (B2 kind-agnostic in Phase 32)
+- `tests/support/journey/journey-dsl.js` — `book_alert` → `repertoire_alert` throughout
+- `tests/support/journey/probes.js` — `assertAlertKind` uses `repertoire_alert` type
+- `tests/support/journey/harness.js` — `wireEngine` guards against `isOver` before
+  `session.applyMove` to avoid race condition between resign and pending engine microtask
+- `tests/unit/ws/coach-conformance.test.js` — new file: 9 tests covering B1, B2, B11,
+  B13, B14 via `makeMessageHandler` with `InMemoryRepertoireRepository`
+- `tests/unit/analysis-service-extra.test.js` — B9 tests: `alertsInGame > 0` skips ELO;
+  `alertsInGame = 0` still updates ELO
+- `tests/unit/repertoire/coach.test.js` — updated `makeRepo` to add canonical moves for
+  each synthetic node (B13); `lapse` test updated to expect `novelty` (B2 Phase 32 routing)
+
+**Journey result after Phase 32:**
+- All 15 stages pass; no unhandled rejections
+- Stage 4 (bootstrap bootstrap silence) — passes with 20 confirmed nodes after 3× LONG_LINE_1 + 3× LONG_LINE_2
+- Stage 5 (first alert + ranked_changed) — passes
+- Stage 6 (order_slip → novelty in Phase 32) — passes
+
+**DoD:** `make verify` green; 873 tests pass (+ 2 expected-fail); coverage ≥ 90.09% branches;
+`npm run journey` green (15/15 stages); B1, B2, B9, B11, B13, B14, U6, U9 closed.

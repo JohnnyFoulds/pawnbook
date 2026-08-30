@@ -62,11 +62,11 @@ export async function playGame(harness, {
   for (const move of moves) {
     await harness.send(ws, { type: 'move', uci: move.uci });
 
-    // Handle book alerts: if a book_alert arrives, auto-continue
-    // If a book_alert is pending (pendingMoves), fire the alert timeout
+    // Handle repertoire alerts: if a repertoire_alert arrives, auto-continue
+    // If an alert is pending (pendingMoves), fire the alert timeout
     // which causes the handler to auto-apply the move after timeout
-    if (ws.messagesOfType('book_alert').length > 0 &&
-        ws.lastOfType('book_alert') &&
+    if (ws.messagesOfType('repertoire_alert').length > 0 &&
+        ws.lastOfType('repertoire_alert') &&
         !ws.lastOfType('move_accepted')) {
       // Timer fires → auto-continues
       harness.scheduler.fireAll();
