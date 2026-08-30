@@ -442,6 +442,21 @@ export class SqlitePuzzleRepository {
     this._db.prepare('UPDATE puzzles SET accepted_moves_json = ? WHERE id = ?').run(acceptedMovesJson, id);
   }
 
+  /**
+   * Returns true if an opening puzzle for this FEN has been drilled at least once.
+   * @param {string} fen
+   * @returns {boolean}
+   */
+  hasDrilledCard(fen) {
+    const row = this._db.prepare(`
+      SELECT 1 FROM puzzles p
+      JOIN fsrs_cards f ON f.puzzle_id = p.id
+      WHERE p.fen = ? AND p.kind = 'opening' AND f.reps > 0
+      LIMIT 1
+    `).get(fen);
+    return !!row;
+  }
+
   /** @param {string} id @returns {object} */
   findById(id) {
     const row = this._db.prepare('SELECT * FROM puzzles WHERE id = ?').get(id);
@@ -973,6 +988,18 @@ export class SqliteRepertoireRepository {
     return this._db.prepare(
       'SELECT * FROM rep_moves WHERE epd = ? AND side = ? ORDER BY role, move_uci'
     ).all(epd, side).map(_moveRow);
+  }
+
+  /**
+   * Update reach_prob and clear reach_stale for a single node.
+   * @param {string} epd
+   * @param {string} side
+   * @param {number} reachProb
+   */
+  updateNodeReachProb(epd, side, reachProb) {
+    this._db.prepare(
+      'UPDATE rep_nodes SET reach_prob = ?, reach_stale = 0 WHERE epd = ? AND side = ?'
+    ).run(reachProb, epd, side);
   }
 
   /** @param {Object} policy @returns {void} */

@@ -1,6 +1,6 @@
 # Traceability matrix — auto-repertoire
 
-**Status:** Phase 32 complete — 2026-08-30; B1/B2/B9/B11/B13/B14/U6/U9 closed  
+**Status:** Phase 33 complete — 2026-08-30; B8 closed  
 All `FR-REP-*` codes from `feature_spec.md`.
 
 | Requirement | Test(s) | File(s) |
@@ -145,3 +145,26 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | Journey stage 4: bootstrap silence until 20 nodes | stage4_bootstrapWakes passes | `tests/journey/repertoire-v1.test.js` |
 | Journey stage 5: first alert + ranked_changed | stage5_firstAlert passes + assertRankedChanged | `tests/journey/repertoire-v1.test.js` |
 | Journey stage 6: alert fires for deviant move | stage6_orderSlip passes | `tests/journey/repertoire-v1.test.js` |
+
+## Phase 33 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| B8: `runReachProbes` BFS coverage | `probes root node even with no canonical move` | `tests/unit/ws/reach-service.test.js` |
+| B8: BFS skips START_FEN not in book (line 73) | `handles starting position not in book` | `tests/unit/ws/reach-service.test.js` |
+| B8: BFS skips opposing-side nodes (line 178) | `skips nodes from the opposing side` | `tests/unit/ws/reach-service.test.js` |
+| B8: Maia policy prob used when defined | `uses Maia policy probabilities when available` | `tests/unit/ws/reach-service.test.js` |
+| B8: policy throws → uniform fallback | `continues BFS when policy() throws` | `tests/unit/ws/reach-service.test.js` |
+| B8: `updateNodeReachProb` errors swallowed | `swallows updateNodeReachProb errors` | `tests/unit/ws/reach-service.test.js` |
+| B8: `computeCoverage` returns all fields | `counts canonical moves as covered` | `tests/unit/ws/reach-service.test.js` |
+| B8: `computeCoverage` reach-weighted | `uses reach_prob for weighted coverage` | `tests/unit/ws/reach-service.test.js` |
+| B8: `computeGapReport` returns gap candidates | `returns gap candidates for opponent replies not in book` | `tests/unit/ws/reach-service.test.js` |
+| B8: gap report excludes covered replies | `excludes opponent replies that are already in the book` | `tests/unit/ws/reach-service.test.js` |
+| `GET /coverage` returns rich coverage shape | `GET /coverage returns coverage object` | `tests/unit/repertoire/routes.test.js` |
+| `GET /gaps` returns gap array | `GET /gaps returns gap array` | `tests/unit/repertoire/routes.test.js` |
+| `GET /gaps` 500 on repo error | `GET /gaps returns 500 when repo throws` | `tests/unit/repertoire/routes.test.js` |
+| `hasDrilledCard` — opening puzzle with reps>0 | `hasDrilledCard returns true for opening puzzle with reps` | `tests/contract/repositories.test.js` |
+| `hasDrilledCard` — no card → false | `hasDrilledCard returns false when no card exists` | `tests/contract/repositories.test.js` |
+| `updateNodeReachProb` persists reach_prob | `updateNodeReachProb writes reach_prob and clears reachStale` | `tests/contract/repositories.test.js` |
+| `runBookMaintenance` returns `reachProbed` | `swallows errors and returns zero counts` shape includes `reachProbed` | `tests/unit/ws/maintenance-service.test.js` |
+| Journey stage 6: `order_slip` kind | `stage6_orderSlip: alert kind is order_slip` | `tests/journey/repertoire-v1.test.js` |

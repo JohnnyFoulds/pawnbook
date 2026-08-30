@@ -236,6 +236,6 @@ describe('error handling', () => {
     const counts = await runBookMaintenance({
       repertoireRepo: badRepo, nowMs: NOW, provenanceId: 1, bookVersion: 1,
     });
-    expect(counts).toEqual({ elections: 0, expirations: 0, reaudits: 0 });
+    expect(counts).toEqual({ elections: 0, expirations: 0, reaudits: 0, reachProbed: 0 });
   });
 });

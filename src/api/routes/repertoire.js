@@ -10,6 +10,7 @@ import { Router } from 'express';
 
 import { REP_REVERSAL_SUPPRESS_ENCOUNTERS } from '../../shared/balance.js';
 import { logger } from '../../config.js';
+import { computeCoverage, computeGapReport } from '../ws/reach-service.js';
 
 const log = logger.child({ mod: 'repertoire-routes' });
 
@@ -43,36 +44,6 @@ export function makeRepertoireRouter({ repertoireRepo }) {
       res.json({ nodes: result });
     } catch (err) {
       log.error({ err }, 'GET /tree failed');
-      res.status(500).json({ error: 'internal_error', message: err.message });
-    }
-  });
-
-  /** GET /api/repertoire/coverage — book coverage statistics */
-  r.get('/coverage', (req, res) => {
-    try {
-      const nodes = repertoireRepo.listNodes();
-      let coveredNodes = 0;
-      let candidateCount = 0;
-      let canonicalCount = 0;
-
-      for (const node of nodes) {
-        const moves = repertoireRepo.getMovesForNode(node.epd, node.side);
-        if (moves.some(m => m.role === 'canonical')) coveredNodes++;
-        for (const m of moves) {
-          if (m.role === 'candidate') candidateCount++;
-          if (m.role === 'canonical') canonicalCount++;
-        }
-      }
-
-      res.json({
-        totalNodes: nodes.length,
-        coveredNodes,
-        candidateCount,
-        canonicalCount,
-        coveragePct: nodes.length > 0 ? Math.round((coveredNodes / nodes.length) * 100) : 0,
-      });
-    } catch (err) {
-      log.error({ err }, 'GET /coverage failed');
       res.status(500).json({ error: 'internal_error', message: err.message });
     }
   });
@@ -231,6 +202,28 @@ export function makeRepertoireRouter({ repertoireRepo }) {
       res.json({ ok: true });
     } catch (err) {
       log.error({ err, id: req.params.id }, 'POST /changelog/:id/reverse failed');
+      res.status(500).json({ error: 'internal_error', message: err.message });
+    }
+  });
+
+  /** GET /api/repertoire/coverage — coverage % and confirmed node count */
+  r.get('/coverage', (_req, res) => {
+    try {
+      const result = computeCoverage(repertoireRepo);
+      res.json(result);
+    } catch (err) {
+      log.error({ err }, 'GET /coverage failed');
+      res.status(500).json({ error: 'internal_error', message: err.message });
+    }
+  });
+
+  /** GET /api/repertoire/gaps — opponent replies with significant reach but no book coverage */
+  r.get('/gaps', (_req, res) => {
+    try {
+      const gaps = computeGapReport(repertoireRepo);
+      res.json({ gaps });
+    } catch (err) {
+      log.error({ err }, 'GET /gaps failed');
       res.status(500).json({ error: 'internal_error', message: err.message });
     }
   });

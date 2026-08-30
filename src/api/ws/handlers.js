@@ -36,11 +36,12 @@ const HINT_COOLDOWN_MS = 2000;
  * @param {import('../../ports/clock.js').Clock} deps.clock
  * @param {object|null} [deps.enginePool]
  * @param {object|null} [deps.repertoireRepo]
+ * @param {object|null} [deps.puzzleRepo] — used to check nodeHasDrillHistory for lapse detection
  * @param {import('../../ports/scheduler.js').Scheduler} [deps.scheduler] — alert timeouts;
  *   defaults to RealTimer (production). Inject ManualTimer in tests/journey harness.
  * @returns {(ws: import('ws').WebSocket, raw: string) => Promise<void>}
  */
-export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool = null, repertoireRepo = null, scheduler = null }) {
+export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool = null, repertoireRepo = null, puzzleRepo = null, scheduler = null }) {
   const _scheduler = scheduler ?? new RealTimer();
   /** @type {Map<string, GameSession>} ws-scoped active sessions */
   const sessions = new Map();
@@ -51,7 +52,7 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
   /** @type {WeakMap<object, ReturnType<typeof setTimeout>>} per-connection alert timeout handles */
   const alertTimeouts = new WeakMap();
 
-  const deps = { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler: _scheduler };
+  const deps = { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, puzzleRepo, scheduler: _scheduler };
 
   return async function handleMessage(ws, raw) {
     // Register cleanup once per ws object so sessions Map doesn't grow unboundedly
@@ -360,14 +361,22 @@ async function _checkBookAlert(ws, uci, session, deps) {
     resultingEpdInBook = !!deps.repertoireRepo.getNode(extractEpd(chess.fen()), oppSide);
   } catch { /* illegal move — resultingEpdInBook stays false */ }
 
+  // Phase 33: compute reachable book UCIs (moves that appear at future canonical positions)
+  const reachableBookUcis = _getReachableBookUcis(deps.repertoireRepo, epd, side);
+
+  // Phase 33: check if the player has ever drilled this node via FSRS opening cards
+  const nodeHasDrillHistory = deps.puzzleRepo
+    ? (deps.puzzleRepo.hasDrilledCard?.(session.fen) ?? false)
+    : false;
+
   // B2: classify using the full deviation table instead of ALERTING_SET
   const { kind, alert } = classifyDeviation({
     playedUci: uci,
     nodeRole: playerMove?.role ?? null,
     nodeHasCanonical,
     resultingEpdInBook,
-    nodeHasDrillHistory: false, // Phase 33: wire FSRS drill history
-    reachableBookUcis: null,    // Phase 33: wire transposition look-ahead
+    nodeHasDrillHistory,
+    reachableBookUcis,
   });
 
   if (!alert) return false;
@@ -602,4 +611,36 @@ function send(ws, obj) {
 
 function sendError(ws, message) {
   send(ws, { type: 'error', error_code: 'internal_error', message, detail: {} });
+}
+
+/**
+ * Collect canonical/alt UCIs that appear at player-side nodes BEYOND the current ply.
+ * Used by classifyDeviation (row 5) to detect order_slip: the player played a correct
+ * move but at the wrong point in the line.
+ *
+ * Returns null if there are no deeper nodes (no look-ahead available).
+ *
+ * @param {object} repertoireRepo
+ * @param {string} epd — current position EPD
+ * @param {string} side — player side ('white' or 'black')
+ * @returns {string[]|null}
+ */
+function _getReachableBookUcis(repertoireRepo, epd, side) {
+  if (!repertoireRepo) return null;
+  const currentNode = repertoireRepo.getNode(epd, side);
+  if (!currentNode) return null;
+  const currentMinPly = currentNode.minPly ?? 0;
+
+  const nodes = repertoireRepo.listNodes()
+    .filter(n => n.side === side && (n.minPly ?? 0) > currentMinPly);
+  if (nodes.length === 0) return null;
+
+  const ucis = new Set();
+  for (const node of nodes) {
+    const moves = repertoireRepo.getMovesForNode(node.epd, node.side);
+    for (const m of moves) {
+      if (m.role === 'canonical' || m.role === 'alt') ucis.add(m.moveUci);
+    }
+  }
+  return ucis.size > 0 ? [...ucis] : null;
 }

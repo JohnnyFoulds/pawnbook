@@ -61,6 +61,47 @@ describe('GET /api/repertoire/coverage', () => {
     expect(res.body.coveredNodes).toBe(1);
     expect(res.body.coveragePct).toBe(100);
   });
+
+  it('returns 500 when repo throws', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.listNodes = () => { throw new Error('db down'); };
+    const res = await request(makeApp(repo)).get('/api/repertoire/coverage');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('internal_error');
+  });
+});
+
+describe('GET /api/repertoire/gaps', () => {
+  it('returns empty gaps when book is empty', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const res = await request(makeApp(repo)).get('/api/repertoire/gaps');
+    expect(res.status).toBe(200);
+    expect(res.body.gaps).toHaveLength(0);
+  });
+
+  it('returns gap candidates for uncovered opponent replies', async () => {
+    const START_EPD = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
+    const repo = new InMemoryRepertoireRepository();
+    repo.upsertNode({
+      epd: START_EPD, side: 'white',
+      fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      timesReached: 5, encounters: 5, firstSeen: 1_000, lastSeen: 2_000,
+      reachProb: 1.0,
+    });
+    repo.upsertMove({ epd: START_EPD, side: 'white', moveUci: 'e2e4', moveSan: 'e4', role: 'canonical', observations: 5, scoreW: 1, scoreD: 0, scoreL: 0 });
+
+    const res = await request(makeApp(repo)).get('/api/repertoire/gaps');
+    expect(res.status).toBe(200);
+    expect(res.body.gaps.length).toBeGreaterThan(0);
+  });
+
+  it('returns 500 when repo throws', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.listNodes = () => { throw new Error('db down'); };
+    const res = await request(makeApp(repo)).get('/api/repertoire/gaps');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('internal_error');
+  });
 });
 
 describe('GET /api/repertoire/challenges', () => {
@@ -108,6 +149,14 @@ describe('GET /api/repertoire/refusals', () => {
     expect(res.body.refusals).toHaveLength(1);
     expect(res.body.refusals[0].resolution).toBe('alerted_kept');
   });
+
+  it('returns 500 when repo throws', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.getAllDeviations = () => { throw new Error('db down'); };
+    const res = await request(makeApp(repo)).get('/api/repertoire/refusals');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('internal_error');
+  });
 });
 
 describe('GET /api/repertoire/changelog', () => {
@@ -132,6 +181,14 @@ describe('GET /api/repertoire/changelog', () => {
     const entry = res.body.entries[0];
     expect(entry.fromSan).toBe('e4');
     expect(entry.toSan).toBe('d4');
+  });
+
+  it('returns 500 when repo throws', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.getChangelog = () => { throw new Error('db down'); };
+    const res = await request(makeApp(repo)).get('/api/repertoire/changelog');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('internal_error');
   });
 });
 
