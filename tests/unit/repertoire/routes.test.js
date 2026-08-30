@@ -410,3 +410,39 @@ describe('POST /api/repertoire/changelog/:id/reverse', () => {
     expect(res.body.canonicalCount).toBe(1);
   });
 });
+
+describe('GET /api/repertoire/journey', () => {
+  it('returns empty derived fields when no changelog entries', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const app = makeApp(repo);
+    const res = await request(app).get('/api/repertoire/journey');
+    expect(res.status).toBe(200);
+    expect(res.body.timeline).toEqual([]);
+    expect(res.body.growthSeries).toEqual([]);
+    expect(res.body.milestones.firstConfirm).toBeNull();
+  });
+
+  it('returns populated timeline and growthSeries from changelog entries', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const at = new Date('2025-06-01').getTime();
+    repo.appendChangelog({ id: 'c1', kind: 'confirm', at, epd: EPD, side: 'white',
+      toUci: 'e2e4', bookVersion: 1, provenanceId: 'p1' });
+    const app = makeApp(repo);
+    const res = await request(app).get('/api/repertoire/journey');
+    expect(res.status).toBe(200);
+    expect(res.body.timeline).toHaveLength(1);
+    expect(res.body.timeline[0].date).toBe('2025-06-01');
+    expect(res.body.growthSeries).toHaveLength(1);
+    expect(res.body.growthSeries[0].confirms).toBe(1);
+    expect(res.body.growthSeries[0].total).toBe(1);
+    expect(res.body.milestones.firstConfirm).toMatchObject({ kind: 'confirm' });
+  });
+
+  it('returns 500 when repo throws', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.getChangelogRange = () => { throw new Error('db error'); };
+    const app = makeApp(repo);
+    const res = await request(app).get('/api/repertoire/journey');
+    expect(res.status).toBe(500);
+  });
+});

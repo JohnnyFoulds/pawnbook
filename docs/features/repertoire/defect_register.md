@@ -256,12 +256,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | CLOSED — Phase 36 — 2026-08-30 |
 | **Evidence** | `public/repertoire.html` — two panels only: Coverage and "What changed in your book" |
-| **Description** | The changelog panel shows the last 20 entries with no dates, no grouping, no trend. `getChangelog(limit=50)` has no time range or cursor. The player cannot see how his book has grown, what changed when, or why. RQ2 (coverage-growth curve) is in the same data. |
+| **Description** | The changelog panel showed the last 20 entries with no dates, no grouping, no trend. `getChangelog(limit=50)` had no time range or cursor. |
 | **Closing phase** | Phase 36 |
-| **Test** | Journey stage 3.8 (full invariant sweep includes journey route) |
-| **Closing note** | — |
+| **Test** | `GET /api/repertoire/journey returns populated timeline and growthSeries from changelog entries` — `tests/unit/repertoire/routes.test.js`; `buildTimeline/buildGrowthSeries/buildMilestones` unit suite — `tests/unit/repertoire/history.test.js` |
+| **Closing note** | `src/domain/repertoire/history.js` added with `buildTimeline`, `buildGrowthSeries`, `buildMilestones`. `getChangelogRange` added to both repos. `GET /api/repertoire/journey` route wired. Journey panel added to `repertoire.html`. `computeRq2` in `repertoire-analysis.js` refactored to use `buildGrowthSeries` — UI and paper share one derivation. |
 
 ---
 

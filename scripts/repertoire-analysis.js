@@ -11,6 +11,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 
+import { buildGrowthSeries } from '../src/domain/repertoire/history.js';
+
 const args = process.argv.slice(2);
 const inputArg = args.indexOf('--input');
 const outputArg = args.indexOf('--output');
@@ -37,36 +39,17 @@ function writeCsv(filename, headers, rows) {
 }
 
 // ── RQ2: Coverage growth curve ────────────────────────────────────────────
+// Derived via buildGrowthSeries from history.js — same function used by
+// GET /api/repertoire/journey so the paper and UI cannot diverge.
 
 function computeRq2() {
-  const games = readNdjson('games.ndjson')
-    .filter(g => g.status === 'finished' && g.played_at)
-    .sort((a, b) => a.played_at - b.played_at);
-
-  const moves = readNdjson('rep_moves.ndjson');
-
-  const rows = [];
-  for (let i = 0; i < games.length; i++) {
-    const game = games[i];
-    const canonicalAtTime = moves.filter(
-      m => m.role === 'canonical' && m.first_played && m.first_played <= game.played_at
-    ).length;
-    const totalNodes = new Set(moves.map(m => `${m.epd}|${m.side}`)).size;
-    const coveragePct = totalNodes > 0 ? Math.round((canonicalAtTime / totalNodes) * 100) : 0;
-
-    rows.push({
-      game_n: i + 1,
-      game_id: game.id,
-      played_at: game.played_at,
-      canonical_nodes: canonicalAtTime,
-      coverage_pct: coveragePct,
-    });
-  }
+  const entries = readNdjson('rep_changelog.ndjson');
+  const series  = buildGrowthSeries(entries);
 
   writeCsv('rq2-coverage.csv',
-    ['game_n', 'game_id', 'played_at', 'canonical_nodes', 'coverage_pct'],
-    rows);
-  return rows.length;
+    ['date', 'confirms', 'promotes', 'retires', 'refuses', 'total'],
+    series);
+  return series.length;
 }
 
 // ── RQ1: Refusal hit-rate ──────────────────────────────────────────────────

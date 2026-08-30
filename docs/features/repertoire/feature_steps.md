@@ -668,3 +668,25 @@ Branch: `feat/phase-35-tui-playwright`
 **DoD:** `make verify` green; 925 tests pass (+ 2 expected-fail); coverage 90.01% branches;
 `npm run journey` green (15/15 stages); U10 closed; `playwright.journey.config.js` and
 `tests/playwright/journey.spec.js` ready for `npx playwright test -c playwright.journey.config.js`.
+
+---
+
+## Phase 36 — "Your journey" view
+
+Branch: `feat/phase-36-journey-view`
+
+### Files changed
+- `docs/features/repertoire/feature_spec.md` — `FR-REP-JOURNEY-1` through `FR-REP-JOURNEY-6` added; `GET /journey` added to FR-REP-API-1 list
+- `src/domain/repertoire/history.js` (NEW) — pure domain module: `buildTimeline`, `buildGrowthSeries`, `buildMilestones`
+- `src/adapters/sqlite/repositories.js` — `getChangelogRange({ from, to, cursor, limit })` added
+- `src/adapters/memory/repositories.js` — `getChangelogRange({ from, to, cursor, limit })` added
+- `src/api/routes/repertoire.js` — `GET /journey` route added using `history.js`
+- `public/repertoire.html` — "Your journey" panel (`#journey-panel`, `#journey-milestones`, `#journey-growth`)
+- `public/js/repertoire.js` — `loadJourney()` and `renderJourney()` added; wired in `init()`
+- `scripts/repertoire-analysis.js` — `computeRq2` refactored to use `buildGrowthSeries` (shared derivation)
+- `tests/unit/repertoire/history.test.js` (NEW) — 18 tests for all three history functions
+- `tests/unit/adapters/memory-repos-extra.test.js` — 4 `getChangelogRange` contract tests
+- `tests/unit/ws/maintenance-service.test.js` — 4 SQLite `getChangelogRange` tests
+- `tests/unit/repertoire/routes.test.js` — 3 `GET /journey` route tests
+
+**DoD:** `make verify` green; 958 tests pass (+ 2 expected-fail); coverage 90.07% branches; U13 closed; `computeRq2` and `GET /journey` share `buildGrowthSeries` — UI and paper cannot diverge.

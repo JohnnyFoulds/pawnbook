@@ -210,6 +210,15 @@ All four gates use data already stored in `move_evals`. Column names are authori
 - FR-REP-STORE-7: `games.coach_enabled INTEGER NOT NULL DEFAULT 1` MUST be added via an `ALTER TABLE`
   in-try migration (same pattern as `schema.js:15-17`).
 
+### FR-REP-JOURNEY: Your journey view
+
+- FR-REP-JOURNEY-1: `GET /api/repertoire/journey` MUST return three derived fields: `timeline`, `growthSeries`, and `milestones`. All three are derived by replaying `rep_changelog`; no snapshot table exists for them.
+- FR-REP-JOURNEY-2: `timeline` MUST be a reverse-chronological array of day buckets `{ date, entries[] }` where each entry carries `id`, `at`, `kind`, `fromSan`, `toSan`, `rule`, and `detailJson`.
+- FR-REP-JOURNEY-3: `growthSeries` MUST be a chronological array of `{ date, confirms, promotes, retires, refuses, total }` where all counts are **cumulative** as of that date. `total = confirms + promotes - retires` as of that date.
+- FR-REP-JOURNEY-4: `milestones` MUST include, when present in the log: `firstConfirm`, `coachWoke` (at the 20th cumulative confirm), `firstPromotion`, `firstRefusal`, and `firstReversal`. Each milestone is `{ at, kind }` or `null` when not yet reached.
+- FR-REP-JOURNEY-5: The growth-series derivation used by `GET /api/repertoire/journey` and by `scripts/repertoire-analysis.js` (RQ2 coverage curve) MUST call the same `buildGrowthSeries` function from `src/domain/repertoire/history.js`. A divergence between the UI and the published paper is a defect.
+- FR-REP-JOURNEY-6: `getChangelogRange({ from, to, cursor, limit })` MUST be available on both `SqliteRepertoireRepository` and `InMemoryRepertoireRepository`. Absent parameters return rows in ascending `at` order up to `limit` (default 500). `cursor` is an `at` timestamp used as an exclusive lower bound for forward-paging.
+
 ### FR-REP-API: REST and WebSocket surface
 
 - FR-REP-API-1: The following REST routes MUST be served at `/api/repertoire`:
@@ -218,6 +227,7 @@ All four gates use data already stored in `move_evals`. Column names are authori
   - `GET /challenges` — open and recently resolved challenges (read-only)
   - `GET /refusals` — refusal log with inferred interpretation, signal values and outcome
   - `GET /changelog` — book change feed
+  - `GET /journey` — timeline, growth series and milestones derived from the changelog
   - `POST /changelog/:id/reverse` — one-click reversal
 - FR-REP-API-2: WebSocket messages added:
   - Outbound: `repertoire_alert { kind, playedUci, bookUci, winPctCost }` (held move notification)

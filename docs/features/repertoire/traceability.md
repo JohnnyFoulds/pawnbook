@@ -1,6 +1,6 @@
 # Traceability matrix — auto-repertoire
 
-**Status:** Phase 35 complete — 2026-08-30; U10 closed  
+**Status:** Phase 36 complete — 2026-08-30; U13 closed  
 All `FR-REP-*` codes from `feature_spec.md`.
 
 | Requirement | Test(s) | File(s) |
@@ -196,3 +196,27 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | U10: renders gap entries | `repertoire screen renders gap entries` | `tests/unit/tui-phase10.test.js` |
 | U10: `chess repertoire` subcommand wired | `bin/chess.js has repertoire subcommand` | `tests/unit/tui-phase10.test.js` |
 | Playwright journey: 10-stage DOM suite | `tests/playwright/journey.spec.js` (10 stages) | `tests/playwright/journey.spec.js` |
+
+## Phase 36 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| FR-REP-JOURNEY-1: `GET /journey` returns timeline, growthSeries, milestones | `GET /api/repertoire/journey returns populated timeline and growthSeries` | `tests/unit/repertoire/routes.test.js` |
+| FR-REP-JOURNEY-1: empty when no entries | `GET /api/repertoire/journey returns empty derived fields when no changelog entries` | `tests/unit/repertoire/routes.test.js` |
+| FR-REP-JOURNEY-1: 500 on repo error | `returns 500 when repo throws` (journey) | `tests/unit/repertoire/routes.test.js` |
+| FR-REP-JOURNEY-2: `buildTimeline` day buckets reverse-chron | `groups entries by date, reverse-chronological` | `tests/unit/repertoire/history.test.js` |
+| FR-REP-JOURNEY-2: multiple entries same day | `groups multiple entries on the same day together` | `tests/unit/repertoire/history.test.js` |
+| FR-REP-JOURNEY-3: `buildGrowthSeries` cumulative counts | `accumulates across multiple days` | `tests/unit/repertoire/history.test.js` |
+| FR-REP-JOURNEY-3: `elect` counted as confirm | `counts elect as confirm` | `tests/unit/repertoire/history.test.js` |
+| FR-REP-JOURNEY-4: `buildMilestones` firstConfirm, coachWoke at 20 | `sets coachWoke at the 20th confirm` | `tests/unit/repertoire/history.test.js` |
+| FR-REP-JOURNEY-4: milestones null when not reached | `returns all-null for empty input` | `tests/unit/repertoire/history.test.js` |
+| FR-REP-JOURNEY-5: `computeRq2` uses `buildGrowthSeries` | import of `buildGrowthSeries` in `scripts/repertoire-analysis.js` | `scripts/repertoire-analysis.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` InMemory — all rows ascending | `getChangelogRange: returns all entries ascending when no filters` | `tests/unit/adapters/memory-repos-extra.test.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` InMemory — from/to filter | `getChangelogRange: filters by from/to` | `tests/unit/adapters/memory-repos-extra.test.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` InMemory — cursor | `getChangelogRange: cursor is exclusive lower bound` | `tests/unit/adapters/memory-repos-extra.test.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` InMemory — limit | `getChangelogRange: respects limit` | `tests/unit/adapters/memory-repos-extra.test.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` SQLite — ascending order | `returns all entries in ascending at order with no filters` | `tests/unit/ws/maintenance-service.test.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` SQLite — from/to filter | `filters by from and to` | `tests/unit/ws/maintenance-service.test.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` SQLite — cursor | `cursor acts as exclusive lower bound` | `tests/unit/ws/maintenance-service.test.js` |
+| FR-REP-JOURNEY-6: `getChangelogRange` SQLite — limit | `respects limit` | `tests/unit/ws/maintenance-service.test.js` |
+| U13: journey panel in `repertoire.html` | `#journey-milestones`, `#journey-growth`, `#journey-panel` elements present | `public/repertoire.html` |
