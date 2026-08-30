@@ -482,6 +482,26 @@ for (const { name, factory } of implementations) {
         findability: 0.3,
       })).not.toThrow();
     });
+
+    it('hasDrilledCard returns false when no opening puzzle exists for fen', () => {
+      if (!repos.puzzles.hasDrilledCard) return;
+      expect(repos.puzzles.hasDrilledCard('no-such-fen')).toBe(false);
+    });
+
+    it('hasDrilledCard returns false when opening puzzle has no card', () => {
+      if (!repos.puzzles.hasDrilledCard) return;
+      const fen = 'hasDrilled-fen-' + randomUUID();
+      repos.puzzles.save({ fen, sideToMove: 'white', bestMoveUci: 'e2e4', bestMoveSan: 'e4', winLossPts: 0, classification: 'ok', findability: 0.5, kind: 'opening' });
+      expect(repos.puzzles.hasDrilledCard(fen)).toBe(false);
+    });
+
+    it('hasDrilledCard returns true when opening puzzle has card with reps > 0', () => {
+      if (!repos.puzzles.hasDrilledCard) return;
+      const fen = 'hasDrilled-drilled-' + randomUUID();
+      const id = repos.puzzles.save({ fen, sideToMove: 'white', bestMoveUci: 'e2e4', bestMoveSan: 'e4', winLossPts: 0, classification: 'ok', findability: 0.5, kind: 'opening' });
+      repos.puzzles.saveCard({ puzzleId: id, due: 1, stability: 1, difficulty: 0.5, elapsedDays: 0, scheduledDays: 1, reps: 1, lapses: 0, state: 'review', lastReview: null, graduated: true });
+      expect(repos.puzzles.hasDrilledCard(fen)).toBe(true);
+    });
   });
 
   describe(`[${name}] settings repository`, () => {
@@ -681,6 +701,18 @@ for (const { name, factory } of implementations) {
       expect(lineLoss).toBeCloseTo(-1.5);
       const reachStale = node.reachStale ?? node.reach_stale;
       expect(reachStale).toBe(false);
+    });
+
+    it('updateNodeReachProb persists reach probability and clears reach_stale', () => {
+      if (!repos.repertoire.updateNodeReachProb) return;
+      const EPD2 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3';
+      repos.repertoire.upsertNode({ epd: EPD2, side: 'white', fen: EPD2 + ' 0 1', timesReached: 1, encounters: 1, firstSeen: 1000, lastSeen: 1000, reachProb: null, reachStale: true });
+      repos.repertoire.updateNodeReachProb(EPD2, 'white', 0.42);
+      const node = repos.repertoire.getNode(EPD2, 'white');
+      const prob = node.reachProb ?? node.reach_prob;
+      expect(prob).toBeCloseTo(0.42);
+      const stale = node.reachStale ?? node.reach_stale;
+      expect(stale).toBe(false);
     });
 
     it('upsertMove with all optional fields set stores weightedScore, meanWinLossPts, firstPlayed', () => {
