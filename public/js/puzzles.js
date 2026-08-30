@@ -115,13 +115,17 @@ function loadCard(idx) {
   const gameLink = document.getElementById('game-link');
   gameLink.href = `review.html?game=${card.sourceGameId}`;
 
-  document.getElementById('move-label').textContent =
-    `Move ${Math.ceil(card.ply / 2)}${card.ply % 2 === 1 ? '.' : '…'}  ${card.sideToMove === 'white' ? 'White' : 'Black'} to play`;
+  const isOpening = card.kind === 'opening';
+  const moveLabel = `Move ${Math.ceil(card.ply / 2)}${card.ply % 2 === 1 ? '.' : '…'}  ${card.sideToMove === 'white' ? 'White' : 'Black'} to play`;
+  document.getElementById('move-label').textContent = isOpening
+    ? `Opening — ${moveLabel}`
+    : moveLabel;
 
-  document.getElementById('drill-prompt').innerHTML =
-    `You played <span class="drill-prompt__move">${card.playedMoveSan}</span> here and `
+  document.getElementById('drill-prompt').innerHTML = isOpening
+    ? `Your book move here is <span class="drill-prompt__move">${card.bestMoveSan ?? '?'}</span>.`
+    : (`You played <span class="drill-prompt__move">${card.playedMoveSan}</span> here and `
     + `lost ${card.winLoss != null ? Math.round(card.winLoss) : '?'}% win chance.<br>`
-    + 'Find something better.';
+    + 'Find something better.');
 
   document.getElementById('feedback-wrap').innerHTML = '';
   document.getElementById('action-btns').style.display = 'flex';

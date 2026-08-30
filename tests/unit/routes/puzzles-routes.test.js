@@ -89,6 +89,14 @@ describe('GET /api/puzzles/due', () => {
     expect(res.body.total).toBe(1);
   });
 
+  it('includes kind field on each card (U7)', async () => {
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    makePuzzle(puzzleRepo);
+    const res = await request(makeApp(puzzleRepo)).get('/api/puzzles/due');
+    expect(res.status).toBe(200);
+    expect(res.body.cards[0]).toHaveProperty('kind');
+  });
+
   it('displayTotal shows DUE_SOFT_CAP+ when overCap (covers overCap true branch)', async () => {
     const puzzleRepo = new InMemoryPuzzleRepository();
     // Add 41 overdue puzzles to trigger DUE_SOFT_CAP (40) overflow

@@ -624,3 +624,25 @@ and `/gaps` API endpoints. Closes B8.
 
 **DoD:** `make verify` green; 910 tests pass (+ 2 expected-fail); coverage 90.01% branches;
 `npm run journey` green (15/15 stages); B8 closed.
+
+---
+
+## Phase 34 — Repertoire pages and drill surface
+
+Branch: `feat/phase-34-repertoire-pages`
+
+### Files changed
+- `src/api/routes/repertoire.js` — `/refusals` enriched with `keptCount`, `keptInBookCount`, `hitRatePct`
+- `src/api/routes/puzzles.js` — `formatCard` includes `kind` field (U7)
+- `public/repertoire.html` — added tree view panel, gap report panel, refusal log panel (U1, U2, U4)
+- `public/js/repertoire.js` — `loadTree`, `renderTree`, `loadGaps`, `loadRefusals` (U1, U2, U4)
+- `public/js/play.js` — per-kind sub-line copy, `order_slip` "first" suffix, `refused_repeat` "instead" suffix (U11)
+- `public/js/puzzles.js` — Opening badge and opening-specific prompt text (U7)
+- `tests/unit/routes/puzzles-routes.test.js` — `kind` field test
+- `tests/unit/repertoire/routes.test.js` — hit-rate tests, challenges 500, reverse 500, refusals edge cases
+
+### Journey
+`npm run journey` — 15/15 stages pass.
+
+**DoD:** `make verify` green; 917 tests pass (+ 2 expected-fail); coverage 90.01% branches;
+`npm run journey` green (15/15 stages); U1, U2, U4 (backend + frontend), U7, U11 closed.

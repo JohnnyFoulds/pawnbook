@@ -1,6 +1,6 @@
 # Traceability matrix — auto-repertoire
 
-**Status:** Phase 33 complete — 2026-08-30; B8 closed  
+**Status:** Phase 34 complete — 2026-08-30; U1/U2/U4/U7/U11 closed  
 All `FR-REP-*` codes from `feature_spec.md`.
 
 | Requirement | Test(s) | File(s) |
@@ -168,3 +168,17 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | `updateNodeReachProb` persists reach_prob | `updateNodeReachProb writes reach_prob and clears reachStale` | `tests/contract/repositories.test.js` |
 | `runBookMaintenance` returns `reachProbed` | `swallows errors and returns zero counts` shape includes `reachProbed` | `tests/unit/ws/maintenance-service.test.js` |
 | Journey stage 6: `order_slip` kind | `stage6_orderSlip: alert kind is order_slip` | `tests/journey/repertoire-v1.test.js` |
+
+## Phase 34 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| U1: tree view rendered in UI | `GET /api/repertoire/tree` route test | `tests/unit/repertoire/routes.test.js` |
+| U2: refusal log with hit-rate | `includes keptCount, keptInBookCount and hitRatePct` | `tests/unit/repertoire/routes.test.js` |
+| U2: hitRatePct null when no kept deviations | `hitRatePct is null when no kept deviations` | `tests/unit/repertoire/routes.test.js` |
+| U2: skips kept deviation with unknown EPD | `skips kept deviation when EPD has no matching node` | `tests/unit/repertoire/routes.test.js` |
+| U2: keptInBookCount 0 when move not canonical/alt | `keptInBookCount 0 when kept move is not canonical or alt` | `tests/unit/repertoire/routes.test.js` |
+| U4: gap report panel in UI | `GET /api/repertoire/gaps returns gap array` | `tests/unit/repertoire/routes.test.js` |
+| U7: `kind` field on drill cards | `includes kind field on each card (U7)` | `tests/unit/routes/puzzles-routes.test.js` |
+| `/challenges` 500 error path | `returns 500 when repo throws` (challenges) | `tests/unit/repertoire/routes.test.js` |
+| `POST /changelog/:id/reverse` 500 error path | `returns 500 when repo throws during reverse` | `tests/unit/repertoire/routes.test.js` |

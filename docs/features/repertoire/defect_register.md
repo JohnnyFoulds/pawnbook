@@ -298,12 +298,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 34) |
 | **Evidence** | `public/repertoire.html` — two panels only (Coverage, Recent changes) |
 | **Description** | The player cannot see his book as a navigable move tree. Candidates, quarantined and challenged nodes are not visible. |
 | **Closing phase** | Phase 34 |
-| **Test** | Journey stage 3.7 (DOM probe for tree element) |
-| **Closing note** | — |
+| **Test** | `GET /api/repertoire/tree` route test; `public/js/repertoire.js` `renderTree` |
+| **Closing note** | Fixed: added Book tree panel to `repertoire.html` and `repertoire.js`. Flat list sorted by minPly with toggle for candidates/alts. Reach prob shown per node when available. |
 
 ---
 
@@ -312,12 +312,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 34) |
 | **Evidence** | `public/repertoire.html` — no refusal log panel |
 | **Description** | The player cannot see which moves he has refused, how many became book moves, or what the hit-rate is. All data exists in `rep_deviations` + `rep_challenges`. |
 | **Closing phase** | Phase 34 |
-| **Test** | Journey stage 3.5 (refusal log DOM probe) |
-| **Closing note** | — |
+| **Test** | `GET /api/repertoire/refusals` hit-rate tests (`tests/unit/repertoire/routes.test.js`) |
+| **Closing note** | Fixed: refusal log panel added to `repertoire.html`; `GET /api/repertoire/refusals` enriched with `keptCount`, `keptInBookCount`, `hitRatePct`; `loadRefusals` in `repertoire.js` renders summary and per-deviation rows. |
 
 ---
 
@@ -340,12 +340,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 34) |
 | **Evidence** | `public/js/puzzles.js` — no `kind`-based rendering branch |
 | **Description** | Opening FSRS cards (`puzzles.kind = 'opening'`) are visually identical to tactical cards. The player does not know he is drilling his opening repertoire vs a tactics position. |
 | **Closing phase** | Phase 34 |
-| **Test** | Journey stage 3.4 (DOM probe for opening card label) |
-| **Closing note** | — |
+| **Test** | `includes kind field on each card (U7)` in `tests/unit/routes/puzzles-routes.test.js` |
+| **Closing note** | Fixed: `formatCard` in `puzzles.js` route now includes `kind`; `puzzles.js` frontend prepends "Opening — " to the move label and shows a dedicated prompt for opening cards. |
 
 ---
 
@@ -368,12 +368,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 34) |
 | **Evidence** | `public/js/play.js:508-518`; `docs/game/voice_and_tone.md:65` |
 | **Description** | Per-kind headline copy exists but: (1) sub-line is one generic string regardless of kind; (2) "first"/"instead" button suffixes are missing; (3) `refused_repeat` headline is inverted against `voice_and_tone.md:65`. |
 | **Closing phase** | Phase 34 |
-| **Test** | DOM probe: alert overlay headline matches `voice_and_tone.md` copy |
-| **Closing note** | — |
+| **Test** | `public/js/play.js` (frontend, excluded from coverage) |
+| **Closing note** | Fixed: per-kind `subCopy` map in `showCoachAlert`; `order_slip` button "Play X first"; `refused_repeat` button "Play X instead"; `refused_repeat` sub "Cost vs X: N win%"; `lapse` sub "You've drilled this position. Cost: N win%". |
 
 ---
 
@@ -382,12 +382,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 34) |
 | **Evidence** | `public/repertoire.html` — no gap panel |
 | **Description** | FR-REP-REACH-5: the gap report must list opponent replies with high policy probability for which the player has no response. No UI surface exists. |
 | **Closing phase** | Phase 34 |
-| **Test** | DOM probe (Phase 34) |
-| **Closing note** | Phase 33 added `GET /api/repertoire/gaps` backed by `computeGapReport`. UI panel deferred to Phase 34. |
+| **Test** | `GET /api/repertoire/gaps` route tests; `loadGaps` in `public/js/repertoire.js` |
+| **Closing note** | Phase 33 added `GET /api/repertoire/gaps` backed by `computeGapReport`. Phase 34 added Coverage gaps panel to `repertoire.html` with top-10 gaps sorted by reach probability. |
 
 ---
 
