@@ -2,6 +2,7 @@
  * Unit tests for repertoire-service helpers.
  */
 import { describe, it, expect } from 'vitest';
+
 import { InMemoryRepertoireRepository, InMemoryPuzzleRepository } from '../../../src/adapters/memory/repositories.js';
 import { _ensureOpeningCards, getProvenanceId } from '../../../src/api/ws/repertoire-service.js';
 

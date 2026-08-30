@@ -3,6 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
+
 import { applySchema } from '../../src/adapters/sqlite/schema.js';
 
 describe('puzzles migration (Phase 23)', () => {

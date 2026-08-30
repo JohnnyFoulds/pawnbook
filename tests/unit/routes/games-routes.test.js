@@ -1,10 +1,11 @@
 /**
  * Unit tests for games REST routes.
  */
+import { randomUUID } from 'crypto';
+
 import { describe, it, expect } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { randomUUID } from 'crypto';
 
 import { gamesRouter } from '../../../src/api/routes/games.js';
 import { InMemoryGameRepository, InMemoryPuzzleRepository, InMemorySettingsRepository } from '../../../src/adapters/memory/repositories.js';

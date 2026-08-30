@@ -1,10 +1,11 @@
 /**
  * Unit tests for state and stats REST routes.
  */
+import { randomUUID } from 'crypto';
+
 import { describe, it, expect } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { randomUUID } from 'crypto';
 
 import { stateRouter } from '../../../src/api/routes/state.js';
 import { statsRouter } from '../../../src/api/routes/stats.js';

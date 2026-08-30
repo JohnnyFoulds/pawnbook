@@ -18,6 +18,7 @@ import {
   REP_ALERTS_PER_GAME_MAX,
   REP_ALERT_TIMEOUT_SEC,
 } from '../../shared/balance.js';
+import { RealTimer } from '../../adapters/scheduler/real-timer.js';
 import { logger } from '../../config.js';
 
 import { getProvenanceId } from './repertoire-service.js';
@@ -33,9 +34,12 @@ const HINT_COOLDOWN_MS = 2000;
  * @param {import('../../ports/clock.js').Clock} deps.clock
  * @param {object|null} [deps.enginePool]
  * @param {object|null} [deps.repertoireRepo]
+ * @param {import('../../ports/scheduler.js').Scheduler} [deps.scheduler] — alert timeouts;
+ *   defaults to RealTimer (production). Inject ManualTimer in tests/journey harness.
  * @returns {(ws: import('ws').WebSocket, raw: string) => Promise<void>}
  */
-export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool = null, repertoireRepo = null }) {
+export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool = null, repertoireRepo = null, scheduler = null }) {
+  const _scheduler = scheduler ?? new RealTimer();
   /** @type {Map<string, GameSession>} ws-scoped active sessions */
   const sessions = new Map();
   /** @type {WeakMap<object, number>} per-connection last-hint timestamp for rate-limiting */
@@ -45,7 +49,7 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
   /** @type {WeakMap<object, ReturnType<typeof setTimeout>>} per-connection alert timeout handles */
   const alertTimeouts = new WeakMap();
 
-  const deps = { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo };
+  const deps = { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler: _scheduler };
 
   return async function handleMessage(ws, raw) {
     // Register cleanup once per ws object so sessions Map doesn't grow unboundedly
@@ -54,7 +58,7 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
       ws.once('close', () => {
         sessions.delete(ws);
         const handle = alertTimeouts.get(ws);
-        if (handle) clearTimeout(handle);
+        if (handle) _scheduler.cancel(handle);
         alertTimeouts.delete(ws);
         pendingMoves.delete(ws);
       });
@@ -159,7 +163,7 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
   }
 }
 
-async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo }) {
+async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
 
@@ -171,7 +175,7 @@ async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions, pendingMo
   // Pre-commit book check (only on player turns with an active repo)
   if (repertoireRepo && session.isPlayerTurn) {
     const held = await _checkBookAlert(ws, msg.uci, session,
-      { sessions, pendingMoves, alertTimeouts, gameRepo, settingsRepo, repertoireRepo });
+      { sessions, pendingMoves, alertTimeouts, gameRepo, settingsRepo, repertoireRepo, scheduler });
     if (held) return;
   }
 
@@ -201,7 +205,7 @@ async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions, pendingMo
   ws.emit('engine_turn', session);
 }
 
-async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo }) {
+async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
 
@@ -217,7 +221,7 @@ async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, session
 
   // Clear the alert timeout
   const handle = alertTimeouts.get(ws);
-  if (handle) clearTimeout(handle);
+  if (handle) scheduler.cancel(handle);
   alertTimeouts.delete(ws);
   pendingMoves.delete(ws);
 
@@ -230,13 +234,13 @@ async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, session
     { resolution, decisionMs, pending, openChallenge, gameRepo, settingsRepo, repertoireRepo });
 }
 
-async function handleResign(ws, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts }) {
+async function handleResign(ws, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, scheduler }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
 
   // Clear any pending alert before resigning
   const handle = alertTimeouts.get(ws);
-  if (handle) clearTimeout(handle);
+  if (handle) scheduler.cancel(handle);
   alertTimeouts.delete(ws);
   pendingMoves.delete(ws);
 
@@ -321,7 +325,7 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
  * Pre-commit book check. Returns true if the move was held (alert sent), false otherwise.
  */
 async function _checkBookAlert(ws, uci, session, deps) {
-  const { pendingMoves, alertTimeouts } = deps;
+  const { pendingMoves, alertTimeouts, scheduler } = deps;
 
   if (session.coachEnabled === false) return false;
   const confirmedCount = deps.repertoireRepo.listNodes().filter(n => n.encounters >= 2).length;
@@ -358,7 +362,7 @@ async function _checkBookAlert(ws, uci, session, deps) {
     alertedAt: Date.now(),
   });
 
-  const handle = setTimeout(() => _handleAlertTimeout(ws, deps), REP_ALERT_TIMEOUT_SEC * 1000);
+  const handle = scheduler.schedule(() => _handleAlertTimeout(ws, deps), REP_ALERT_TIMEOUT_SEC * 1000);
   alertTimeouts.set(ws, handle);
 
   send(ws, {

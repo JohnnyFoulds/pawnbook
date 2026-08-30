@@ -2,7 +2,6 @@
  * Extra coverage for repertoire-service.js — focuses on updateRepertoire (lines 63-145).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { randomUUID } from 'crypto';
 
 import { updateRepertoire } from '../../../src/api/ws/repertoire-service.js';
 import { InMemoryGameRepository, InMemoryPuzzleRepository, InMemoryRepertoireRepository } from '../../../src/adapters/memory/repositories.js';

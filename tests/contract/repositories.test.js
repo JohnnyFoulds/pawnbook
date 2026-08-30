@@ -203,7 +203,10 @@ for (const { name, factory } of implementations) {
       }
     });
 
-    it('saveMoveEval stores classification field', () => {
+    it('saveMoveEval stores classification field and getEvals returns snake_case shapes', () => {
+      // B15 regression: SQLite SELECT * returns snake_case; in-memory must match.
+      // build.js reads eval_.win_loss_pts / win_before / win_after — if these are
+      // camelCase the gates silently return 'admitted' against the memory adapter.
       const game = makeGame();
       repos.games.save(game);
       repos.games.saveMoveEval({
@@ -214,9 +217,24 @@ for (const { name, factory } of implementations) {
         mover: 'player',
         classification: 'brilliant',
         cpWhite: 50,
+        winBefore: 55,
+        winAfter: 48,
+        winLoss: 7,
+        cpLoss: 12,
       });
       const evals = repos.games.getEvals(game.id);
       expect(evals).toHaveLength(1);
+      const e = evals[0];
+      // Field shape — same snake_case keys that SQLite SELECT * produces
+      expect(e.mover).toBe('player');
+      expect(e.classification).toBe('brilliant');
+      expect(typeof e.win_loss_pts).toBe('number');   // not winLossPts
+      expect(typeof e.win_before).toBe('number');      // not winBefore
+      expect(typeof e.win_after).toBe('number');       // not winAfter
+      // camelCase variants must NOT be present
+      expect(e.winLossPts).toBeUndefined();
+      expect(e.winBefore).toBeUndefined();
+      expect(e.winAfter).toBeUndefined();
     });
 
     it('elo_history append is ordered by recorded_at', () => {
@@ -351,7 +369,7 @@ for (const { name, factory } of implementations) {
 
     it('listAll returns all puzzles including those without cards', () => {
       const id1 = repos.puzzles.save(makePuzzle({ id: randomUUID(), fen: 'list-all-a' }));
-      const id2 = repos.puzzles.save(makePuzzle({ id: randomUUID(), fen: 'list-all-b' }));
+      repos.puzzles.save(makePuzzle({ id: randomUUID(), fen: 'list-all-b' }));
       repos.puzzles.saveCard({ puzzleId: id1, due: Date.now(), stability: 0, difficulty: 0,
         elapsedDays: 0, scheduledDays: 0, reps: 0, lapses: 0, state: 0, lastReview: null, graduated: 0 });
       const all = repos.puzzles.listAll();

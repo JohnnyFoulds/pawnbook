@@ -7,6 +7,34 @@ import { randomUUID } from 'crypto';
 
 import { GameNotFoundError, PuzzleNotFoundError } from '../../errors.js';
 
+// ─── move-eval normalisation ──────────────────────────────────────────────────
+// B15: SQLite SELECT * returns snake_case column names; the analysis pipeline
+// produces camelCase. The in-memory repo normalises to snake_case on write so
+// build.js (which reads win_loss_pts, win_before, win_after) works identically
+// against both adapters.
+function _normaliseMoveEval(e) {
+  return {
+    game_id:       e.gameId    ?? e.game_id    ?? null,
+    ply:           e.ply,
+    fen:           e.fen,
+    move_uci:      e.moveUci   ?? e.move_uci   ?? null,
+    move_san:      e.moveSan   ?? e.move_san   ?? null,
+    cp_white:      e.cpWhite   ?? e.cp_white   ?? null,
+    mate_in:       e.mateIn    ?? e.mate_in    ?? null,
+    best_move_uci: e.bestMoveUci ?? e.best_move_uci ?? null,
+    pv:            e.pv        ?? null,
+    mover:         e.mover     ?? null,
+    win_before:    e.winBefore  ?? e.win_before  ?? null,
+    win_after:     e.winAfter   ?? e.win_after   ?? null,
+    cp_loss:       e.cpLoss    ?? e.cp_loss    ?? null,
+    // pipeline: winLoss; SQLite column: win_loss_pts — the critical B15 field
+    win_loss_pts:  e.winLoss   ?? e.win_loss_pts ?? e.winLossPts ?? null,
+    classification: e.classification ?? null,
+    move_accuracy: e.moveAccuracy ?? e.move_accuracy ?? null,
+    alt_moves_json: e.altMovesJson ?? e.alt_moves_json ?? null,
+  };
+}
+
 // ─── activity helpers ─────────────────────────────────────────────────────────
 
 function _activityDayKey(timestampMs) {
@@ -109,8 +137,9 @@ export class InMemoryGameRepository {
   saveMoveEval(eval_) {
     if (!this._evals) this._evals = new Map();
     const list = this._evals.get(eval_.gameId) ?? [];
-    const idx = list.findIndex(e => e.ply === eval_.ply);
-    if (idx >= 0) list[idx] = eval_; else list.push(eval_);
+    const row = _normaliseMoveEval(eval_);
+    const idx = list.findIndex(e => e.ply === row.ply);
+    if (idx >= 0) list[idx] = row; else list.push(row);
     this._evals.set(eval_.gameId, list);
   }
 
@@ -118,8 +147,17 @@ export class InMemoryGameRepository {
     if (!this._evals) this._evals = new Map();
     const list = this._evals.get(gameId) ?? [];
     if (list.some(e => e.ply === ply)) return; // INSERT OR IGNORE semantics
-    list.push({ gameId, ply, fen, cpWhite: evalData.cp ?? null, mateIn: evalData.mate ?? null,
-      bestMoveUci: evalData.bestmove ?? null, pv: evalData.pv ?? null });
+    // Pre-evals omit mover/win_* fields; normalise to the same snake_case shape.
+    list.push({
+      game_id: gameId, ply, fen,
+      cp_white: evalData.cp ?? null,
+      mate_in: evalData.mate ?? null,
+      best_move_uci: evalData.bestmove ?? null,
+      pv: evalData.pv ?? null,
+      mover: null,
+      win_before: null, win_after: null, cp_loss: null, win_loss_pts: null,
+      classification: null, move_accuracy: null, alt_moves_json: null,
+    });
     this._evals.set(gameId, list);
   }
 

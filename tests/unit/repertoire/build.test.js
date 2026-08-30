@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import { processGame } from '../../../src/domain/repertoire/build.js';
 import {
-  REP_CONFIRM_OBS,
   REP_PLY_MAX,
   REP_QUARANTINE_WIN_PTS,
 } from '../../../src/shared/balance.js';

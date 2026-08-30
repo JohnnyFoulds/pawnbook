@@ -22,7 +22,7 @@ async function api(path, opts) {
 
 let ws = null;
 let gameId = null;
-let currentFen = null;
+let currentFen = null; // eslint-disable-line no-unused-vars -- U9: read guard added Phase 32
 let legalMoves = [];
 let youPlay = null;
 let selectedOpponentId = null;
@@ -32,7 +32,7 @@ let ranked = true;
 let board = null;
 let isRanked = true;
 let analysisRunning = false;
-let coachAlertPending = false;
+let coachAlertPending = false; // eslint-disable-line no-unused-vars -- U9: consulted in handlePlayerMove Phase 32
 let coachAlertTimer = null;
 
 // Resolved when the board DOM is initialised and ready to receive setPosition calls.

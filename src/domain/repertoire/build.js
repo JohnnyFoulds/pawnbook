@@ -4,14 +4,14 @@
  * Returns operations; all I/O is the caller's responsibility.
  */
 
-import { extractEpd, sideFromFen } from './epd.js';
-import { runGates } from './gates.js';
-import { promoteCandidate, candidateExpired } from './state.js';
 import {
   REP_PLY_MAX,
   REP_CONFIRM_OBS,
-  REP_CANDIDATE_TTL_ENCOUNTERS,
 } from '../../shared/balance.js';
+
+import { extractEpd, sideFromFen } from './epd.js';
+import { runGates } from './gates.js';
+import { promoteCandidate } from './state.js';
 
 /**
  * Process a finished, analysed game and compute all book operations.
@@ -33,7 +33,7 @@ import {
  */
 export function processGame({
   gameId,
-  playerColor,
+  playerColor: _playerColor,
   gameResult,
   gameMoves,
   moveEvals,

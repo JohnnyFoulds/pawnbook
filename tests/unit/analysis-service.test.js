@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 import { analyseGame } from '../../src/api/ws/analysis-service.js';
 import { ScriptedEngineClient } from '../../src/adapters/engine/scripted-engine-client.js';
@@ -7,11 +7,6 @@ import { InMemoryGameRepository, InMemoryPuzzleRepository, InMemorySettingsRepos
 const SF_BLUNDER = [
   'info depth 18 seldepth 24 score cp 100 nodes 100000 pv e2e4',
   'bestmove e2e4',
-].join('\n');
-
-const SF_AFTER_BLUNDER = [
-  'info depth 18 seldepth 24 score cp -500 nodes 100000 pv e7e5',
-  'bestmove e7e5',
 ].join('\n');
 
 function makeFakeEnginePool({ sfFixtures = {}, maiaPolicyMap = null } = {}) {
@@ -70,7 +65,8 @@ describe('analyseGame', () => {
 
     const evals = gameRepo.getEvals(session.id);
     expect(evals.length).toBe(2);
-    expect(evals[0].gameId).toBe(session.id);
+    // B15: getEvals returns snake_case — field is game_id not gameId
+    expect(evals[0].game_id).toBe(session.id);
   });
 
   it('emits analysis_progress and analysis_done over WS', async () => {

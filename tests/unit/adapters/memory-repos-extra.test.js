@@ -2,8 +2,9 @@
  * Additional branch coverage for InMemory repositories.
  * Targets paths not exercised by the contract tests.
  */
-import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'crypto';
+
+import { describe, it, expect } from 'vitest';
 
 import {
   InMemoryGameRepository,
@@ -48,7 +49,8 @@ describe('InMemoryGameRepository — extended branches', () => {
     repo.saveMoveEval({ gameId: 'g1', ply: 1, fen: FEN, mover: 'player', cpWhite: 50, bestMoveUci: 'e2e4' });
     const evals = repo.getEvals('g1');
     expect(evals).toHaveLength(1);
-    expect(evals[0].cpWhite).toBe(50);
+    // B15: getEvals returns snake_case after normalisation
+    expect(evals[0].cp_white).toBe(50);
   });
 
   it('savePreEval ignores duplicate ply (INSERT OR IGNORE semantics)', () => {
@@ -58,7 +60,7 @@ describe('InMemoryGameRepository — extended branches', () => {
     repo.savePreEval('g1', 2, FEN, { cp: 99, bestmove: 'e2e4' });
     const evals = repo.getEvals('g1');
     expect(evals).toHaveLength(1);
-    expect(evals[0].cpWhite).toBe(30); // first wins
+    expect(evals[0].cp_white).toBe(30); // first wins; B15: snake_case
   });
 
   it('recordActivity increments games count', () => {
@@ -119,8 +121,9 @@ describe('InMemoryGameRepository — extended branches', () => {
     repo.save({ id: 'g1', opponentId: 'maia-1100', opponentElo: 1100, playerColor: 'white', status: 'in_progress', ranked: false });
     repo.savePreEval('g1', 5, FEN, { mate: 3 }); // cp undefined, bestmove undefined
     const evals = repo.getEvals('g1');
-    expect(evals[0].cpWhite).toBeNull();
-    expect(evals[0].bestMoveUci).toBeNull();
+    // B15: getEvals returns snake_case after normalisation
+    expect(evals[0].cp_white).toBeNull();
+    expect(evals[0].best_move_uci).toBeNull();
   });
 });
 

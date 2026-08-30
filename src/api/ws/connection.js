@@ -125,7 +125,7 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
         return;
       }
       log.info({ gameId: session.id, result: result.result }, 'triggering post-game analysis');
-      analyseGame({ gameId: session.id, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool, repertoireRepo })
+      analyseGame({ gameId: session.id, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool, repertoireRepo, clock })
         .catch(err => log.error({ err, gameId: session.id }, 'analyseGame threw unexpectedly'));
     });
 

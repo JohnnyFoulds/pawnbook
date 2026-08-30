@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import { makeMessageHandler } from '../../src/api/ws/handlers.js';
-import { InMemoryGameRepository, InMemorySettingsRepository } from '../../src/adapters/memory/repositories.js';
+import { InMemoryGameRepository } from '../../src/adapters/memory/repositories.js';
 import { FixedClock } from '../../src/adapters/clock/fixed-clock.js';
 
 vi.mock('fs', async (importOriginal) => {

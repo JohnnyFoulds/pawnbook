@@ -10,8 +10,9 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import { processGame } from '../../domain/repertoire/build.js';
-import { resolveOpenChallenges } from './challenge-service.js';
 import { logger } from '../../config.js';
+
+import { resolveOpenChallenges } from './challenge-service.js';
 
 const log = logger.child({ mod: 'repertoire-service' });
 
@@ -58,8 +59,9 @@ export function getProvenanceId(repertoireRepo) {
  * @param {object} opts.repertoireRepo
  * @param {object} [opts.puzzleRepo]
  * @param {import('ws').WebSocket} [opts.ws]
+ * @param {import('../../ports/clock.js').Clock} [opts.clock] — injected clock; defaults to wall time
  */
-export async function updateRepertoire({ gameId, playerColor, gameResult, gameRepo, repertoireRepo, puzzleRepo, ws }) {
+export async function updateRepertoire({ gameId, playerColor, gameResult, gameRepo, repertoireRepo, puzzleRepo, ws, clock = null }) {
   try {
     const gameMoves = gameRepo.getMoves(gameId);
     if (!gameMoves.length) return;
@@ -77,7 +79,7 @@ export async function updateRepertoire({ gameId, playerColor, gameResult, gameRe
     });
 
     const bookVersion = repertoireRepo.getCurrentBookVersion();
-    const nowMs = Date.now();
+    const nowMs = clock ? clock.now().getTime() : Date.now();
 
     // Collect unique EPD+side keys for positions in this game (player moves only)
     const playerEvals = moveEvals.filter(e => e.mover === 'player');
@@ -122,11 +124,11 @@ export async function updateRepertoire({ gameId, playerColor, gameResult, gameRe
     });
 
     // Resolve any open challenges with the freshly-written observations
-    await resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId });
+    await resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId, nowMs });
 
     // Create/update opening FSRS cards for all confirmed canonical nodes
     if (puzzleRepo) {
-      _ensureOpeningCards(repertoireRepo, puzzleRepo);
+      _ensureOpeningCards(repertoireRepo, puzzleRepo, nowMs);
     }
 
     if (ws?.readyState === 1) {
@@ -153,10 +155,11 @@ export async function updateRepertoire({ gameId, playerColor, gameResult, gameRe
  *
  * @param {object} repertoireRepo
  * @param {object} puzzleRepo
+ * @param {number} [nowMs] — current timestamp; defaults to Date.now()
  */
-export function _ensureOpeningCards(repertoireRepo, puzzleRepo) {
+export function _ensureOpeningCards(repertoireRepo, puzzleRepo, nowMs = Date.now()) {
   const nodes = repertoireRepo.listNodes();
-  const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+  const tomorrow = nowMs + 24 * 60 * 60 * 1000;
 
   for (const node of nodes) {
     const moves = repertoireRepo.getMovesForNode(node.epd, node.side);

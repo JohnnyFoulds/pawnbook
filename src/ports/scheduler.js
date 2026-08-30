@@ -1,23 +1,11 @@
 /**
  * @module ports/scheduler
- * Scheduler port — FSRS spaced repetition scheduling.
- * Two implementations: FsrsScheduler (production) and FakeScheduler (tests).
- */
-
-/**
- * @typedef {'Again'|'Hard'|'Good'|'Easy'} Rating
- */
-
-/**
- * @typedef {Object} ScheduleResult
- * @property {Date} due
- * @property {number} stability
- * @property {number} difficulty
- * @property {number} scheduledDays
- * @property {number} elapsed_days
- * @property {number} reps
- * @property {number} lapses
- * @property {string} state
+ * Scheduler port — abstracts setTimeout/clearTimeout so alert timeouts are
+ * controllable in tests without waiting real wall-clock seconds.
+ *
+ * Two implementations:
+ *   RealScheduler   — wraps the process setTimeout (production)
+ *   ManualScheduler — stores pending callbacks; caller fires them explicitly
  */
 
 /**
@@ -27,15 +15,13 @@
 /**
  * @function
  * @name Scheduler#schedule
- * @param {Object} card - current FSRS card state
- * @param {Rating} rating
- * @param {Date} now
- * @returns {ScheduleResult}
+ * @param {Function} fn
+ * @param {number} delayMs
+ * @returns {*} handle (opaque; pass to cancel())
  */
 
 /**
  * @function
- * @name Scheduler#newCard
- * @param {Date} due
- * @returns {Object} initial card state
+ * @name Scheduler#cancel
+ * @param {*} handle
  */

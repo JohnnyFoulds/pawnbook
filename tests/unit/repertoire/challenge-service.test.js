@@ -5,7 +5,9 @@
  */
 
 import { randomUUID } from 'crypto';
+
 import { describe, it, expect } from 'vitest';
+
 import { resolveChallenge } from '../../../src/domain/repertoire/challenge.js';
 import { resolveOpenChallenges } from '../../../src/api/ws/challenge-service.js';
 import { InMemoryRepertoireRepository } from '../../../src/adapters/memory/repositories.js';
@@ -292,9 +294,8 @@ describe('resolveOpenChallenges — service', () => {
   it('settled_both: challenger gets alt role and changelog entry', async () => {
     const repo = makeRepo();
     addMoves(repo);
-    const ch = openChallenge(repo, { openedAt: 1_000 });
-
-    const provenanceId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    openChallenge(repo, { openedAt: 1_000 });
+    repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
 
     // Manually patch to qualifiesForAlternation = true by injecting it via the evidence
     // The only way to trigger rule 9 from the service is if _gatherEvidence returns true.

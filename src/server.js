@@ -22,7 +22,8 @@ import { stateRouter } from './api/routes/state.js';
 import { makeRepertoireRouter } from './api/routes/repertoire.js';
 import { attachWebSocketServer } from './api/ws/connection.js';
 import { createEnginePool } from './adapters/engine/engine-pool.js';
-import { PORT, BIND_ADDR, DB_PATH, NODE_ENV, logger } from './config.js';
+import { createFakeEnginePool } from './adapters/engine/fake-engine-pool.js';
+import { PORT, BIND_ADDR, DB_PATH, NODE_ENV, ENGINE_MODE, logger } from './config.js';
 import { initTelemetry } from './telemetry.js';
 
 const log = logger.child({ mod: 'server' });
@@ -62,7 +63,7 @@ async function start() {
   }
 
   // ── Engine pool (created before routes so /analyse can use it) ───────────
-  const enginePool = createEnginePool();
+  const enginePool = ENGINE_MODE === 'fake' ? createFakeEnginePool() : createEnginePool();
 
   // ── Express app ───────────────────────────────────────────────────────────
   const app = express();

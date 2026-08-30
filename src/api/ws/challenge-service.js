@@ -22,22 +22,22 @@ const log = logger.child({ mod: 'challenge-service' });
  * Called after each game's rep_observations are written.
  * Always resolves — errors logged and swallowed.
  *
- * @param {{ repertoireRepo: object, bookVersion: number, provenanceId: number }} opts
+ * @param {{ repertoireRepo: object, bookVersion: number, provenanceId: number, nowMs?: number }} opts
  */
-export async function resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId }) {
+export async function resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId, nowMs = Date.now() }) {
   try {
     const challenges = repertoireRepo.listOpenChallenges();
     for (const challenge of challenges) {
-      _resolveOne(challenge, repertoireRepo, bookVersion, provenanceId);
+      _resolveOne(challenge, repertoireRepo, bookVersion, provenanceId, nowMs);
     }
   } catch (err) {
     log.warn({ err }, 'challenge resolution failed');
   }
 }
 
-function _resolveOne(challenge, repo, bookVersion, provenanceId) {
+function _resolveOne(challenge, repo, bookVersion, provenanceId, nowMs = Date.now()) {
   try {
-    const evidence = _gatherEvidence(challenge, repo);
+    const evidence = _gatherEvidence(challenge, repo, nowMs);
     const { status, rule } = resolveChallenge(evidence);
 
     // Always update the running counters so the data is current
@@ -51,7 +51,7 @@ function _resolveOne(challenge, repo, bookVersion, provenanceId) {
 
     // Resolved — write all state changes atomically
     repo.transaction(() => {
-      const now = Date.now();
+      const now = nowMs;
       const newBookVersion = repo.incrementBookVersion();
 
       repo.updateChallenge(challenge.id, {
@@ -137,7 +137,7 @@ function _resolveOne(challenge, repo, bookVersion, provenanceId) {
   }
 }
 
-function _gatherEvidence(challenge, repo) {
+function _gatherEvidence(challenge, repo, nowMs = Date.now()) {
   const observations = repo.getObservationsForNode(challenge.epd, challenge.side);
   const openedAt = challenge.openedAt;
 
@@ -160,7 +160,6 @@ function _gatherEvidence(challenge, repo) {
   const isSuppressed = supp != null && (node?.encounters ?? 0) < supp.untilEncounters;
 
   const halfLifeMs = REP_RECENCY_HALFLIFE_DAYS * 86_400_000;
-  const nowMs = Date.now();
   const incumbentRecentCount = observations.filter(
     o => o.moveUci === challenge.incumbentUci &&
          o.source !== 'coach_corrected' &&

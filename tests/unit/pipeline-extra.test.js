@@ -3,6 +3,7 @@
  * Covers catch blocks, existingEvals ?? chains, and sort comparator.
  */
 import { describe, it, expect } from 'vitest';
+
 import { runAnalysis } from '../../src/domain/analysis/pipeline.js';
 import { ScriptedEngineClient } from '../../src/adapters/engine/scripted-engine-client.js';
 

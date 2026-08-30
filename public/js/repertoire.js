@@ -62,7 +62,7 @@ async function loadChallenges() {
     const r = await fetch('/api/repertoire/challenges');
     const { challenges } = await r.json();
     document.getElementById('open-challenges').textContent = challenges.length;
-  } catch (err) {
+  } catch {
     document.getElementById('open-challenges').textContent = '—';
   }
 }

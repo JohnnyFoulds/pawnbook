@@ -3,6 +3,7 @@
  * Verifies determinism invariants required by invariant 13.
  */
 import { describe, it, expect } from 'vitest';
+
 import { sortedNdjson, buildPgn, computeManifest } from '../../scripts/lib/export-utils.js';
 
 describe('sortedNdjson', () => {
@@ -114,7 +115,7 @@ describe('computeManifest', () => {
     const lines = manifest.trim().split('\n');
     expect(lines).toHaveLength(2);
     // Each line: <64-char hex>  <filename>
-    expect(lines[0]).toMatch(/^[0-9a-f]{64}  [a-z.]+$/);
+    expect(lines[0]).toMatch(/^[0-9a-f]{64} {2}[a-z.]+$/);
   });
 
   it('is sorted by filename', () => {
