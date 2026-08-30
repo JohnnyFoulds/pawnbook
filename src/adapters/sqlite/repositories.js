@@ -60,14 +60,14 @@ export class SqliteGameRepository {
     const stmt = this._db.prepare(`
       INSERT INTO games (
         id, started_at, opponent_id, opponent_elo, player_color,
-        status, ranked, time_control_initial_sec, time_control_inc_sec,
+        status, ranked, coach_enabled, time_control_initial_sec, time_control_inc_sec,
         clock_white_ms, clock_black_ms,
         result, termination, pgn, played_at,
         elo_before, elo_after, accuracy, opponent_accuracy,
         analysis_state, analysis_error, analysed_at
       ) VALUES (
         @id, @started_at, @opponent_id, @opponent_elo, @player_color,
-        @status, @ranked, @time_control_initial_sec, @time_control_inc_sec,
+        @status, @ranked, @coach_enabled, @time_control_initial_sec, @time_control_inc_sec,
         @clock_white_ms, @clock_black_ms,
         @result, @termination, @pgn, @played_at,
         @elo_before, @elo_after, @accuracy, @opponent_accuracy,
@@ -97,6 +97,7 @@ export class SqliteGameRepository {
       player_color: game.playerColor,
       status: game.status ?? 'in_progress',
       ranked: game.ranked ? 1 : 0,
+      coach_enabled: game.coachEnabled === false ? 0 : 1,
       time_control_initial_sec: game.timeControlInitialSec ?? null,
       time_control_inc_sec: game.timeControlIncSec ?? null,
       clock_white_ms: game.clockWhiteMs ?? null,
@@ -285,6 +286,7 @@ export class SqliteGameRepository {
       termination: row.termination,
       pgn: row.pgn,
       ranked: row.ranked === 1,
+      coachEnabled: row.coach_enabled !== 0,
       timeControlInitialSec: row.time_control_initial_sec,
       timeControlIncSec: row.time_control_inc_sec,
       clockWhiteMs: row.clock_white_ms,
@@ -335,25 +337,27 @@ export class SqlitePuzzleRepository {
 
   /** @param {object} puzzle */
   save(puzzle) {
-    const existing = this._db.prepare('SELECT id FROM puzzles WHERE fen = ?').get(puzzle.fen);
+    const kind = puzzle.kind ?? 'tactical';
+    const existing = this._db.prepare('SELECT id FROM puzzles WHERE fen = ? AND kind = ?').get(puzzle.fen, kind);
     if (existing) {
-      this._db.prepare('UPDATE puzzles SET times_seen = times_seen + 1 WHERE fen = ?').run(puzzle.fen);
+      this._db.prepare('UPDATE puzzles SET times_seen = times_seen + 1 WHERE fen = ? AND kind = ?').run(puzzle.fen, kind);
       return existing.id;
     }
     const id = puzzle.id ?? randomUUID();
     this._db.prepare(`
-      INSERT INTO puzzles (id, fen, side_to_move, best_move_uci, best_move_san, pv,
+      INSERT INTO puzzles (id, kind, fen, side_to_move, best_move_uci, best_move_san, pv,
         accepted_moves_json, followup_uci, played_move_uci, played_move_san,
         cp_loss, win_loss_pts, classification, findability, temptation, instructiveness,
         tags, maia_model, policy_temperature, elo_at_creation, source_game_id, source_ply,
         phase, was_timed, times_seen, created_at)
-      VALUES (@id, @fen, @side_to_move, @best_move_uci, @best_move_san, @pv,
+      VALUES (@id, @kind, @fen, @side_to_move, @best_move_uci, @best_move_san, @pv,
         @accepted_moves_json, @followup_uci, @played_move_uci, @played_move_san,
         @cp_loss, @win_loss_pts, @classification, @findability, @temptation, @instructiveness,
         @tags, @maia_model, @policy_temperature, @elo_at_creation, @source_game_id, @source_ply,
         @phase, @was_timed, 1, @created_at)
     `).run({
       id,
+      kind,
       fen: puzzle.fen,
       side_to_move: puzzle.sideToMove,
       best_move_uci: puzzle.bestMoveUci,
@@ -382,6 +386,23 @@ export class SqlitePuzzleRepository {
     return id;
   }
 
+  /**
+   * @param {string} fen
+   * @param {string} kind
+   * @returns {object|null}
+   */
+  getByFenAndKind(fen, kind) {
+    return this._db.prepare('SELECT * FROM puzzles WHERE fen = ? AND kind = ?').get(fen, kind) ?? null;
+  }
+
+  /**
+   * @param {string} id
+   * @param {string} acceptedMovesJson
+   */
+  updateAcceptedMoves(id, acceptedMovesJson) {
+    this._db.prepare('UPDATE puzzles SET accepted_moves_json = ? WHERE id = ?').run(acceptedMovesJson, id);
+  }
+
   /** @param {string} id @returns {object} */
   findById(id) {
     const row = this._db.prepare('SELECT * FROM puzzles WHERE id = ?').get(id);
@@ -395,7 +416,9 @@ export class SqlitePuzzleRepository {
    */
   getDueCards(now) {
     return this._db.prepare(`
-      SELECT p.*, f.due, f.stability, f.difficulty, f.reps, f.lapses, f.state, f.graduated
+      SELECT p.id, p.kind, p.fen, p.side_to_move, p.best_move_uci, p.best_move_san,
+        p.accepted_moves_json, p.findability, p.instructiveness, p.tags,
+        f.due, f.stability, f.difficulty, f.reps, f.lapses, f.state, f.graduated
       FROM puzzles p
       JOIN fsrs_cards f ON f.puzzle_id = p.id
       WHERE f.due <= ? AND f.graduated = 0
@@ -551,4 +574,464 @@ export class SqliteSettingsRepository {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     `).run(key, String(value));
   }
+}
+
+export class SqliteRepertoireRepository {
+  /** @param {import('better-sqlite3').Database} db */
+  constructor(db) {
+    this._db = db;
+  }
+
+  /** @param {Object} ctx @returns {number} */
+  getOrCreateProvenance(ctx) {
+    const existing = this._db.prepare(`
+      SELECT id FROM rep_provenance
+      WHERE balance_hash = ? AND schema_version = ?
+        AND (sf_version IS ? OR sf_version = ?)
+        AND (sf_depth IS ? OR sf_depth = ?)
+        AND (sf_multipv IS ? OR sf_multipv = ?)
+        AND (maia_weights_id IS ? OR maia_weights_id = ?)
+      LIMIT 1
+    `).get(
+      ctx.balanceHash, ctx.schemaVersion,
+      ctx.sfVersion ?? null, ctx.sfVersion ?? null,
+      ctx.sfDepth ?? null, ctx.sfDepth ?? null,
+      ctx.sfMultipv ?? null, ctx.sfMultipv ?? null,
+      ctx.maiaWeightsId ?? null, ctx.maiaWeightsId ?? null,
+    );
+    if (existing) return existing.id;
+    const result = this._db.prepare(`
+      INSERT INTO rep_provenance
+        (at, schema_version, balance_hash, app_git_sha, sf_version, sf_depth, sf_multipv, maia_weights_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      Date.now(), ctx.schemaVersion, ctx.balanceHash,
+      ctx.appGitSha ?? null, ctx.sfVersion ?? null,
+      ctx.sfDepth ?? null, ctx.sfMultipv ?? null, ctx.maiaWeightsId ?? null,
+    );
+    return Number(result.lastInsertRowid);
+  }
+
+  /** @returns {number} */
+  getCurrentBookVersion() {
+    return this._db.prepare('SELECT version FROM rep_book_version WHERE singleton = 0').get().version;
+  }
+
+  /** @returns {number} */
+  incrementBookVersion() {
+    this._db.prepare('UPDATE rep_book_version SET version = version + 1 WHERE singleton = 0').run();
+    return this.getCurrentBookVersion();
+  }
+
+  /** @param {Object} obs @returns {void} */
+  appendObservation(obs) {
+    this._db.prepare(`
+      INSERT INTO rep_observations
+        (game_id, ply, epd, side, move_uci, move_san, win_loss_pts, classification,
+         played_at, source, provenance_id, book_version)
+      VALUES
+        (@game_id, @ply, @epd, @side, @move_uci, @move_san, @win_loss_pts, @classification,
+         @played_at, @source, @provenance_id, @book_version)
+    `).run({
+      game_id: obs.gameId, ply: obs.ply, epd: obs.epd, side: obs.side,
+      move_uci: obs.moveUci, move_san: obs.moveSan ?? null,
+      win_loss_pts: obs.winLossPts ?? null, classification: obs.classification ?? null,
+      played_at: obs.playedAt, source: obs.source,
+      provenance_id: obs.provenanceId, book_version: obs.bookVersion,
+    });
+  }
+
+  /** @param {string} epd @param {string} side @returns {Object[]} */
+  getObservationsForNode(epd, side) {
+    return this._db.prepare(
+      'SELECT * FROM rep_observations WHERE epd = ? AND side = ? ORDER BY played_at'
+    ).all(epd, side).map(_obsRow);
+  }
+
+  /** @param {Object} dev @returns {void} */
+  appendDeviation(dev) {
+    this._db.prepare(`
+      INSERT INTO rep_deviations
+        (id, game_id, ply, epd, kind, played_uci, book_uci, resolution,
+         decision_ms_taken, provenance_id, book_version)
+      VALUES
+        (@id, @game_id, @ply, @epd, @kind, @played_uci, @book_uci, @resolution,
+         @decision_ms_taken, @provenance_id, @book_version)
+    `).run({
+      id: dev.id, game_id: dev.gameId, ply: dev.ply, epd: dev.epd,
+      kind: dev.kind, played_uci: dev.playedUci, book_uci: dev.bookUci ?? null,
+      resolution: dev.resolution ?? null, decision_ms_taken: dev.decisionMsTaken ?? null,
+      provenance_id: dev.provenanceId, book_version: dev.bookVersion,
+    });
+  }
+
+  /** @param {string} gameId @returns {Object[]} */
+  getDeviationsForGame(gameId) {
+    return this._db.prepare(
+      'SELECT * FROM rep_deviations WHERE game_id = ? ORDER BY ply'
+    ).all(gameId).map(_devRow);
+  }
+
+  /** @param {number} [limit] @returns {Object[]} */
+  getAllDeviations(limit = 200) {
+    return this._db.prepare('SELECT * FROM rep_deviations ORDER BY rowid DESC LIMIT ?').all(limit).map(_devRow);
+  }
+
+  /** @param {Object} audit @returns {void} */
+  appendAudit(audit) {
+    this._db.prepare(`
+      INSERT INTO rep_audits
+        (id, epd, side, move_uci, depth, multipv, win_pct, cp, pv, run_at, provenance_id, book_version)
+      VALUES
+        (@id, @epd, @side, @move_uci, @depth, @multipv, @win_pct, @cp, @pv, @run_at, @provenance_id, @book_version)
+    `).run({
+      id: audit.id, epd: audit.epd, side: audit.side, move_uci: audit.moveUci,
+      depth: audit.depth, multipv: audit.multipv, win_pct: audit.winPct ?? null,
+      cp: audit.cp ?? null, pv: audit.pv ?? null, run_at: audit.runAt,
+      provenance_id: audit.provenanceId, book_version: audit.bookVersion,
+    });
+  }
+
+  /** @param {string} id @returns {Object|null} */
+  getAudit(id) {
+    const row = this._db.prepare('SELECT * FROM rep_audits WHERE id = ?').get(id);
+    return row ? _auditRow(row) : null;
+  }
+
+  /** @param {Object} challenge @returns {void} */
+  openChallenge(challenge) {
+    this._db.prepare(`
+      INSERT INTO rep_challenges (
+        id, epd, side, fen, incumbent_uci, challenger_uci,
+        opened_game_id, opened_ply, opened_at,
+        inc_observations, inc_mean_win_loss_pts,
+        inc_score_w, inc_score_d, inc_score_l, inc_card_state,
+        challenger_plays, incumbent_plays, encounters_since_open,
+        move_ms_taken, move_ms_zscore, decision_ms_taken,
+        engine_delta_win_pts, engine_audit_id,
+        trend_challenger, trend_incumbent,
+        result_challenger_perf, result_challenger_n,
+        result_incumbent_perf, result_incumbent_n,
+        status, resolution_rule, resolved_at, resolved_by, gate_reason,
+        provenance_id, book_version
+      ) VALUES (
+        @id, @epd, @side, @fen, @incumbent_uci, @challenger_uci,
+        @opened_game_id, @opened_ply, @opened_at,
+        @inc_observations, @inc_mean_win_loss_pts,
+        @inc_score_w, @inc_score_d, @inc_score_l, @inc_card_state,
+        @challenger_plays, @incumbent_plays, @encounters_since_open,
+        @move_ms_taken, @move_ms_zscore, @decision_ms_taken,
+        @engine_delta_win_pts, @engine_audit_id,
+        @trend_challenger, @trend_incumbent,
+        @result_challenger_perf, @result_challenger_n,
+        @result_incumbent_perf, @result_incumbent_n,
+        @status, @resolution_rule, @resolved_at, @resolved_by, @gate_reason,
+        @provenance_id, @book_version
+      )
+    `).run({
+      id: challenge.id, epd: challenge.epd, side: challenge.side, fen: challenge.fen,
+      incumbent_uci: challenge.incumbentUci, challenger_uci: challenge.challengerUci,
+      opened_game_id: challenge.openedGameId, opened_ply: challenge.openedPly,
+      opened_at: challenge.openedAt,
+      inc_observations: challenge.incObservations ?? null,
+      inc_mean_win_loss_pts: challenge.incMeanWinLossPts ?? null,
+      inc_score_w: challenge.incScoreW ?? null, inc_score_d: challenge.incScoreD ?? null,
+      inc_score_l: challenge.incScoreL ?? null, inc_card_state: challenge.incCardState ?? null,
+      challenger_plays: challenge.challengerPlays ?? 0,
+      incumbent_plays: challenge.incumbentPlays ?? 0,
+      encounters_since_open: challenge.encountersSinceOpen ?? 0,
+      move_ms_taken: challenge.moveMsTaken ?? null,
+      move_ms_zscore: challenge.moveMsZscore ?? null,
+      decision_ms_taken: challenge.decisionMsTaken ?? null,
+      engine_delta_win_pts: challenge.engineDeltaWinPts ?? null,
+      engine_audit_id: challenge.engineAuditId ?? null,
+      trend_challenger: challenge.trendChallenger ?? null,
+      trend_incumbent: challenge.trendIncumbent ?? null,
+      result_challenger_perf: challenge.resultChallengerPerf ?? null,
+      result_challenger_n: challenge.resultChallengerN ?? 0,
+      result_incumbent_perf: challenge.resultIncumbentPerf ?? null,
+      result_incumbent_n: challenge.resultIncumbentN ?? 0,
+      status: challenge.status ?? 'open',
+      resolution_rule: challenge.resolutionRule ?? null,
+      resolved_at: challenge.resolvedAt ?? null,
+      resolved_by: challenge.resolvedBy ?? null,
+      gate_reason: challenge.gateReason ?? null,
+      provenance_id: challenge.provenanceId, book_version: challenge.bookVersion,
+    });
+  }
+
+  /** @param {string} id @param {Object} patch @returns {void} */
+  updateChallenge(id, patch) {
+    const colMap = {
+      challengerPlays: 'challenger_plays', incumbentPlays: 'incumbent_plays',
+      encountersSinceOpen: 'encounters_since_open', moveMsTaken: 'move_ms_taken',
+      moveMsZscore: 'move_ms_zscore', decisionMsTaken: 'decision_ms_taken',
+      engineDeltaWinPts: 'engine_delta_win_pts', engineAuditId: 'engine_audit_id',
+      trendChallenger: 'trend_challenger', trendIncumbent: 'trend_incumbent',
+      resultChallengerPerf: 'result_challenger_perf', resultChallengerN: 'result_challenger_n',
+      resultIncumbentPerf: 'result_incumbent_perf', resultIncumbentN: 'result_incumbent_n',
+      status: 'status', resolutionRule: 'resolution_rule',
+      resolvedAt: 'resolved_at', resolvedBy: 'resolved_by', gateReason: 'gate_reason',
+    };
+    const sets = [];
+    const params = {};
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in patch) {
+        sets.push(`${col} = @${key}`);
+        params[key] = patch[key];
+      }
+    }
+    if (sets.length === 0) return;
+    params._id = id;
+    this._db.prepare(`UPDATE rep_challenges SET ${sets.join(', ')} WHERE id = @_id`).run(params);
+  }
+
+  /** @param {string} id @returns {Object|null} */
+  getChallenge(id) {
+    const row = this._db.prepare('SELECT * FROM rep_challenges WHERE id = ?').get(id);
+    return row ? _challengeRow(row) : null;
+  }
+
+  /** @param {string} epd @param {string} side @returns {Object|null} */
+  getOpenChallenge(epd, side) {
+    const row = this._db.prepare(
+      "SELECT * FROM rep_challenges WHERE epd = ? AND side = ? AND status = 'open' LIMIT 1"
+    ).get(epd, side);
+    return row ? _challengeRow(row) : null;
+  }
+
+  /** @returns {Object[]} */
+  listOpenChallenges() {
+    return this._db.prepare(
+      "SELECT * FROM rep_challenges WHERE status = 'open' ORDER BY opened_at ASC"
+    ).all().map(_challengeRow);
+  }
+
+  /** @param {Object} entry @returns {void} */
+  appendChangelog(entry) {
+    this._db.prepare(`
+      INSERT INTO rep_changelog
+        (id, at, epd, side, kind, from_uci, to_uci, challenge_id, rule, detail_json,
+         provenance_id, book_version)
+      VALUES
+        (@id, @at, @epd, @side, @kind, @from_uci, @to_uci, @challenge_id, @rule, @detail_json,
+         @provenance_id, @book_version)
+    `).run({
+      id: entry.id, at: entry.at, epd: entry.epd, side: entry.side, kind: entry.kind,
+      from_uci: entry.fromUci ?? null, to_uci: entry.toUci ?? null,
+      challenge_id: entry.challengeId ?? null, rule: entry.rule ?? null,
+      detail_json: entry.detailJson ?? null,
+      provenance_id: entry.provenanceId, book_version: entry.bookVersion,
+    });
+  }
+
+  /** @param {number} [limit] @returns {Object[]} */
+  getChangelog(limit = 50) {
+    return this._db.prepare('SELECT * FROM rep_changelog ORDER BY at DESC LIMIT ?').all(limit)
+      .map(_changelogRow);
+  }
+
+  /** @param {string} id @returns {Object|null} */
+  getChangelogEntry(id) {
+    const row = this._db.prepare('SELECT * FROM rep_changelog WHERE id = ?').get(id);
+    return row ? _changelogRow(row) : null;
+  }
+
+  /** @param {Object} supp @returns {void} */
+  upsertSuppression(supp) {
+    this._db.prepare(`
+      INSERT OR REPLACE INTO rep_suppressions
+        (epd, side, move_uci, until_encounters, created_at, changelog_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(supp.epd, supp.side, supp.moveUci, supp.untilEncounters, supp.createdAt, supp.changelogId ?? null);
+  }
+
+  /** @param {string} epd @param {string} side @param {string} moveUci @returns {Object|null} */
+  getSuppression(epd, side, moveUci) {
+    const row = this._db.prepare(
+      'SELECT * FROM rep_suppressions WHERE epd = ? AND side = ? AND move_uci = ?'
+    ).get(epd, side, moveUci);
+    if (!row) return null;
+    return {
+      epd: row.epd, side: row.side, moveUci: row.move_uci,
+      untilEncounters: row.until_encounters, createdAt: row.created_at,
+      changelogId: row.changelog_id,
+    };
+  }
+
+  /** @param {Object} node @returns {void} */
+  upsertNode(node) {
+    this._db.prepare(`
+      INSERT OR REPLACE INTO rep_nodes
+        (epd, side, fen, first_seen, last_seen, times_reached, encounters, min_ply,
+         reach_prob, reach_stale, line_loss, vote_frozen_until_encounter)
+      VALUES
+        (@epd, @side, @fen, @first_seen, @last_seen, @times_reached, @encounters, @min_ply,
+         @reach_prob, @reach_stale, @line_loss, @vote_frozen_until_encounter)
+    `).run({
+      epd: node.epd, side: node.side, fen: node.fen ?? null,
+      first_seen: node.firstSeen ?? null, last_seen: node.lastSeen ?? null,
+      times_reached: node.timesReached ?? 0, encounters: node.encounters ?? 0,
+      min_ply: node.minPly ?? null, reach_prob: node.reachProb ?? null,
+      reach_stale: node.reachStale ? 1 : 0, line_loss: node.lineLoss ?? null,
+      vote_frozen_until_encounter: node.voteFrozenUntilEncounter ?? null,
+    });
+  }
+
+  /** @param {string} epd @param {string} side @returns {Object|null} */
+  getNode(epd, side) {
+    const row = this._db.prepare('SELECT * FROM rep_nodes WHERE epd = ? AND side = ?').get(epd, side);
+    return row ? _nodeRow(row) : null;
+  }
+
+  /** @returns {Object[]} */
+  listNodes() {
+    return this._db.prepare('SELECT * FROM rep_nodes ORDER BY epd, side').all().map(_nodeRow);
+  }
+
+  /** @param {Object} move @returns {void} */
+  upsertMove(move) {
+    this._db.prepare(`
+      INSERT OR REPLACE INTO rep_moves
+        (epd, side, move_uci, move_san, role, observations, weighted_score,
+         mean_win_loss_pts, worst_win_loss_pts, audit_id, gate_reason,
+         score_w, score_d, score_l, first_played, last_played)
+      VALUES
+        (@epd, @side, @move_uci, @move_san, @role, @observations, @weighted_score,
+         @mean_win_loss_pts, @worst_win_loss_pts, @audit_id, @gate_reason,
+         @score_w, @score_d, @score_l, @first_played, @last_played)
+    `).run({
+      epd: move.epd, side: move.side, move_uci: move.moveUci, move_san: move.moveSan ?? null,
+      role: move.role, observations: move.observations ?? 0,
+      weighted_score: move.weightedScore ?? null,
+      mean_win_loss_pts: move.meanWinLossPts ?? null,
+      worst_win_loss_pts: move.worstWinLossPts ?? null,
+      audit_id: move.auditId ?? null, gate_reason: move.gateReason ?? null,
+      score_w: move.scoreW ?? 0, score_d: move.scoreD ?? 0, score_l: move.scoreL ?? 0,
+      first_played: move.firstPlayed ?? null, last_played: move.lastPlayed ?? null,
+    });
+  }
+
+  /** @param {string} epd @param {string} side @param {string} moveUci @returns {Object|null} */
+  getMove(epd, side, moveUci) {
+    const row = this._db.prepare(
+      'SELECT * FROM rep_moves WHERE epd = ? AND side = ? AND move_uci = ?'
+    ).get(epd, side, moveUci);
+    return row ? _moveRow(row) : null;
+  }
+
+  /** @param {string} epd @param {string} side @returns {Object[]} */
+  getMovesForNode(epd, side) {
+    return this._db.prepare(
+      'SELECT * FROM rep_moves WHERE epd = ? AND side = ? ORDER BY role, move_uci'
+    ).all(epd, side).map(_moveRow);
+  }
+
+  /** @param {Object} policy @returns {void} */
+  upsertPolicy(policy) {
+    this._db.prepare(`
+      INSERT OR REPLACE INTO rep_policy (epd, maia_model, maia_weights_id, policy_json, computed_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(policy.epd, policy.maiaModel, policy.maiaWeightsId, policy.policyJson, policy.computedAt);
+  }
+
+  /** @param {string} epd @param {string} maiaModel @param {string} maiaWeightsId @returns {Object|null} */
+  getPolicy(epd, maiaModel, maiaWeightsId) {
+    const row = this._db.prepare(
+      'SELECT * FROM rep_policy WHERE epd = ? AND maia_model = ? AND maia_weights_id = ?'
+    ).get(epd, maiaModel, maiaWeightsId);
+    if (!row) return null;
+    return {
+      epd: row.epd, maiaModel: row.maia_model, maiaWeightsId: row.maia_weights_id,
+      policyJson: row.policy_json, computedAt: row.computed_at,
+    };
+  }
+
+  /** @param {Function} fn @returns {any} */
+  transaction(fn) {
+    return this._db.transaction(fn)();
+  }
+}
+
+// ─── row mappers ─────────────────────────────────────────────────────────────
+
+function _obsRow(r) {
+  return {
+    gameId: r.game_id, ply: r.ply, epd: r.epd, side: r.side,
+    moveUci: r.move_uci, moveSan: r.move_san,
+    winLossPts: r.win_loss_pts, classification: r.classification,
+    playedAt: r.played_at, source: r.source,
+    provenanceId: r.provenance_id, bookVersion: r.book_version,
+  };
+}
+
+function _devRow(r) {
+  return {
+    id: r.id, gameId: r.game_id, ply: r.ply, epd: r.epd, kind: r.kind,
+    playedUci: r.played_uci, bookUci: r.book_uci, resolution: r.resolution,
+    decisionMsTaken: r.decision_ms_taken,
+    provenanceId: r.provenance_id, bookVersion: r.book_version,
+  };
+}
+
+function _auditRow(r) {
+  return {
+    id: r.id, epd: r.epd, side: r.side, moveUci: r.move_uci,
+    depth: r.depth, multipv: r.multipv, winPct: r.win_pct,
+    cp: r.cp, pv: r.pv, runAt: r.run_at,
+    provenanceId: r.provenance_id, bookVersion: r.book_version,
+  };
+}
+
+function _challengeRow(r) {
+  return {
+    id: r.id, epd: r.epd, side: r.side, fen: r.fen,
+    incumbentUci: r.incumbent_uci, challengerUci: r.challenger_uci,
+    openedGameId: r.opened_game_id, openedPly: r.opened_ply, openedAt: r.opened_at,
+    incObservations: r.inc_observations, incMeanWinLossPts: r.inc_mean_win_loss_pts,
+    incScoreW: r.inc_score_w, incScoreD: r.inc_score_d, incScoreL: r.inc_score_l,
+    incCardState: r.inc_card_state,
+    challengerPlays: r.challenger_plays, incumbentPlays: r.incumbent_plays,
+    encountersSinceOpen: r.encounters_since_open,
+    moveMsTaken: r.move_ms_taken, moveMsZscore: r.move_ms_zscore,
+    decisionMsTaken: r.decision_ms_taken,
+    engineDeltaWinPts: r.engine_delta_win_pts, engineAuditId: r.engine_audit_id,
+    trendChallenger: r.trend_challenger, trendIncumbent: r.trend_incumbent,
+    resultChallengerPerf: r.result_challenger_perf, resultChallengerN: r.result_challenger_n,
+    resultIncumbentPerf: r.result_incumbent_perf, resultIncumbentN: r.result_incumbent_n,
+    status: r.status, resolutionRule: r.resolution_rule,
+    resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, gateReason: r.gate_reason,
+    provenanceId: r.provenance_id, bookVersion: r.book_version,
+  };
+}
+
+function _changelogRow(r) {
+  return {
+    id: r.id, at: r.at, epd: r.epd, side: r.side, kind: r.kind,
+    fromUci: r.from_uci, toUci: r.to_uci, challengeId: r.challenge_id,
+    rule: r.rule, detailJson: r.detail_json,
+    provenanceId: r.provenance_id, bookVersion: r.book_version,
+  };
+}
+
+function _nodeRow(r) {
+  return {
+    epd: r.epd, side: r.side, fen: r.fen,
+    firstSeen: r.first_seen, lastSeen: r.last_seen,
+    timesReached: r.times_reached, encounters: r.encounters,
+    minPly: r.min_ply, reachProb: r.reach_prob,
+    reachStale: r.reach_stale === 1,
+    lineLoss: r.line_loss, voteFrozenUntilEncounter: r.vote_frozen_until_encounter,
+  };
+}
+
+function _moveRow(r) {
+  return {
+    epd: r.epd, side: r.side, moveUci: r.move_uci, moveSan: r.move_san,
+    role: r.role, observations: r.observations, weightedScore: r.weighted_score,
+    meanWinLossPts: r.mean_win_loss_pts, worstWinLossPts: r.worst_win_loss_pts,
+    auditId: r.audit_id, gateReason: r.gate_reason,
+    scoreW: r.score_w, scoreD: r.score_d, scoreL: r.score_l,
+    firstPlayed: r.first_played, lastPlayed: r.last_played,
+  };
 }

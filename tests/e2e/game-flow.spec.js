@@ -262,14 +262,12 @@ test.describe('Move legality', () => {
 });
 
 test.describe('Training loop', () => {
-  let trainingGameId = null;
-
   test('full loop: play move → resign → game_over → analysis_done', async ({ page }) => {
     const errs = captureErrors(page);
     const { received } = captureWs(page);
     await page.goto('/play.html');
     await page.waitForLoadState('networkidle');
-    trainingGameId = await startGame(page, received, { color: 'white' });
+    await startGame(page, received, { color: 'white' });
 
     const { centre } = await getBoardHelpers(page);
 

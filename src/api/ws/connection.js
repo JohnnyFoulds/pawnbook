@@ -25,11 +25,12 @@ const log = logger.child({ mod: 'ws-connection' });
  * @param {import('../../adapters/sqlite/repositories.js').SqliteSettingsRepository} opts.settingsRepo
  * @param {import('../../ports/clock.js').Clock} opts.clock
  * @param {object|null} opts.enginePool — engine dispatch function; null in test/dev without engines
+ * @param {object|null} [opts.repertoireRepo]
  * @returns {WebSocketServer}
  */
-export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool }) {
+export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settingsRepo, clock, enginePool, repertoireRepo = null }) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws', maxPayload: 4096 });
-  const handleMessage = makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool });
+  const handleMessage = makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool, repertoireRepo });
 
   wss.on('connection', (ws, req) => {
     log.info({ remoteAddress: req.socket.remoteAddress }, 'ws connected');
@@ -124,7 +125,7 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
         return;
       }
       log.info({ gameId: session.id, result: result.result }, 'triggering post-game analysis');
-      analyseGame({ gameId: session.id, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool })
+      analyseGame({ gameId: session.id, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool, repertoireRepo, clock })
         .catch(err => log.error({ err, gameId: session.id }, 'analyseGame threw unexpectedly'));
     });
 

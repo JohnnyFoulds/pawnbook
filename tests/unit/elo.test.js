@@ -59,6 +59,11 @@ describe('elo', () => {
     expect(() => validateRanked({ oppElo: null })).toThrow();
   });
 
+  it('an opponent with an undefined rating cannot produce a ranked game', () => {
+    // Covers the || false branch: null===null is false, undefined===undefined is true
+    expect(() => validateRanked({ oppElo: undefined })).toThrow();
+  });
+
   it('rating cannot drop below ELO_FLOOR', () => {
     // Start just above the floor, lose heavily — should land at exactly ELO_FLOOR
     const result = updateElo({ myElo: ELO_FLOOR + 5, oppElo: 3190, score: 0, gamesPlayed: 100 });

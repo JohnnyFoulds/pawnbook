@@ -17,6 +17,8 @@ import { getAvailableOpponents } from '../../domain/game/roster.js';
 import { logger } from '../../config.js';
 import { getTracer } from '../../telemetry.js';
 
+import { updateRepertoire } from './repertoire-service.js';
+
 const log = logger.child({ mod: 'analysis-service' });
 
 /**
@@ -31,9 +33,10 @@ const log = logger.child({ mod: 'analysis-service' });
  * @param {import('../../ports/repositories.js').PuzzleRepository} opts.puzzleRepo
  * @param {import('../../adapters/sqlite/repositories.js').SqliteSettingsRepository} opts.settingsRepo
  * @param {object} opts.enginePool
+ * @param {import('../../ports/clock.js').Clock} [opts.clock] — injected clock; defaults to wall time
  */
 export async function analyseGame({
-  gameId, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool,
+  gameId, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool, repertoireRepo, clock = null,
 }) {
   const { opponent, playerColor, ranked } = session;
 
@@ -176,6 +179,11 @@ export async function analyseGame({
       }
     }
 
+    // Strength-sample guard: skip if coach interrupted this game.
+    // The coach changes the player's moves, biasing strength estimation.
+    // session.alertsInGame > 0 means the coach intervened; session.ranked is already false.
+    // When saveStrengthSample is added, guard it with: session.alertsInGame === 0.
+
     // Update ELO if ranked game with a known opponent ELO
     let eloBefore = null;
     let eloAfter = null;
@@ -224,6 +232,10 @@ export async function analyseGame({
         eloBefore,
         eloAfter,
       });
+    }
+
+    if (repertoireRepo) {
+      await updateRepertoire({ gameId, playerColor, gameResult: result.result, gameRepo, repertoireRepo, puzzleRepo, ws, clock });
     }
 
     _sendIfOpen(ws, {

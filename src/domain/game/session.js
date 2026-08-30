@@ -44,6 +44,7 @@ export class GameSession {
     this._clockWhiteMs = timeControl ? timeControl.initialSec * 1000 : null;
     this._clockBlackMs = timeControl ? timeControl.initialSec * 1000 : null;
     this._lastMoveAt = this._startedAt;
+    this.alertsInGame = 0;
   }
 
   get status() { return this._status; }
@@ -139,6 +140,12 @@ export class GameSession {
     }
     return null;
   }
+
+  /** Mark the game as unranked (called when the coach intervenes). */
+  setUnranked() { this.ranked = false; }
+
+  /** Reset the clock baseline to now so alert display time is not debited. */
+  resetClockBaseline() { this._lastMoveAt = this.clock.now(); }
 
   resign() {
     if (this.isOver) throw new GameAlreadyOverError(`Game '${this.id}' is already over`);

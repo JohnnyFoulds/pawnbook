@@ -36,8 +36,9 @@ function statusFor(err) {
   return 500;
 }
 
-// eslint-disable-next-line no-unused-vars
-export function errorMiddleware(err, req, res, next) {
+ 
+// Express requires a 4-arg signature for error handlers; `_next` is intentionally unused
+export function errorMiddleware(err, req, res, _next) {
   if (err instanceof ZodError) {
     return res.status(400).json({
       error_code: ErrorCode.VALIDATION_FAILED,
