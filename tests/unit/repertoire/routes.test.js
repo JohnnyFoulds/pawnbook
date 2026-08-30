@@ -127,6 +127,14 @@ describe('GET /api/repertoire/challenges', () => {
     expect(res.status).toBe(200);
     expect(res.body.challenges).toHaveLength(1);
   });
+
+  it('returns 500 when repo throws', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.listOpenChallenges = () => { throw new Error('db down'); };
+    const res = await request(makeApp(repo)).get('/api/repertoire/challenges');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('internal_error');
+  });
 });
 
 describe('GET /api/repertoire/refusals', () => {
@@ -148,6 +156,54 @@ describe('GET /api/repertoire/refusals', () => {
     expect(res.status).toBe(200);
     expect(res.body.refusals).toHaveLength(1);
     expect(res.body.refusals[0].resolution).toBe('alerted_kept');
+  });
+
+  it('includes keptCount, keptInBookCount and hitRatePct', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    // Add a node so sideByEpd resolves
+    repo.upsertNode({ epd: EPD, side: 'white', fen: EPD + ' 0 1', firstSeen: 1, lastSeen: 1, timesReached: 1, encounters: 1, minPly: 1, reachProb: null, reachStale: false, lineLoss: null, voteFrozenUntilEncounter: null });
+    // alerted_kept deviation for e2e4 — which is now canonical in book
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'e2e4', moveSan: 'e4', role: 'canonical', observations: 2, weightedScore: 1, meanWinLossPts: 0, worstWinLossPts: 0, auditId: null, gateReason: null, scoreW: 1, scoreD: 0, scoreL: 0, firstPlayed: 1, lastPlayed: 1 });
+    repo.appendDeviation({ id: randomUUID(), gameId: 'g1', ply: 3, epd: EPD, kind: 'refused_repeat', playedUci: 'e2e4', bookUci: 'd2d4', resolution: 'alerted_kept', decisionMsTaken: 3000, provenanceId: provId, bookVersion: 0 });
+    const res = await request(makeApp(repo)).get('/api/repertoire/refusals');
+    expect(res.status).toBe(200);
+    expect(res.body.keptCount).toBe(1);
+    expect(res.body.keptInBookCount).toBe(1);
+    expect(res.body.hitRatePct).toBe(100);
+  });
+
+  it('hitRatePct is null when no kept deviations', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    repo.appendDeviation({ id: randomUUID(), gameId: 'g1', ply: 5, epd: EPD, kind: 'lapse', playedUci: 'e2e4', bookUci: 'd2d4', resolution: 'alerted_corrected', decisionMsTaken: 5000, provenanceId: provId, bookVersion: 0 });
+    const res = await request(makeApp(repo)).get('/api/repertoire/refusals');
+    expect(res.status).toBe(200);
+    expect(res.body.hitRatePct).toBeNull();
+  });
+
+  it('skips kept deviation when EPD has no matching node (side unknown)', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    // No node for EPD — sideByEpd.get() returns undefined → !side → continue
+    repo.appendDeviation({ id: randomUUID(), gameId: 'g1', ply: 3, epd: EPD, kind: 'lapse', playedUci: 'e2e4', bookUci: 'd2d4', resolution: 'alerted_kept', decisionMsTaken: 3000, provenanceId: provId, bookVersion: 0 });
+    const res = await request(makeApp(repo)).get('/api/repertoire/refusals');
+    expect(res.status).toBe(200);
+    expect(res.body.keptInBookCount).toBe(0);
+    expect(res.body.hitRatePct).toBe(0);
+  });
+
+  it('keptInBookCount 0 when kept move is not canonical or alt', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22', sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null });
+    repo.upsertNode({ epd: EPD, side: 'white', fen: EPD + ' 0 1', firstSeen: 1, lastSeen: 1, timesReached: 1, encounters: 1, minPly: 1, reachProb: null, reachStale: false, lineLoss: null, voteFrozenUntilEncounter: null });
+    // e2e4 is a candidate, not canonical/alt
+    repo.upsertMove({ epd: EPD, side: 'white', moveUci: 'e2e4', moveSan: 'e4', role: 'candidate', observations: 1, weightedScore: 1, meanWinLossPts: 0, worstWinLossPts: 0, auditId: null, gateReason: null, scoreW: 1, scoreD: 0, scoreL: 0, firstPlayed: 1, lastPlayed: 1 });
+    repo.appendDeviation({ id: randomUUID(), gameId: 'g1', ply: 3, epd: EPD, kind: 'lapse', playedUci: 'e2e4', bookUci: 'd2d4', resolution: 'alerted_kept', decisionMsTaken: 3000, provenanceId: provId, bookVersion: 0 });
+    const res = await request(makeApp(repo)).get('/api/repertoire/refusals');
+    expect(res.status).toBe(200);
+    expect(res.body.keptInBookCount).toBe(0);
+    expect(res.body.hitRatePct).toBe(0);
   });
 
   it('returns 500 when repo throws', async () => {
@@ -306,6 +362,14 @@ describe('POST /api/repertoire/changelog/:id/reverse', () => {
     const res = await request(makeApp(repo)).post(`/api/repertoire/changelog/${entryId}/reverse`);
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+
+  it('returns 500 when repo throws during reverse', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    repo.getChangelogEntry = () => { throw new Error('db down'); };
+    const res = await request(makeApp(repo)).post(`/api/repertoire/changelog/${randomUUID()}/reverse`);
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('internal_error');
   });
 
   it('GET /api/repertoire/changelog with limit returns limited entries', async () => {

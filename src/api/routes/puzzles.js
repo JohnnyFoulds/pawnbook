@@ -158,6 +158,7 @@ function formatCard(row) {
     legalMoves: [],  // populated from chess.js if needed; TUI uses move validation server-side
     ply: row.source_ply ?? row.sourcePly,
     sourceGameId: row.source_game_id ?? row.sourceGameId ?? null,
+    kind: row.kind ?? null,
   };
 }
 

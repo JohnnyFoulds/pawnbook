@@ -513,22 +513,31 @@ function onRepertoireAlert(msg) {
     novelty: 'New move',
     refused_repeat: 'Refused move',
   };
+  const bookLabel = msg.bookSan ?? msg.bookUci ?? '?';
+  const playerLabel = msg.playerSan ?? msg.playerUci ?? '?';
   const headlineCopy = {
-    order_slip: `You usually play ${msg.bookSan ?? msg.bookUci} first here`,
-    lapse: `Your book move here is ${msg.bookSan ?? msg.bookUci}`,
-    novelty: `New move — your book says ${msg.bookSan ?? msg.bookUci}`,
-    refused_repeat: `Your book won't play ${msg.playerSan ?? msg.playerUci}`,
+    order_slip: `You usually play ${bookLabel} first here`,
+    lapse: `Your book move here is ${bookLabel}`,
+    novelty: `New move — your book says ${bookLabel}`,
+    refused_repeat: `${playerLabel} is a move your book won't play`,
   };
-  const costText = msg.costWinPts != null && msg.costWinPts > 0
-    ? `Cost vs your usual: ${msg.costWinPts.toFixed(1)} win%`
-    : '';
+  const costPts = msg.costWinPts != null && msg.costWinPts > 0 ? msg.costWinPts.toFixed(1) : null;
+  const subCopy = {
+    order_slip: `Your move ${playerLabel} is also in your book — just in a different order.`,
+    lapse: costPts ? `You've drilled this position. Cost: ${costPts} win%` : `You've drilled this position.`,
+    novelty: costPts ? `Cost vs your usual: ${costPts} win%` : '',
+    refused_repeat: costPts ? `Cost vs ${bookLabel}: ${costPts} win%` : '',
+  };
 
   kindEl.textContent = kindLabels[msg.kind] ?? msg.kind;
-  headlineEl.textContent = headlineCopy[msg.kind] ?? `Book: ${msg.bookSan ?? msg.bookUci}`;
-  subEl.textContent = costText;
+  headlineEl.textContent = headlineCopy[msg.kind] ?? `Book: ${bookLabel}`;
+  subEl.textContent = subCopy[msg.kind] ?? '';
 
-  btnCorrect.textContent = msg.bookSan ? `Play ${msg.bookSan}` : 'Play book move';
-  btnKeep.textContent = msg.playerSan ? `Keep ${msg.playerSan}` : 'Keep mine';
+  const correctLabel = msg.kind === 'order_slip' ? `Play ${bookLabel} first`
+    : msg.kind === 'refused_repeat' ? `Play ${bookLabel} instead`
+    : (msg.bookSan ? `Play ${bookLabel}` : 'Play book move');
+  btnCorrect.textContent = correctLabel;
+  btnKeep.textContent = msg.playerSan ? `Keep ${playerLabel}` : 'Keep mine';
 
   let secsLeft = msg.timeoutSec ?? 60;
   timerEl.textContent = `Auto-keeps in ${secsLeft}s`;
