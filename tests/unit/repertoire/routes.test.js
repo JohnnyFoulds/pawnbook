@@ -117,6 +117,22 @@ describe('GET /api/repertoire/changelog', () => {
     expect(res.status).toBe(200);
     expect(res.body.entries).toHaveLength(0);
   });
+
+  it('enriches entries with fromSan/toSan SAN fields', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    // Starting position EPD — white to move, e2e4 is legal
+    const startEpd = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
+    const provId = repo.getOrCreateProvenance({ balanceHash: 'x', schemaVersion: '22',
+      sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null, appGitSha: null });
+    repo.appendChangelog({ id: randomUUID(), at: Date.now(), epd: startEpd, side: 'white',
+      kind: 'promote', fromUci: 'e2e4', toUci: 'd2d4', challengeId: null, rule: null,
+      detailJson: null, provenanceId: provId, bookVersion: 1 });
+    const res = await request(makeApp(repo)).get('/api/repertoire/changelog');
+    expect(res.status).toBe(200);
+    const entry = res.body.entries[0];
+    expect(entry.fromSan).toBe('e4');
+    expect(entry.toSan).toBe('d4');
+  });
 });
 
 describe('POST /api/repertoire/changelog/:id/reverse', () => {

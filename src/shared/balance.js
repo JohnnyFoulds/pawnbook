@@ -64,6 +64,7 @@ export const REP_AUDIT_DEPTH = 22;
 export const REP_AUDIT_MULTIPV = 3;
 export const REP_BOOTSTRAP_CONFIRMED_MIN = 20;
 export const REP_CANDIDATE_TTL_ENCOUNTERS = 8;
+export const REP_AUTO_PROMOTE = false;        // Phase 30 kill switch — flip on when Phase 31 audit evidence is live
 
 // Repertoire — challenge resolution (refusal-driven promotion)
 // engine_delta = winPct(challenger) − winPct(incumbent); positive = challenger better

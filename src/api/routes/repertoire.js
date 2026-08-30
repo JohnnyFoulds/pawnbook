@@ -5,12 +5,25 @@
 
 import { randomUUID } from 'crypto';
 
+import { Chess } from 'chess.js';
 import { Router } from 'express';
 
 import { REP_REVERSAL_SUPPRESS_ENCOUNTERS } from '../../shared/balance.js';
 import { logger } from '../../config.js';
 
 const log = logger.child({ mod: 'repertoire-routes' });
+
+/** @param {string} epd @param {string|null} uci @returns {string|null} */
+function uciToSan(epd, uci) {
+  if (!uci || !epd) return null;
+  try {
+    const chess = new Chess(`${epd} 0 1`);
+    const result = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] ?? undefined });
+    return result?.san ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * @param {{ repertoireRepo: object }} opts
@@ -96,7 +109,11 @@ export function makeRepertoireRouter({ repertoireRepo }) {
   r.get('/changelog', (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit ?? '50', 10), 200);
-      const entries = repertoireRepo.getChangelog(limit);
+      const entries = repertoireRepo.getChangelog(limit).map(e => ({
+        ...e,
+        fromSan: uciToSan(e.epd, e.fromUci),
+        toSan: uciToSan(e.epd, e.toUci),
+      }));
       res.json({ entries });
     } catch (err) {
       log.error({ err }, 'GET /changelog failed');
