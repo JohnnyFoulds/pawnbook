@@ -7,6 +7,7 @@
  *   chess                        connect to localhost:3000, play screen
  *   chess drill                  drill due queue
  *   chess stats                  stats screen
+ *   chess repertoire             repertoire overview
  *   chess --host dragon:3000     remote server (pure WS/REST client, no local deps)
  *   chess --ascii                ASCII pieces instead of Unicode glyphs
  *   chess --no-mouse             disable SGR mouse reporting
@@ -25,9 +26,10 @@
 import { parseArgs } from 'util';
 
 import { createClient, apiCall } from '../tui/client.js';
-import { createPlayScreen }  from '../tui/screens/play.js';
-import { createDrillScreen } from '../tui/screens/drill.js';
-import { createStatsScreen } from '../tui/screens/stats.js';
+import { createPlayScreen }        from '../tui/screens/play.js';
+import { createDrillScreen }       from '../tui/screens/drill.js';
+import { createStatsScreen }       from '../tui/screens/stats.js';
+import { createRepertoireScreen }  from '../tui/screens/repertoire.js';
 
 // ── Argument parsing ─────────────────────────────────────────────────────────
 
@@ -57,9 +59,10 @@ if (args.help) {
 Usage: chess [command] [options]
 
 Commands:
-  (none)   Play screen
-  drill    Drill due queue
-  stats    Stats overview
+  (none)        Play screen
+  drill         Drill due queue
+  stats         Stats overview
+  repertoire    Repertoire overview
 
 Options:
   --host HOST      Server address (default: localhost:3000)
@@ -97,7 +100,7 @@ async function main() {
   const isTTY = process.stdout.isTTY;
 
   if (!isTTY) {
-    // Just print board diagnostics and exit cleanly
+    // Just print screen output and exit cleanly for non-interactive use
     if (subcommand === 'stats') {
       try {
         const screen = createStatsScreen({ host, sessionOpts, apiCall: apiCallBound });
@@ -105,6 +108,15 @@ async function main() {
         console.log(screen.render());
       } catch (err) {
         console.error('stats error:', err.message);
+        process.exit(1);
+      }
+    } else if (subcommand === 'repertoire') {
+      try {
+        const screen = createRepertoireScreen({ host, apiCall: apiCallBound });
+        await screen.boot();
+        console.log(screen.render());
+      } catch (err) {
+        console.error('repertoire error:', err.message);
         process.exit(1);
       }
     } else {
@@ -146,6 +158,17 @@ async function runLineFallback() {
     }
     return;
   }
+  if (subcommand === 'repertoire') {
+    try {
+      const screen = createRepertoireScreen({ host, apiCall });
+      await screen.boot();
+      console.log(screen.render());
+    } catch (err) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    return;
+  }
   console.error('Full TUI requires terminal-kit. Install with: npm install terminal-kit');
   console.error('Stats without full TUI: chess stats');
 }
@@ -171,6 +194,16 @@ async function runTermkit(tk) {
   // Dispatch to screen
   if (subcommand === 'stats') {
     const screen = createStatsScreen({ host, sessionOpts, apiCall });
+    await screen.boot();
+    term.clear();
+    term(screen.render() + '\n');
+    term.grabInput(false);
+    setTimeout(() => process.exit(0), 100);
+    return;
+  }
+
+  if (subcommand === 'repertoire') {
+    const screen = createRepertoireScreen({ host, apiCall });
     await screen.boot();
     term.clear();
     term(screen.render() + '\n');

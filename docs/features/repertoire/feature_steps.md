@@ -646,3 +646,25 @@ Branch: `feat/phase-34-repertoire-pages`
 
 **DoD:** `make verify` green; 917 tests pass (+ 2 expected-fail); coverage 90.01% branches;
 `npm run journey` green (15/15 stages); U1, U2, U4 (backend + frontend), U7, U11 closed.
+
+---
+
+## Phase 35 — TUI screen and longitudinal Playwright suite
+
+Branch: `feat/phase-35-tui-playwright`
+
+### Files changed
+- `tui/screens/repertoire.js` — `createRepertoireScreen({ host, apiCall })`: fetches coverage, changelog, challenges, gaps; renders coverage bar, top gaps, recent changelog (U10)
+- `bin/chess.js` — `chess repertoire` subcommand; wired for TTY, non-TTY and line-fallback modes
+- `playwright.journey.config.js` — Playwright config pointing at simulated DB on port 3002 with `ENGINE_MODE=fake`
+- `tests/playwright/journey.spec.js` — 10-stage DOM assertion suite against simulated 30-day DB
+- `eslint.config.js` — browser-globals override for `tests/playwright/**` and `tests/e2e/**`
+- `vitest.config.js` — exclude `tests/playwright/**` from vitest discovery
+- `tests/unit/tui-phase10.test.js` — `repertoire TUI screen (U10)` describe block (8 tests)
+
+### Journey
+`npm run journey` — 15/15 stages pass.
+
+**DoD:** `make verify` green; 925 tests pass (+ 2 expected-fail); coverage 90.01% branches;
+`npm run journey` green (15/15 stages); U10 closed; `playwright.journey.config.js` and
+`tests/playwright/journey.spec.js` ready for `npx playwright test -c playwright.journey.config.js`.

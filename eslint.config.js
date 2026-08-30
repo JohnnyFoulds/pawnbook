@@ -44,4 +44,14 @@ export default [
       'no-console': 'warn',
     },
   },
+  // Playwright journey tests — waitForFunction callbacks execute in browser context
+  {
+    files: ['tests/playwright/**/*.js', 'tests/e2e/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
+    },
+  },
 ];
