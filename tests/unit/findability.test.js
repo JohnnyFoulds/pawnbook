@@ -109,6 +109,25 @@ describe('findability', () => {
     expect(result.findability).toBe(0.25);
   });
 
+  it('degrades gracefully when policy AND bestmove both throw (line 49)', async () => {
+    const client = new ScriptedEngineClient({}, { defaultBestmove: 'e2e4' });
+    client.policy = async () => { throw new Error('lc0 crashed'); };
+    client.bestmove = async () => { throw new Error('bestmove also failed'); };
+
+    const result = await probeFindability({
+      maiaClient: client,
+      fen: FEN,
+      bestMoveUci: 'e2e4',
+      playedMoveUci: 'd2d4',
+      winLossPts: 10,
+      maiaModel: 'maia-1300',
+    });
+
+    expect(result.degraded).toBe(true);
+    // maiaMove = null → null !== 'e2e4' → findability = 0.25
+    expect(result.findability).toBe(0.25);
+  });
+
   it('degrades to binary when policy returns empty map', async () => {
     const client = new ScriptedEngineClient({}, { defaultBestmove: 'e2e4' });
     client.policy = async () => new Map(); // empty
@@ -123,6 +142,36 @@ describe('findability', () => {
     });
 
     expect(result.degraded).toBe(true);
+  });
+
+  it('temptation is 0.75 when degraded and Maia plays the same move as the player (line 50 TRUE branch)', async () => {
+    const client = new ScriptedEngineClient({}, { defaultBestmove: 'e7e5' });
+    client.policy = async () => { throw new Error('policy failed'); };
+
+    const result = await probeFindability({
+      maiaClient: client, fen: FEN,
+      bestMoveUci: 'd2d4', playedMoveUci: 'e7e5',
+      winLossPts: 10, maiaModel: 'maia-1300',
+    });
+
+    expect(result.degraded).toBe(true);
+    expect(result.temptation).toBe(0.75);
+  });
+
+  it('findability and temptation default to 0 when moves absent from policyMap (fires ?? 0 right sides)', async () => {
+    const policyMap = new Map([['d2d4', 0.3]]); // has d2d4 but not bestMoveUci or playedMoveUci
+    const client = new ScriptedEngineClient({}, { defaultBestmove: 'd2d4' });
+    client.policy = async () => policyMap;
+
+    const result = await probeFindability({
+      maiaClient: client, fen: FEN,
+      bestMoveUci: 'e2e4', playedMoveUci: 'g1f3',
+      winLossPts: 10, maiaModel: 'maia-1300',
+    });
+
+    expect(result.degraded).toBe(false);
+    expect(result.findability).toBe(0);
+    expect(result.temptation).toBe(0);
   });
 });
 

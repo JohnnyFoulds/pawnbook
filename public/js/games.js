@@ -52,6 +52,7 @@ async function boot() {
         <td><a href="review.html?game=${g.id}" style="color:var(--ink-secondary)">${g.opponentId}</a></td>
         <td style="color:var(--ink-muted);font-size:13px">${g.playerColor ?? ''}</td>
         <td class="num" style="text-align:right">${g.accuracy != null ? Math.round(g.accuracy) + '%' : '—'}</td>
+        <td class="num" style="text-align:right">${g.strengthElo != null ? g.strengthElo : '—'}<span style="color:var(--ink-muted);font-size:11px">${g.opponentStrengthElo != null ? ' / ' + g.opponentStrengthElo : ''}</span></td>
         <td class="num" style="text-align:right;color:${delta == null ? 'inherit' : delta >= 0 ? 'var(--good)' : 'var(--critical)'}">
           ${delta != null ? (delta >= 0 ? '+' : '') + delta : '—'}
         </td>

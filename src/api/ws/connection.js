@@ -10,7 +10,7 @@
 import { WebSocketServer } from 'ws';
 
 import { logger } from '../../config.js';
-import { INCREMENTAL_MAX_QUEUE, INCREMENTAL_DEPTH } from '../../shared/balance.js';
+import { INCREMENTAL_MAX_QUEUE } from '../../shared/balance.js';
 
 import { makeMessageHandler } from './handlers.js';
 import { analyseGame } from './analysis-service.js';
@@ -35,6 +35,30 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
   wss.on('connection', (ws, req) => {
     log.info({ remoteAddress: req.socket.remoteAddress }, 'ws connected');
     let _incrementalPending = 0;
+
+    /**
+     * Queue a background pre-eval for the given position if the queue has room.
+     * Drops silently when the cap is reached to prevent blocking post-game analysis.
+     */
+    function queuePreEval(gameId, ply, fen) {
+      if (!gameRepo.savePreEval) return;
+      // Drop new pre-evals when the queue is full — prevents 60+ jobs from
+      // blocking the post-game analysis SF client for minutes.
+      if (_incrementalPending >= INCREMENTAL_MAX_QUEUE) return;
+      _incrementalPending++;
+      enginePool.getAnalysisSfClient()
+        // movetime caps each pre-eval so the queue drains in ≤ MAX_QUEUE × 1.5s
+        .then(sfClient => sfClient.eval(fen, { movetime: 1500 }))
+        .then(r => gameRepo.savePreEval(gameId, ply, fen, r))
+        .catch(err => log.debug({ err, gameId }, 'incremental pre-eval failed'))
+        .finally(() => { _incrementalPending--; });
+    }
+
+    // Pre-eval after the player's move (position the engine will now face)
+    ws.on('player_move_pre_eval', ({ gameId, ply, fen }) => {
+      if (!enginePool) return;
+      queuePreEval(gameId, ply, fen);
+    });
 
     // Wire the engine dispatch once per connection
     ws.on('engine_turn', async (session) => {
@@ -94,16 +118,8 @@ export function attachWebSocketServer({ httpServer, gameRepo, puzzleRepo, settin
         }
 
         // Background incremental pre-eval of the position the player will now ponder (FR-ANALYSE-9/12)
-        if (!move.gameOver && gameRepo.savePreEval && _incrementalPending < INCREMENTAL_MAX_QUEUE) {
-          _incrementalPending++;
-          const preEvalPly = session.moves.length + 1;
-          const preEvalFen = move.fen;
-          const preEvalGameId = session.id;
-          enginePool.getAnalysisSfClient()
-            .then(sfClient => sfClient.eval(preEvalFen, { depth: INCREMENTAL_DEPTH }))
-            .then(r => gameRepo.savePreEval(preEvalGameId, preEvalPly, preEvalFen, r))
-            .catch(err => log.debug({ err, gameId: preEvalGameId }, 'incremental pre-eval failed'))
-            .finally(() => { _incrementalPending--; });
+        if (!move.gameOver) {
+          queuePreEval(session.id, session.moves.length + 1, move.fen);
         }
 
         send(ws, reply);

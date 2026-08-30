@@ -4,6 +4,7 @@
  * quick-play and drill CTAs, rating sparkline, recent games.
  */
 
+import './lib/chart.js';
 
 const BASE = '';
 

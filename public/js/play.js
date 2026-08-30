@@ -343,7 +343,7 @@ function onGameOver(msg) {
   overlay.style.display = 'flex';
   analysisRunning = true;
 
-  document.getElementById('review-link').href = `review.html?game=${gameId}`;
+  // review-link stays disabled (aria-disabled) until analysis_done fires
 
   document.getElementById('play-again-btn').addEventListener('click', () => {
     overlay.style.display = 'none';
@@ -372,9 +372,10 @@ function onAnalysisDone(msg) {
   document.getElementById('analysis-progress').style.width = '100%';
   const count = msg.puzzleCount ?? 0;
   const reviewLink = document.getElementById('review-link');
-  if (reviewLink && count > 0) {
-    reviewLink.textContent = `Review & quiz (${count} positions)`;
-    // href stays as review.html — set in onGameOver
+  if (reviewLink) {
+    reviewLink.href = `review.html?game=${gameId}`;
+    reviewLink.removeAttribute('aria-disabled');
+    if (count > 0) reviewLink.textContent = `Review & quiz (${count} positions)`;
   }
 }
 

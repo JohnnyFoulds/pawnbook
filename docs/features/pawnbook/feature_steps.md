@@ -338,6 +338,8 @@ drill: feedback leads with a glyph and survives --plain and --ascii
 
 ## Phase 12 — Incremental analysis (pre-evaluation during play)
 
+**Status:** Complete — 2026-08-27
+
 **Branch:** `feat/phase-12-incremental-analysis`  
 **Files:** `src/adapters/engine/engine-pool.js`, `src/api/ws/analysis-service.js`, `src/domain/analysis/pipeline.js`  
 **Spec refs:** FR-ANALYSE-9–13, FR-ENGINE-5–7, NFR-A1b, NFR-A5
@@ -363,3 +365,177 @@ pipeline: pass-2 depth is 22 (not 20)
 ```
 
 **DoD:** All tests green; `make verify` passes; a real game measured end-to-end shows post-game analysis completes in ≤ 70 s when pre-eval ran during play.
+
+---
+
+## Phase 13 — Eval POV normalisation
+
+**Status:** Complete — 2026-08-28
+
+**Branch:** `fix/phase-13-eval-pov`  
+**Files:** `src/shared/pov.js` (new), `src/adapters/engine/uci-engine-client.js`, `src/adapters/engine/scripted-engine-client.js`, `tests/unit/pov.test.js` (new), `tests/unit/pipeline.test.js`, `tests/unit/analysis-service.test.js`, `scripts/regrade.js` (new), `docs/features/pawnbook/feature_spec.md`  
+**Spec refs:** FR-ENGINE-8
+
+**Design:** `src/ports/engine-client.js` declares `cp` as *"normalised to White's POV"* but no adapter honoured it. `UciEngineClient._doEval` and `ScriptedEngineClient.eval` both returned `top.cp` straight from the UCI `info` line, which is **always side-to-move relative**. As a result `cp_white` alternated in sign by ply, collapsing `cpLoss` to 0 for one side and inflating it for the other — both stored `maia-1600` games read at 23–31% accuracy instead of ≈85–92%.
+
+Fix: one exported helper `normaliseToWhitePov(fen, result)` in `src/shared/pov.js` — parses the FEN's side-to-move field and negates `cp`, `mate`, and every `lines[]` entry when `b`. Both adapters call it before returning. `scripts/regrade.js` (engine-free, idempotent) re-signs `cp_white`/`mate_in` for existing rows and re-derives the full grading chain from the corrected values. **Must run in the same deployment as the adapter fix** because `pipeline.js:59` restores cached evals as `cp: e.cp_white ?? e.cpWhite` — a resumed analysis over pre-fix rows would mix both sign conventions inside one game.
+
+```
+engine: eval negates cp when Black is to move
+engine: eval leaves cp unchanged when White is to move
+engine: eval negates mate when Black is to move
+engine: every multiPV line is normalised, not just the top line
+engine: the scripted client applies the same normalisation as the UCI client
+pipeline: consecutive positions no longer alternate in sign for a quiet game
+regression: a Black-to-move mate score is reported as negative from White POV
+```
+
+**DoD:** All green; `make verify` passes; `scripts/regrade.js` re-derives the two stored `maia-1600` games to ≈85%/≈90% and ≈87%/≈92% rather than 23%/31%; the review eval graph is visually smooth; a `fix(engine):` changelog entry is present.
+
+---
+
+## Phase 14 — Playing-strength estimate
+
+**Status:** Complete — 2026-08-28
+
+**Branch:** `feat/phase-14-playing-strength`  
+**Files:** `src/shared/balance.js`, `src/domain/analysis/grade.js`, `src/domain/analysis/pipeline.js`, `src/adapters/sqlite/schema.js`, `src/adapters/sqlite/repositories.js`, `src/adapters/memory/repositories.js`, `src/ports/repositories.js`, `src/api/ws/analysis-service.js`, `src/api/routes/games.js`, `public/games.html`, `public/js/games.js`, `public/review.html`, `public/js/review.js`, `scripts/refit-strength.js` (new), `calibration/strength-model.json` (new), `docs/research/strength-estimation.md` (new), `tests/unit/strength.test.js` (new), `tests/unit/analysis-service.test.js`, `tests/unit/api-routes.test.js`, `tests/unit/ui-phase9.test.js`, `tests/contract/repositories.test.js`  
+**Spec refs:** FR-GRADE-6–11, FR-ANALYSE-14–15, FR-STORE-8–9, FR-STATS-5, Q-7, NFR-A6, NFR-STR
+
+**Design:** Regan & Haworth's `ln(1+x)` scaled error, averaged over eligible plies, mapped linearly to Elo. Eligible plies exclude only-moves, mate evals, and decided positions (`|cpWhite| > STRENGTH_DECIDED_CP`). Both sides are scored symmetrically under identical criteria on the shared White-POV evaluation series — they are a disjoint partition, not the same ply set. The opponent's known Elo, the player's stored Elo, and the game result are never inputs (`FR-GRADE-10`), which makes every game against a rated Maia a live calibration sample.
+
+Coefficients are versioned in `calibration/strength-model.json` (append-only) and read from `src/shared/balance.js`. A `STRENGTH_COEFF_VERSION` constant ties them together; a test enforces the invariant. `scripts/refit-strength.js` runs WLS regression of `opponent_elo ~ ase` over `strength_samples` once ≥ 20 samples spanning ≥ 3 distinct ratings are available — it appends to the JSON and prints paste-ready constants but never writes `balance.js`.
+
+The `_saveFailed()` helper in `analysis-service.js` reads the existing game row before every failure save and carries `accuracy`, `opponentAccuracy`, `strengthElo`, and `opponentStrengthElo` forward, so a failed re-analysis cannot null a previously stored result (`FR-ANALYSE-15`).
+
+The review page rolling aggregate uses inverse-variance weighting over the most recent `STRENGTH_ROLLING_N` games. SE is recomputed on read from stored `(n, sd)` — never stored — so a coefficient refit is retroactive for free.
+
+```
+strength: scaledError(0) is 0
+strength: scaledError is strictly increasing and compresses large losses
+strength: a cpLoss above STRENGTH_CP_CAP is winsorised to the cap
+strength: playingStrength(ase = STRENGTH_ANCHOR_ASE) returns STRENGTH_ANCHOR_ELO
+strength: playingStrength is strictly decreasing in average scaled error
+strength: playingStrength clamps to [STRENGTH_ELO_MIN, STRENGTH_ELO_MAX]
+strength: a flawless game never returns Infinity or NaN
+strength: zero eligible plies returns ase null, sd 0 and strength null, never NaN
+strength: exactly one eligible ply returns sd 0, not NaN
+strength: playingStrength returns an integer Elo and an integer standard error
+strength: playingStrength returns null below STRENGTH_MIN_PLIES eligible plies
+strength: playingStrength ignores plies where the mover had exactly one legal move
+strength: playingStrength ignores plies whose pre-move eval is a mate score
+strength: playingStrength ignores plies with |cpWhite| above STRENGTH_DECIDED_CP
+strength: playingStrength reports n, ase, sd and p75Loss alongside the estimate
+strength: p75Loss is the 75th percentile of winsorised cpLoss over eligible plies only
+strength: p75Loss does not affect the estimate or the standard error
+strength: the standard error is ELO_PER_ASE * sd / sqrt(n)
+strength: a wider spread of losses yields a wider standard error at equal n
+strength: a clean game estimates above a sloppy game of the same ply count
+strength: playingStrength never reads a result, a player Elo, or an opponent Elo
+pipeline: runAnalysis returns both sides' strength beside accuracy
+pipeline: every position records its legal-move count for strength filtering
+pipeline: strength estimation issues no engine calls
+pipeline: a six-move game returns null strengths, not zero
+pipeline: both sides' eligibility gates are evaluated on the same White-POV series
+pipeline: a ply is eligible for exactly one side, never both and never neither
+analysis: the success save persists both strength estimates and both sample rows
+analysis: a failed analysis does not null a previously stored strength estimate
+analysis: a failed analysis does not null a previously stored accuracy
+store: [sqlite|memory] strengthElo round-trips through save and findById
+store: [sqlite|memory] strengthElo survives a second save that supplies it
+store: [sqlite|memory] strengthElo is exposed by listRecent
+store: [sqlite|memory] a strength_samples row round-trips per side
+store: [sqlite|memory] a strength_samples row carries p75Loss and was_timed for later refitting
+store: [sqlite|memory] saveStrengthSample is idempotent on (gameId, side)
+store: [sqlite|memory] listStrengthSamples returns newest first and honours limit
+store: [sqlite|memory] listStrengthSamples filters by side
+store: [sqlite] deleting a game removes its strength_samples rows
+store: an absent strength column loads as null, not zero
+routes: GET /api/games exposes both strength estimates
+routes: GET /api/games/:id/review exposes both estimates, their SEs and the rolling aggregate
+routes: the review standard error equals ELO_PER_ASE * sd / sqrt(n) from the stored sample
+routes: the rolling aggregate is inverse-variance weighted, not a plain mean
+routes: the rolling aggregate is null when no game has enough eligible plies
+routes: a game with no estimate exposes null, not zero
+ui: games.html has eight columns and the loading row spans all eight
+ui: games.js renders both strength numbers in one right-aligned cell
+ui: games.js renders an em dash for a null estimate
+ui: review.js writes strength-line as a sibling of acc-bars, not into it
+balance: every STRENGTH_ parameter is documented in balance.md
+calibration: the stored maia-1600 fixture estimates its opponent within 300 Elo of 1600
+calibration: refit-strength refuses to fit below 20 samples or 3 distinct ratings
+calibration: refit-strength tolerates an sd of 0 without an infinite weight
+calibration: refit-strength appends a version and never rewrites an existing one
+calibration: the newest strength-model.json entry matches balance.js and STRENGTH_COEFF_VERSION
+```
+
+**DoD:** All 634 tests pass (632 passing + 2 expected fail); branch coverage 91.03%; `scripts/refit-strength.js` exits non-zero on the 2-game corpus with the required message; `calibration/strength-model.json` v1 committed; `docs/research/strength-estimation.md` written; no model binary in any commit.
+
+---
+
+## Phase 15 — Acquire the upgrade assets
+
+**Status:** Complete — 2026-08-28
+
+**Branch:** `feat/phase-15-upgrade-assets`  
+**Files:** `.gitignore`, `scripts/build-opening-book.js` (new), `docs/research/skill-models.md` (new), `docs/research/opening-elo-book.md` (new)  
+**Spec refs:** none (acquisition only — no `src/` changes)
+
+**Design:** Acquire and verify Maia-3 and Maia-2, and write the opening-book script, so the v2 refit has inputs to fit against. Nothing in `src/` changes; `make verify` output is identical before and after.
+
+**Maia-3 (primary).** Fetched via `maia3-cache --cache-dir weights/maia3`. Sizes match the HF-published bytes: 5M = 20,968,049 B, 23M = 91,799,307 B. UCI interface confirmed: all five options (`SelfElo`, `OppoElo`, `MultiPV`, `Temperature`, `TopP`) advertised. Decisive test: SelfElo 1100 vs 2400 produces different MultiPV orderings on `e2e4 e7e5 Nf3` — conditioning is real. Wall-clock (M4 CPU): ~430 ms first call (model load), ~15–50 ms subsequently.
+
+**Maia-2 (fallback).** Fetched from `shermansiu/maia2-rapid` (93 MB) into `weights/maia2/original/model.pt` and `from_pretrained` also downloaded the 280 MB Drive file to `weights/maia2/rapid_model.pt`. SHA-256 of the HF file verified against the digest pinned in `CSSLab/maia2/model.py`: `65aae846...e997` — exact match. Smoke test: `inference_each` on the start position at elo_self=1500 returns a distribution summing to 0.9999 with plausible opening moves. **API correction from plan:** maia2 0.11.0 `prepare()` takes no arguments; `inference_each` returns `(dict[uci→prob], win_prob)` — the plan's pre-fetch description was inaccurate.
+
+**Opening book.** `scripts/build-opening-book.js` written. Exits non-zero with the token URL when `LICHESS_TOKEN` is absent (verified). BFS crawl, EPD-keyed, rate-limited at ≤ 1 req/s, resumes from partial output, writes `calibration/opening-elo-book.json` with provenance header. Crawl not yet run (no Lichess token in this environment).
+
+```
+maia3:   uci advertises SelfElo, OppoElo and MultiPV as spin options
+maia3:   the multipv ordering CHANGES between SelfElo 1100 and SelfElo 2400
+maia3:   Temperature 0 makes two identical go calls return the same bestmove
+maia3:   per-go wall-clock recorded for 5M and 23M on this machine
+maia2:   the rapid checkpoint matches the SHA-256 pinned in CSSLab/maia2/maia2/model.py
+maia2:   from_pretrained validates the local file and loads without Drive re-download
+maia2:   inference_each on the start position returns a distribution summing to ~1
+book:    build-opening-book exits non-zero with the token URL when LICHESS_TOKEN is unset
+```
+
+**DoD:** Maia-3 5M and 23M cached in `weights/maia3/` (gitignored); the SelfElo ordering test passing; Maia-2 rapid checkpoint on disk and digest-verified; `docs/research/skill-models.md` and `docs/research/opening-elo-book.md` written; `scripts/build-opening-book.js` exits cleanly on the no-token path; no model binary in any commit; `make verify` suite unchanged.
+
+## Phase 16 — Maia-3 UCI integration (Complete — 2026-08-28)
+
+**Status:** Complete  
+**Branch:** `feat/phase-16-maia3`  
+**Files:**
+- `src/config.js` — added `maia3` to `NATIVE_PATHS` and `CONTAINER_PATHS`
+- `src/domain/game/roster.js` — changed all maia entries to `type: 'maia3'`; added `maia-2000`; made `maia-2200` non-optional; added `getMaiaAnalysisWeights()`; updated `getAvailableOpponents()` for maia3
+- `src/adapters/engine/engine-pool.js` — added `maia3` branch: one shared process, `SelfElo`/`Temperature 0` set per move
+- `src/api/ws/analysis-service.js` — findability uses `getMaiaAnalysisWeights()` (lc0 on-disk weights), not game roster filter
+- `tests/unit/roster.test.js` — updated for new entry count (19), type changes, new functions
+- `tests/unit/engine-pool.test.js` — new: maia3 routing, binary path, SelfElo dispatch
+
+**Tests:**
+```
+roster: getRosterTable returns all 19 entries
+roster: getOpponent resolves a known id (type is now maia3)
+roster: getOpponent throws for an unknown id
+roster: drawfish has elo=null
+roster: maia-2200 is no longer optional (maia3-backed)
+roster: maia-2000 fills the former 1900→2200 gap
+roster: sf-max has elo=3190
+roster: getAvailableOpponents excludes all maia3 entries when binary is missing
+roster: getAvailableOpponents includes maia3 entries when binary exists
+roster: getMaiaAnalysisWeights returns lc0 weight IDs that exist on disk
+roster: getMaiaAnalysisWeights returns empty when no lc0 pb.gz files are present
+roster: getMaiaAnalysisWeights only returns IDs whose file exists
+engine pool: maia3 routing: requestMove for maia3 spawns the maia3 binary, not lc0
+engine pool: maia3 routing: requestMove for maia3 passes --cache-dir and --local-files-only args
+engine pool: maia3 routing: requestMove for maia3 sends SelfElo matching opponent.elo
+engine pool: maia3 routing: requestMove for maia3 sends Temperature 0
+engine pool: maia3 routing: requestMove for maia3 returns the engine bestmove
+engine pool: maia3 routing: requestMove reuses the maia3 client across multiple calls (single process)
+engine pool: maia3 routing: SelfElo is updated on every requestMove for different Elos
+engine pool: maia3 routing: requestMove for unknown type throws
+```
+
+**DoD:** All 20 new tests passing; full suite 644 passing + 2 expected fails; branch coverage 91.05%; no changes to `src/domain/` analysis or scoring logic; `getMaiaAnalysisWeights()` decouples findability from the game roster type; lc0 Maia-1 weights on disk continue to serve pass-3 findability analysis; the 1900→2200 gap is closed with `maia-2000` and a now-required `maia-2200`; `make verify` clean.

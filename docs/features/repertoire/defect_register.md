@@ -1,6 +1,6 @@
 # Defect register — auto-repertoire
 
-**Status:** Phase 32 — 2026-08-30  
+**Status:** Phase 37 — 2026-08-30 (final reconciliation)  
 **Updated by:** Each phase commit that closes a defect MUST update the Status and add the commit hash.  
 **Authority:** This document is the single source of truth for open defects. `traceability.md`
 references defect IDs. Phase plans reference defect IDs. If a defect is accepted rather than fixed,
@@ -30,12 +30,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | blocking |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 31, commit `c5a658f`) |
 | **Evidence** | `src/api/ws/challenge-service.js:_gatherEvidence`; search for `engine_delta_win_pts` — zero writers in the codebase |
-| **Description** | `_gatherEvidence` supplies `challenge.engineDeltaWinPts ?? null`. The `engine_delta_win_pts` column is never written anywhere. All challenges therefore fall through to rule 6 (incumbent wins) or rule 7 (abandoned). No refused move can ever be adopted. This is the feature's central mechanism and its novelty claim. |
+| **Description** | `_gatherEvidence` supplied `challenge.engineDeltaWinPts ?? null`. The `engine_delta_win_pts` column was never written anywhere. All challenges therefore fell through to rule 6 (incumbent wins) or rule 7 (abandoned). No refused move could ever be adopted. |
 | **Closing phase** | Phase 31 |
-| **Test** | Journey stage 2.4 (rule 3 promotion) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/audit-service.test.js` — 16 tests covering engine evidence writes, null engineDelta path, gate verdict error catch, trend/result error catches |
+| **Closing note** | Fixed: `audit-service.js` runs depth-22 A/B eval of challenger vs incumbent; `engineDeltaWinPts`, `gateVerdict`, trend at +[2,4,6] plies, and Elo-adjusted result performance computed and persisted. `_resolveOne` now async, calls `runChallengeAudit` before `resolveChallenge`. Rules 2–5 reachable. |
 
 ---
 
@@ -44,12 +44,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | blocking |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 31, commit `c5a658f`) |
 | **Evidence** | `src/api/ws/challenge-service.js` — `gateVerdict: null, // Phase 26: depth-22 A/B audit` |
-| **Description** | The `_gatherEvidence` function hard-codes `gateVerdict: null`. Rule 1 (gate veto) checks `gateVerdict !== null`, so it never fires. `rep_audits` has no writer. Invariant 8 (`rep_audits` row before canonical transition) is false in practice. |
+| **Description** | `_gatherEvidence` hard-coded `gateVerdict: null`. Rule 1 (gate veto) checked `gateVerdict !== null`, so it never fired. `rep_audits` had no writer. Invariant 8 was false in practice. |
 | **Closing phase** | Phase 31 |
-| **Test** | `tests/unit/repertoire/challenge-service.test.js` — rule 1 test (to be written in Phase 31) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/audit-service.test.js` — gate verdict path covered; `tests/unit/repertoire/challenge-service.test.js` — rule 1 gate veto test |
+| **Closing note** | Fixed: `audit-service.js` writes `rep_audits` and populates `gate_verdict` on the challenge row. `_gatherEvidence` reads `challenge.gateVerdict` (no longer hardcoded null). Rule 1 reachable. |
 
 ---
 
@@ -86,12 +86,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
-| **Evidence** | `src/domain/repertoire/vote.js` exports `electCanonical`; `grep -r electCanonical src/` returns only the definition |
-| **Description** | Phase 22 implemented the recency-weighted vote algorithm (§2 of the design) as a pure function. Nothing calls it. The canonical move at each node never changes after its first confirmation. |
+| **Status** | **CLOSED** (Phase 29, commit `803a0b0`) |
+| **Evidence** | `src/domain/repertoire/vote.js` exports `electCanonical`; `grep -r electCanonical src/` returned only the definition |
+| **Description** | The recency-weighted vote algorithm existed as a pure function with no caller. The canonical move at each node never changed after first confirmation. |
 | **Closing phase** | Phase 29 |
-| **Test** | `src/api/ws/maintenance-service.js` — maintenance-pass test (Phase 29) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/maintenance-service.test.js` — `electCanonical` called in `runBookMaintenance`, idempotence invariant |
+| **Closing note** | Fixed: `src/api/ws/maintenance-service.js` calls `electCanonical` during each maintenance pass. `advanceDay` in the journey harness triggers maintenance. |
 
 ---
 
@@ -100,12 +100,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 29, commit `803a0b0`) |
 | **Evidence** | `src/domain/repertoire/state.js` exports `candidateExpired`; removed from `build.js` imports in Phase 27 lint fix as it was unused there too |
-| **Description** | FR-REP-LEARN-9 requires candidates to expire after `REP_CANDIDATE_TTL_ENCOUNTERS = 8` node encounters. The TTL check has no caller. Rare positions accumulate stale candidates indefinitely. |
+| **Description** | FR-REP-LEARN-9 requires candidates to expire after `REP_CANDIDATE_TTL_ENCOUNTERS = 8` node encounters. Rare positions accumulated stale candidates indefinitely. |
 | **Closing phase** | Phase 29 |
-| **Test** | Journey stage 3.2 (candidate expiry) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/maintenance-service.test.js` — `candidate expires at TTL encounters`; journey stage 3.2 |
+| **Closing note** | Fixed: `runBookMaintenance` calls `candidateExpired` for each candidate during the maintenance pass. |
 
 ---
 
@@ -114,12 +114,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 29, commit `803a0b0`) |
 | **Evidence** | `grep -r reAuditQuarantined src/` — definition only in `src/domain/repertoire/state.js` |
-| **Description** | FR-REP-LEARN-8 requires quarantined moves to be re-audited on subsequent encounters. A clean re-audit (`win_loss_pts < REP_ADMIT_WIN_PTS`) promotes to `alt`. This path is impossible without a caller. All quarantined moves remain quarantined forever. |
+| **Description** | FR-REP-LEARN-8 requires quarantined moves to be re-audited on subsequent encounters. All quarantined moves remained quarantined forever. |
 | **Closing phase** | Phase 29 |
-| **Test** | Journey stage 3.1 (quarantine exit) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/maintenance-service.test.js` — `quarantined move re-audited on encounter`; journey stage 3.1 |
+| **Closing note** | Fixed: `runBookMaintenance` calls `reAuditQuarantined` during the maintenance pass. |
 
 ---
 
@@ -142,12 +142,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
-| **Evidence** | `src/api/ws/handlers.js:_applyChoiceMove:377-453` — catches a failed transaction and re-appends the move outside it |
-| **Description** | NFR N-2: a refusal MUST be durably committed in the same transaction as its move. The current code appends the move outside the transaction on failure, violating atomicity. A network error or process crash between the append and the refusal write would leave the DB in an inconsistent state. |
+| **Status** | **CLOSED** (Phase 29, commit `803a0b0`) |
+| **Evidence** | `src/api/ws/handlers.js:_applyChoiceMove:377-453` — caught a failed transaction and re-appended the move outside it |
+| **Description** | NFR N-2: a refusal MUST be durably committed in the same transaction as its move. The code appended the move outside the transaction on failure, violating atomicity. |
 | **Closing phase** | Phase 29 |
-| **Test** | Unit test for `_applyChoiceMove` with a simulated transaction failure (Phase 29) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/coach-conformance.test.js` — `_applyChoiceMove transaction failure does not re-append` |
+| **Closing note** | Fixed: catch block no longer re-appends the move. Returns without applying on error. NFR N-2 satisfied. |
 
 ---
 
@@ -198,12 +198,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 29, commit `803a0b0`) |
 | **Evidence** | `src/api/ws/handlers.js:_checkBookAlert` — no ply-depth check before book lookup |
-| **Description** | `build.js` enforces `REP_PLY_MAX = 30` post-game. The live coach path has no guard. Alerts can fire at ply 31+ where the book has no data, producing spurious alerts or crashes. |
+| **Description** | `build.js` enforced `REP_PLY_MAX = 30` post-game only. The live coach path had no guard. Alerts could fire at ply 31+ where the book has no data. |
 | **Closing phase** | Phase 29 |
-| **Test** | Unit test for `_checkBookAlert` with ply > 30 (Phase 29) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/coach-conformance.test.js` — `_checkBookAlert silent beyond REP_PLY_MAX` |
+| **Closing note** | Fixed: `_checkBookAlert` returns early when `session.ply > REP_PLY_MAX`. |
 
 ---
 
@@ -242,12 +242,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | blocking |
-| **Status** | OPEN |
-| **Evidence** | `src/api/routes/repertoire.js` — `POST /changelog/:id/reverse` exists and passes its tests; `public/repertoire.html` — no button invokes it |
-| **Description** | The only mechanism a player has to reverse an automatic promotion is the reverse API. It is tested and works. Nothing in the UI calls it. A player cannot undo a promotion without using the API directly. |
+| **Status** | **CLOSED** (Phase 30, commit `b6635f5`) |
+| **Evidence** | `src/api/routes/repertoire.js` — `POST /changelog/:id/reverse` exists and passes its tests; `public/repertoire.html` — no button invoked it |
+| **Description** | The reverse API existed and worked. Nothing in the UI called it. |
 | **Closing phase** | Phase 30 |
-| **Test** | Journey stage 2.5 (Undo button) |
-| **Closing note** | — |
+| **Test** | `POST /api/repertoire/changelog/:id/reverse` route tests in `tests/unit/repertoire/routes.test.js`; changelog panel Reverse button rendered and wired in `public/js/repertoire.js` |
+| **Closing note** | Fixed: changelog panel now shows a Reverse button for promote/settle entries; calls `POST /api/repertoire/changelog/:id/reverse` and refreshes on success. |
 
 ---
 
@@ -270,12 +270,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | high |
-| **Status** | OPEN |
-| **Evidence** | Server emits `{ type: 'repertoire_update', ... }` in `repertoire-service.js`; `public/js/play.js` and `public/js/repertoire.js` have no handler for this message type |
-| **Description** | The post-game panel cannot update after analysis. The player sees no indication that his repertoire was updated. The `repertoire_update` message is broadcast but silently ignored. |
+| **Status** | **CLOSED** (Phase 30, commit `b6635f5`) |
+| **Evidence** | Server emitted `{ type: 'repertoire_update', ... }` in `repertoire-service.js`; clients had no handler |
+| **Description** | The `repertoire_update` message was broadcast but silently ignored. |
 | **Closing phase** | Phase 30 |
-| **Test** | Journey stages 1.5 and 2.9 (event probe for `repertoire_update`) |
-| **Closing note** | — |
+| **Test** | `public/js/repertoire.js` `connectForUpdates` WebSocket handler; `public/js/play.js` appends confirmed-move count to post-game label on `repertoire_update` |
+| **Closing note** | Fixed: `repertoire.js` opens a game WebSocket and refreshes all panels on `repertoire_update`; `play.js` appends confirmed count to the post-game analysis label. |
 
 ---
 
@@ -354,12 +354,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 30, commit `b6635f5`) |
 | **Evidence** | `public/js/repertoire.js` — changelog entries rendered from `from_uci` / `to_uci` fields |
-| **Description** | The changelog panel shows move strings like `e2e4` instead of `e4`. Non-technical players cannot read UCI. |
+| **Description** | The changelog panel showed move strings like `e2e4` instead of `e4`. |
 | **Closing phase** | Phase 30 |
-| **Test** | DOM probe: changelog entry text matches SAN pattern, not UCI pattern |
-| **Closing note** | — |
+| **Test** | `enriches entries with fromSan/toSan SAN fields` in `tests/unit/repertoire/routes.test.js` |
+| **Closing note** | Fixed: `GET /changelog` enriches entries with `fromSan`/`toSan` via `uciToSan`; client uses SAN fields when rendering. |
 
 ---
 
@@ -396,12 +396,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | low |
-| **Status** | OPEN |
+| **Status** | **ACCEPTED** (Phase 37) |
 | **Evidence** | `public/repertoire.html` |
-| **Description** | `rep_nodes.line_loss` is computed correctly but never surfaced in the UI. The player cannot see which lines are most at risk. |
-| **Closing phase** | Phase 34 |
-| **Test** | DOM probe (Phase 34) |
-| **Closing note** | Phase 33 added `reach_prob` to node data; line health UI deferred to Phase 34. |
+| **Description** | `rep_nodes.line_loss` is computed correctly but not surfaced in the UI as a dedicated panel. |
+| **Closing phase** | Phase 37 (accepted) |
+| **Test** | n/a — accepted |
+| **Closing note** | Accepted: `line_loss` is computed at the DB level and available via `GET /api/repertoire/tree`. A dedicated line-health panel is low-severity and deprioritized relative to the research timeline. The data is accessible; the UI convenience is a future improvement. |
 
 ---
 
@@ -426,12 +426,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | low |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 37) |
 | **Evidence** | `docs/game/balance.md:39-68`; every other table in the file has 4 columns |
-| **Description** | The REP_* table has an extra "Rationale" column inline. `tests/unit/config.test.js:23` greps the whole document for UPPER_SNAKE words, so a constant mentioned only in prose passes as "documented". A constant that appears in the 5th column but not the constant-name column would pass the test while being misdocumented. |
+| **Description** | The REP_* table had an extra "If wrong you'll see" column inline. `tests/unit/config.test.js:23` grepped the whole document for UPPER_SNAKE words, so a constant mentioned only in prose passed as "documented". |
 | **Closing phase** | Phase 37 |
-| **Test** | Config test (updated in Phase 37) |
-| **Closing note** | — |
+| **Test** | `tests/unit/config.test.js` — `balance: every parameter in balance.js is documented in balance.md` — now requires `` | `CONSTANT` `` table-row format rather than any bare word match |
+| **Closing note** | Fixed: REP_* table reformatted to 4 columns (`Parameter\|Default\|Range/Units\|Notes`); config test tightened to `matchAll(/\| \`([A-Z][A-Z0-9_]+)\`/g)` so only constants in a table cell match. |
 
 ---
 
@@ -440,12 +440,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | low |
-| **Status** | OPEN |
-| **Evidence** | `docs/features/repertoire/api_contract.md` — uses `decision`, `changes`, `{open, recent}` |
-| **Description** | The API contract drifted during Phases 20–22: `decision` was renamed `choice`; `changes` became `entries`; `{open, recent}` became `{challenges}`. New developers reading the contract will generate incorrect API calls. |
+| **Status** | **CLOSED** (Phase 37) |
+| **Evidence** | `docs/features/repertoire/api_contract.md` — used `changes`, `{open, recent}`; missing `/journey` |
+| **Description** | The API contract drifted during Phases 20–22. `changes` → `entries`; `{open, recent}` → `{challenges}`. The `GET /journey` route added in Phase 36 was also absent. |
 | **Closing phase** | Phase 37 |
-| **Test** | Manual review (Phase 37) |
-| **Closing note** | — |
+| **Test** | Manual review — api_contract.md verified against actual route handlers in `src/api/routes/repertoire.js` |
+| **Closing note** | Fixed: `GET /changelog` response updated to `{entries:[...]}` with `fromSan`/`toSan`; `GET /challenges` updated to `{challenges:[...]}`; `GET /journey` route fully documented including JSON shape for `timeline`, `growthSeries`, `milestones`. |
 
 ---
 
@@ -454,9 +454,9 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | low |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 37) |
 | **Evidence** | `docs/features/repertoire/traceability.md` |
-| **Description** | The traceability matrix claims coverage for FR-REP-DRILL-5 (reach-weighted drill order), FR-REP-COACH-14 (coached-game exclusion), and all FR-REP-REACH-* requirements. No tests in the codebase actually exercise the live paths for these requirements (see B8, B9). |
+| **Description** | The traceability matrix pointed FR-REP-REACH-* and FR-REP-COACH-14 at source files rather than test files. FR-REP-DRILL-5 was marked proved by a queue test that covers sort-within-kind but not reach-weighted sort across kinds (that part was never implemented — B8 deferred). |
 | **Closing phase** | Phase 37 |
-| **Test** | Updated traceability.md with accurate test references |
-| **Closing note** | — |
+| **Test** | Updated `traceability.md`: FR-REP-COACH-14 → `tests/unit/analysis-service-extra.test.js`; FR-REP-REACH-1..6 → correct test files and exact test names; FR-REP-DRILL-5 → partial/deferred note. |
+| **Closing note** | Fixed: traceability.md corrected for all three requirement groups. FR-REP-DRILL-5 reach-weighted sort across kinds remains DEFERRED pending B8 (reach probability implementation). |

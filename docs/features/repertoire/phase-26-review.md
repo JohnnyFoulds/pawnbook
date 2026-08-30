@@ -146,3 +146,44 @@ All REP_* constants documented in `docs/game/balance.md` with rationale and sens
 | D6 | Minor | `feature_steps.md` phase statuses not updated | Fixed (this review) |
 
 `make verify` green. All 15 invariants pass. Branch coverage 90.12% ≥ 90% threshold.
+
+---
+
+## Amendment — 2026-08-30 (Phase 37 reconciliation)
+
+The Phase 26 review passed on the wrong evidence. The review method was: verify that tests exist and
+pass, that coverage meets the gate, and that all requirements have at least one test reference in
+`traceability.md`. What it did **not** verify was that the features those tests describe are reachable
+from a running application.
+
+**What the method missed**
+
+The review checked pure domain functions in isolation. Unit tests for `resolveChallenge`, `build.js`,
+and `reach.js` all pass their dependencies directly — they do not exercise the seams between domain
+functions and the service layer that calls them. Phases 27–35 explored those seams and found:
+
+- **15 behavioural defects** where a tested domain function had no caller in the service layer, or
+  the service layer computed a dependency incorrectly before passing it in (examples: `engineDelta`
+  never written so rules 2–5 can never fire; `electCanonical` never called so the vote algorithm
+  never runs; `buildTimeline` and `buildGrowthSeries` had no consumer until Phase 36).
+- **12 UI gaps** where REST routes existed with tests but the responses were never consumed by the
+  browser client (example: `repertoire_update` was broadcast by the server and unhandled by every
+  client).
+- **3 documentation defects** where `traceability.md` pointed requirements at source files rather
+  than test files, and `api_contract.md` described field names that had been renamed in earlier phases.
+
+The coverage gate (90.12% ≥ 90%) passed throughout. Coverage measures which lines a test suite
+reaches, not whether the application is wired correctly end-to-end. The gate is a necessary but not
+sufficient condition for a feature being usable.
+
+**What a better method would have looked like**
+
+A review that tests reachability from the running application would check: (1) that every domain
+function has at least one integration test that calls it through the real handler with a real DB, not
+only through direct unit-test invocation; (2) that every REST route has a test that verifies the
+response shape matches a real client handler; (3) that every WS message type the server emits has a
+test that the client handles it. The journey harness built in Phase 28 is that instrument.
+
+The 30 defects found in Phases 27–35 are fully documented in `defect_register.md` with their closing
+phases and tests. All blocking defects are closed. D1/D2/D3 (documentation) are closed in Phase 37.
+U12 (line-health panel) is accepted at low severity.

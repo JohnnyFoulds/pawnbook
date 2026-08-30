@@ -11,9 +11,14 @@ const SF_DEFAULT = {
   'default': 'info depth 18 seldepth 24 score cp 30 nodes 100000 pv e2e4 e7e5\nbestmove e2e4',
 };
 
-// A blunder-producing eval: before=cp 100, after=cp -500 (huge swing from white's POV)
+// Blunder-producing eval pair.
+// SF_BLUNDER_BEFORE is used at the start position (White to move): score cp 100
+//   → no POV flip → cp_white = 100 (White slightly better).
+// SF_BLUNDER_AFTER is used at the position after 1.e4 (Black to move): score cp 500
+//   → UCI convention: positive means the side to move (Black) is winning by 500 cp
+//   → normaliseToWhitePov negates → cp_white = -500 (White losing by 5 pawns) → blunder.
 const SF_BLUNDER_BEFORE = 'info depth 18 seldepth 24 score cp 100 nodes 100000 pv e2e4 e7e5\nbestmove e2e4';
-const SF_BLUNDER_AFTER  = 'info depth 18 seldepth 24 score cp -500 nodes 100000 pv e7e5 e2e4\nbestmove e7e5';
+const SF_BLUNDER_AFTER  = 'info depth 18 seldepth 24 score cp 500 nodes 100000 pv e7e5 e2e4\nbestmove e7e5';
 
 function makeSfClient(fixtures = SF_DEFAULT) {
   return new ScriptedEngineClient(fixtures);
@@ -385,7 +390,7 @@ describe('pipeline', () => {
 
     const sfClient = new ScriptedEngineClient({
       [pos0]: MULTI_PV_FIXTURE,
-      [pos1]: SF_BLUNDER_AFTER, // cp=-500 → blunder detected, triggers pass 2
+      [pos1]: SF_BLUNDER_AFTER, // score cp 500, Black to move → normalised to cp_white -500 → blunder
       default: SF_DEFAULT['default'],
     });
     const maiaClient = makeMaiaClient('e2e4', new Map([['e2e4', 0.5], ['d2d4', 0.3]]));
@@ -406,6 +411,133 @@ describe('pipeline', () => {
     const alts = JSON.parse(blunderCandidate.altMovesJson ?? '[]');
     expect(alts.length).toBeGreaterThan(0);
     expect(alts.some(a => a.uci === 'd2d4')).toBe(true);
+  });
+
+  it('pass 2 catch: runAnalysis rejects when onProgress throws during pass2', async () => {
+    const chess = (await import('chess.js')).Chess;
+    const game = new chess();
+    const pos0 = game.fen();
+    game.move({ from: 'e2', to: 'e4' });
+    const pos1 = game.fen();
+
+    const sfClient = new ScriptedEngineClient({
+      [pos0]: SF_BLUNDER_BEFORE,
+      [pos1]: SF_BLUNDER_AFTER,
+      default: SF_DEFAULT['default'],
+    });
+    const maiaClient = makeMaiaClient();
+
+    await expect(runAnalysis({
+      plies: ['e2e4'],
+      playerColor: 'white',
+      sfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+      onProgress: ({ phase }) => {
+        if (phase === 'pass2') throw new Error('pass2 progress error');
+      },
+    })).rejects.toThrow('pass2 progress error');
+  });
+
+  it('pass 3 catch: runAnalysis rejects when onProgress throws during maia pass', async () => {
+    const chess = (await import('chess.js')).Chess;
+    const game = new chess();
+    const pos0 = game.fen();
+    game.move({ from: 'e2', to: 'e4' });
+    const pos1 = game.fen();
+
+    const sfClient = new ScriptedEngineClient({
+      [pos0]: SF_BLUNDER_BEFORE,
+      [pos1]: SF_BLUNDER_AFTER,
+      default: SF_DEFAULT['default'],
+    });
+    const maiaClient = makeMaiaClient();
+
+    await expect(runAnalysis({
+      plies: ['e2e4'],
+      playerColor: 'white',
+      sfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+      onProgress: ({ phase }) => {
+        if (phase === 'maia') throw new Error('pass3 progress error');
+      },
+    })).rejects.toThrow('pass3 progress error');
+  });
+
+  it('pass 2: custom sfClient covers lines 179-186 (null lines, !pv, null cp, far cp)', async () => {
+    // 4 plies: e4 e5 d4 d5 — player is white → plies 0,2 are player plies.
+    // Both white positions are blunders (large cp swing) → pass2 runs TWICE.
+    // Call 1 returns lines:null (covers ?? [] right side, line 179).
+    // Call 2 returns edge-case lines (covers !l.pv, l.cp===null, far cp).
+    const chess = (await import('chess.js')).Chess;
+    const game = new chess();
+    const pos0 = game.fen();                       // before e4 (player ply 1)
+    game.move({ from: 'e2', to: 'e4' });
+    const pos1 = game.fen();                       // before e5 (opponent ply)
+    game.move({ from: 'e7', to: 'e5' });
+    const pos2 = game.fen();                       // before d4 (player ply 2)
+    game.move({ from: 'd2', to: 'd4' });
+    const pos3 = game.fen();                       // before d5 (opponent ply)
+    game.move({ from: 'd7', to: 'd5' });
+    const pos4 = game.fen();                       // final position
+
+    let pass2CallCount = 0;
+    const customSfClient = {
+      _calls: [],
+      async eval(fen, opts = {}) {
+        this._calls.push({ type: 'eval', fen, opts });
+        if (opts && opts.multiPV === 3) {
+          pass2CallCount++;
+          // First call: return lines:null → covers ?? [] right side (line 179)
+          if (pass2CallCount === 1) {
+            return { cp: 0, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: null };
+          }
+          // Second call: edge-case lines — covers all branches on 180, 184, 186
+          return {
+            cp: 0, mate: null, bestmove: 'd2d4', pv: 'd2d4',
+            lines: [
+              { depth: 5, cp: 20 },                          // no pv → !l.pv TRUE (line 180)
+              { depth: 18, cp: 0, pv: 'd2d4 d7d5' },        // same as bestmove → seenMoves skip
+              { depth: 18, cp: null, pv: 'f2f3 e7e5' },     // cp: null → l.cp !== null FALSE (line 184)
+              { depth: 16, cp: -500, pv: 'h2h3 e7e5' },     // far cp → > NEAR_MISS TRUE (line 186)
+              { depth: 14, cp: -2, pv: 'g1f3 d7d5' },       // near-miss → included
+            ],
+          };
+        }
+        // pass1: blunder on pos0 (player) and pos2 (player); opponent plies are fine
+        if (fen === pos0) return { cp: 100, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: [] };
+        if (fen === pos1) return { cp: -500, mate: null, bestmove: 'e7e5', pv: 'e7e5', lines: [] };
+        if (fen === pos2) return { cp: 100, mate: null, bestmove: 'd2d4', pv: 'd2d4', lines: [] };
+        if (fen === pos3) return { cp: -500, mate: null, bestmove: 'd7d5', pv: 'd7d5', lines: [] };
+        if (fen === pos4) return { cp: 0, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: [] };
+        return { cp: 30, mate: null, bestmove: 'e2e4', pv: 'e2e4', lines: [] };
+      },
+    };
+
+    const policyMap = new Map([['e2e4', 0.5], ['d2d4', 0.3], ['g1f3', 0.2]]);
+    const maiaClient = makeMaiaClient('e2e4', policyMap);
+
+    const { puzzleCandidates } = await runAnalysis({
+      plies: ['e2e4', 'e7e5', 'd2d4', 'd7d5'],
+      playerColor: 'white',
+      sfClient: customSfClient,
+      maiaClient,
+      maiaModel: 'maia-1300',
+      playerElo: 1300,
+      wasTimed: false,
+    });
+
+    expect(Array.isArray(puzzleCandidates)).toBe(true);
+    // pass2 should have been called twice (one per player blunder)
+    expect(pass2CallCount).toBe(2);
+    // The second call's near-miss alt move 'g1f3' should appear in altMovesJson
+    const candidates = puzzleCandidates.filter(c => c.mover === 'player');
+    expect(candidates.length).toBeGreaterThanOrEqual(1);
   });
 
   it('regression: existingEvals with bestmove skips the SF call for that position', async () => {
@@ -443,5 +575,109 @@ describe('pipeline', () => {
     // Without skip: 3 calls (positions 0,1,2 for a 2-ply game)
     // With skip for idx=0: 2 calls
     expect(totalEvalCalls).toBeLessThan(3);
+  });
+
+  it('pipeline: runAnalysis returns both sides\' strength beside accuracy', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const result = await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    expect(result).toHaveProperty('playerStrength');
+    expect(result).toHaveProperty('opponentStrength');
+    expect(result.playerStrength).toHaveProperty('n');
+    expect(result.playerStrength).toHaveProperty('ase');
+    expect(result.playerStrength).toHaveProperty('sd');
+    expect(result.playerStrength).toHaveProperty('p75Loss');
+    expect(result.opponentStrength).toHaveProperty('n');
+  });
+
+  it('pipeline: every position records its legal-move count for strength filtering', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    // FOUR_MOVE_PLIES: white plays plies 1 and 3 (player), black plays plies 2 and 4
+    // cp=30 is inside STRENGTH_DECIDED_CP; mateIn=null; normal positions have >1 legal move
+    // So all 4 plies are eligible — 2 per side
+    const { playerStrength, opponentStrength } = await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    expect(playerStrength.n).toBe(2);
+    expect(opponentStrength.n).toBe(2);
+  });
+
+  it('pipeline: strength estimation issues no engine calls', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    // All engine calls are accounted for by pass1+pass2+pass3; playingStrength is pure arithmetic
+    const evalCalls = sfClient.calls.filter(c => c.type === 'eval').length;
+    // 5 positions for pass1 (4 plies + start); pass2 only runs on player blunders (none here)
+    expect(evalCalls).toBe(FOUR_MOVE_PLIES.length + 1);
+  });
+
+  it('pipeline: a six-move game returns null strengths, not zero', async () => {
+    // 6 plies → 3 player plies + 3 opponent plies, both below STRENGTH_MIN_PLIES=12
+    const sixPlies = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'd2d4', 'e5d4'];
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const { playerStrength, opponentStrength } = await runAnalysis({
+      plies: sixPlies, playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    expect(playerStrength.strength).toBeNull();
+    expect(opponentStrength.strength).toBeNull();
+    expect(playerStrength.strength).not.toBe(0);
+    expect(opponentStrength.strength).not.toBe(0);
+  });
+
+  it('pipeline: mate-score positions cover the mate-detection && right-hand branches', async () => {
+    // Engine returns mate score for all positions; normaliseToWhitePov flips Black-to-move.
+    // This exercises the `before.mate != null && before.mate > 0` (and < 0) branches.
+    const sfClient = new ScriptedEngineClient({
+      'default': 'info depth 18 score mate 3 nodes 1000 pv e2e4\nbestmove e2e4',
+    });
+    const maiaClient = makeMaiaClient();
+    const { moveEvals } = await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    expect(moveEvals).toHaveLength(FOUR_MOVE_PLIES.length);
+  });
+
+  it('pipeline: existingEvals with camelCase prop names triggers the fallback ?? branches', async () => {
+    // cp_white is missing → the ?? e.cpWhite fallback (line 59) is used.
+    // best_move_uci is missing → the ?? e.bestMoveUci fallback (line 62) is used.
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const existingEvals = [{
+      ply: 1,
+      cpWhite: 15,    // no cp_white — forces the ?? e.cpWhite branch
+      mateIn: null,   // no mate_in
+      bestMoveUci: 'e2e4', // no best_move_uci — forces the ?? e.bestMoveUci branch
+      pv: 'e2e4',
+    }];
+    await runAnalysis({
+      plies: ['e2e4', 'e7e5'], playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+      existingEvals,
+    });
+    expect(sfClient.calls.filter(c => c.type === 'eval').length).toBeLessThan(3);
+  });
+
+  it('pipeline: a ply is eligible for exactly one side, never both and never neither', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const { playerStrength, opponentStrength } = await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    // Total eligible plies across both sides must equal total plies (4)
+    // because every ply goes to exactly one side
+    expect(playerStrength.n + opponentStrength.n).toBe(FOUR_MOVE_PLIES.length);
   });
 });

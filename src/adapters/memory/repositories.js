@@ -69,6 +69,7 @@ export class InMemoryGameRepository {
     this._eloHistory = [];
     this._settings = new Map();
     this._activity = new Map(); // dayKey → {games, reviews}
+    this._strengthSamples = new Map(); // `${gameId}:${side}` → sample
   }
 
   save(game) {
@@ -80,7 +81,10 @@ export class InMemoryGameRepository {
   findById(id) {
     const game = this._games.get(id);
     if (!game) throw new GameNotFoundError(`Game '${id}' not found`);
-    return { ...game };
+    const g = { ...game };
+    g.strengthElo = game.strengthElo ?? null;
+    g.opponentStrengthElo = game.opponentStrengthElo ?? null;
+    return g;
   }
 
   appendMove(gameId, move) {
@@ -127,7 +131,8 @@ export class InMemoryGameRepository {
   listRecent(limit = 50) {
     return [...this._games.values()]
       .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
-      .slice(0, limit);
+      .slice(0, limit)
+      .map(g => ({ ...g, strengthElo: g.strengthElo ?? null, opponentStrengthElo: g.opponentStrengthElo ?? null }));
   }
 
   getEvals(gameId) {
@@ -171,6 +176,37 @@ export class InMemoryGameRepository {
 
   getStreak(todayTimestampMs) {
     return _deriveStreak([...this._activity.keys()], _activityDayKey(todayTimestampMs));
+  }
+
+  saveStrengthSample({ gameId, side, n, ase, sd, p75Loss, wasTimed, coeffVersion }) {
+    this._strengthSamples.set(`${gameId}:${side}`, { gameId, side, n, ase, sd, p75Loss: p75Loss ?? null, wasTimed: !!wasTimed, coeffVersion });
+  }
+
+  listStrengthSamples({ side, limit } = {}) {
+    let rows = [...this._strengthSamples.values()];
+    if (side != null) rows = rows.filter(r => r.side === side);
+    rows.sort((a, b) => {
+      const ga = this._games.get(a.gameId);
+      const gb = this._games.get(b.gameId);
+      return (gb?.startedAt ?? 0) - (ga?.startedAt ?? 0);
+    });
+    if (limit != null) rows = rows.slice(0, limit);
+    return rows.map(r => ({ ...r }));
+  }
+
+  getPlayerMoveClassifications() {
+    if (!this._evals) return [];
+    const results = [];
+    for (const [gameId, evals] of this._evals) {
+      const game = this._games.get(gameId);
+      if (!game || game.status !== 'finished') continue;
+      for (const eval_ of evals) {
+        if (eval_.mover === 'player' && eval_.classification != null) {
+          results.push({ classification: eval_.classification, played_at: game.playedAt ?? 0 });
+        }
+      }
+    }
+    return results.sort((a, b) => (a.played_at ?? 0) - (b.played_at ?? 0));
   }
 }
 
@@ -262,6 +298,14 @@ export class InMemoryPuzzleRepository {
       .sort((a, b) => (a.sourcePly ?? 0) - (b.sourcePly ?? 0));
   }
 
+  getPuzzleCountsByGameId() {
+    const counts = {};
+    for (const p of this._puzzles.values()) {
+      if (p.sourceGameId) counts[p.sourceGameId] = (counts[p.sourceGameId] ?? 0) + 1;
+    }
+    return counts;
+  }
+
   saveReview(review) {
     if (!this._reviews) this._reviews = [];
     this._reviews.push({ ...review, id: review.id ?? randomUUID() });
@@ -270,6 +314,16 @@ export class InMemoryPuzzleRepository {
   saveReviewAndCard(review, card) {
     this.saveReview(review);
     this.saveCard(card);
+  }
+
+  getPracticeCards(now) {
+    const results = [];
+    for (const [puzzleId, card] of this._cards) {
+      if (card.due > now && !card.graduated) {
+        results.push({ ...this._puzzles.get(puzzleId), ...card });
+      }
+    }
+    return results.sort((a, b) => (b.instructiveness ?? 0) - (a.instructiveness ?? 0));
   }
 }
 

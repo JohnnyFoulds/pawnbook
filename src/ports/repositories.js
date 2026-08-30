@@ -53,6 +53,20 @@
  * @returns {Object[]}
  */
 
+/**
+ * @function
+ * @name GameRepository#saveStrengthSample
+ * @param {{gameId: string, side: string, n: number, ase: number, sd: number, p75Loss: number|null, wasTimed: boolean, coeffVersion: number}} sample
+ * @returns {void}
+ */
+
+/**
+ * @function
+ * @name GameRepository#listStrengthSamples
+ * @param {{side?: string, limit?: number}} [opts]
+ * @returns {object[]} newest game first
+ */
+
 // ────────────────────────────────────────────────────────────────
 
 /**

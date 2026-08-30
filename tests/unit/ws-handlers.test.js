@@ -339,6 +339,135 @@ describe('ws-handlers: makeMessageHandler', () => {
     expect(game.status).toBe('abandoned');
   });
 
+  it('hint with enginePool returning bestmove sends hint_result with piece square', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const fakePool = {
+      getAnalysisSfClient: async () => ({
+        eval: async () => ({ bestmove: 'e2e4', cp: 20, pv: 'e2e4', mate: null }),
+      }),
+    };
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK, enginePool: fakePool });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({ type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: false, timeControl: null }));
+    expect(ws.lastMessage().type).toBe('game_started');
+
+    await handler(ws, JSON.stringify({ type: 'hint' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('hint_result');
+    expect(msg.pieceSquare).toBe('e2');
+  });
+
+  it('hint with enginePool returning null bestmove falls back to a1', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const fakePool = {
+      getAnalysisSfClient: async () => ({
+        eval: async () => ({ bestmove: null, cp: 0, pv: '', mate: null }),
+      }),
+    };
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK, enginePool: fakePool });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({ type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: false, timeControl: null }));
+    await handler(ws, JSON.stringify({ type: 'hint' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('hint_result');
+    expect(msg.pieceSquare).toBe('a1');
+  });
+
+  it('hint with enginePool that throws falls back to a1', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const fakePool = {
+      getAnalysisSfClient: async () => { throw new Error('engine unavailable'); },
+    };
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK, enginePool: fakePool });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({ type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: false, timeControl: null }));
+    await handler(ws, JSON.stringify({ type: 'hint' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('hint_result');
+    expect(msg.pieceSquare).toBe('a1');
+  });
+
+  it('resume triggers engine_turn when it is not the player turn', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    // Start a game as black — engine (white) moves first
+    await handler(ws, JSON.stringify({
+      type: 'new_game', opponentId: 'sf-1400', color: 'black', ranked: false, timeControl: null,
+    }));
+    const gameId = ws._messages.find(m => m.type === 'game_started')?.gameId;
+    expect(gameId).toBeDefined();
+
+    // Resume on a fresh ws — spy on engine_turn
+    const ws2 = makeWs();
+    let engineTurnFired = false;
+    ws2.on('engine_turn', () => { engineTurnFired = true; });
+    await handler(ws2, JSON.stringify({ type: 'resume', gameId }));
+
+    expect(ws2._messages.some(m => m.type === 'game_started')).toBe(true);
+    expect(engineTurnFired).toBe(true);
+  });
+
+  it('hint rate-limiting: second hint within 2s returns no message (lines 62-63)', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: false, timeControl: null,
+    }));
+    expect(ws.lastMessage().type).toBe('game_started');
+
+    const countBefore = ws._messages.length;
+    // First hint is allowed
+    await handler(ws, JSON.stringify({ type: 'hint' }));
+    expect(ws.lastMessage().type).toBe('hint_result');
+
+    // Second hint within 2s should be rate-limited (no message sent)
+    const countAfterFirst = ws._messages.length;
+    await handler(ws, JSON.stringify({ type: 'hint' }));
+    // Rate-limited: no additional message sent
+    expect(ws._messages.length).toBe(countAfterFirst);
+    void countBefore; // suppress unused warning
+  });
+
+  it('timed player move includes clock update (handlers.js line 148)', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({
+      type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: false,
+      timeControl: { initialSec: 300, incSec: 3 },
+    }));
+    expect(ws.lastMessage().type).toBe('game_started');
+
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'e2e4' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('move_accepted');
+    // Timed game: clockUpdate is set in session, stored by handler line 148
+    expect(msg.clockUpdate).toBeDefined();
+    expect(msg.clockUpdate.whiteMs).toBeDefined();
+  });
+
+  it('resume with unknown gameId returns GAME_NOT_FOUND error (handlers.js line 212)', async () => {
+    // Use a custom gameRepo where findById returns null instead of throwing,
+    // so the explicit if (!game) check on line 211 is reached
+    const gameRepo = new InMemoryGameRepository();
+    gameRepo.findById = () => null; // override to return null for unknown IDs
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+
+    await handler(ws, JSON.stringify({ type: 'resume', gameId: '00000000-0000-0000-0000-000000000000' }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('error');
+    expect(msg.error_code).toBe('game_not_found');
+  });
+
   it("player move that checkmates the engine sends game_over via handleMove", async () => {
     const gameRepo = new InMemoryGameRepository();
     const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
@@ -371,5 +500,26 @@ describe('ws-handlers: makeMessageHandler', () => {
     // Lines 122-124: moveResult.gameOver=true → finishGame → game_over
     expect(lastMsg.type).toBe('game_over');
     expect(lastMsg.termination).toBe('checkmate');
+  });
+
+  it('non-Error thrown sends "An internal error occurred" (handlers.js line 75 FALSE branch)', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    gameRepo.save = () => { throw 'not an Error object'; };
+    const handler = makeMessageHandler({ gameRepo, clock: CLOCK });
+    const ws = makeWs();
+    await handler(ws, JSON.stringify({
+      type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: false, timeControl: null,
+    }));
+    const msg = ws.lastMessage();
+    expect(msg.type).toBe('error');
+    expect(msg.message).toBe('An internal error occurred');
+  });
+
+  it('send() skips ws.send when socket is not OPEN (handlers.js line 287 FALSE branch)', async () => {
+    const handler = makeMessageHandler({ gameRepo: new InMemoryGameRepository(), clock: CLOCK });
+    const ws = makeWs();
+    ws.readyState = 0; // closed — not OPEN (which is 1)
+    await handler(ws, '{invalid json}');
+    expect(ws._messages).toHaveLength(0);
   });
 });

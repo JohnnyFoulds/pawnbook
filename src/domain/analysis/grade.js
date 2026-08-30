@@ -4,7 +4,12 @@
  * All thresholds in win% POINTS (0–100), never winningChances (−1..+1).
  */
 
-import { BLUNDER_WIN_PTS, MISTAKE_WIN_PTS, INACCURACY_WIN_PTS, GREAT_CP_MAX, GOOD_CP_MAX } from '../../shared/balance.js';
+import {
+  BLUNDER_WIN_PTS, MISTAKE_WIN_PTS, INACCURACY_WIN_PTS, GREAT_CP_MAX, GOOD_CP_MAX,
+  STRENGTH_CP_CAP, STRENGTH_DECIDED_CP, STRENGTH_MIN_PLIES,
+  STRENGTH_ANCHOR_ELO, STRENGTH_ANCHOR_ASE, STRENGTH_ELO_PER_ASE,
+  STRENGTH_ELO_MIN, STRENGTH_ELO_MAX,
+} from '../../shared/balance.js';
 
 const CP_CLAMP = 1000;
 const WC_K = 0.00368208;
@@ -77,6 +82,62 @@ export function moveAccuracy(winBefore, winAfter) {
  * @param {number[]} accs — array of per-move accuracies (0–100)
  * @returns {number}
  */
+/**
+ * Regan & Haworth scaled error for one ply: ln(1 + min(cpLoss, cap) / 100).
+ * @param {number} cpLoss — centipawn loss (non-negative)
+ * @returns {number}
+ */
+export function scaledError(cpLoss) {
+  return Math.log(1 + Math.min(cpLoss, STRENGTH_CP_CAP) / 100);
+}
+
+/**
+ * Estimate playing strength from a set of per-ply samples.
+ *
+ * Each sample must supply the pre-move position's properties:
+ *   { cpLoss, cpWhite, mateIn, legalMovesBefore }
+ *
+ * Eligible plies: legalMovesBefore > 1, mateIn === null,
+ *   cpWhite !== null, |cpWhite| <= STRENGTH_DECIDED_CP.
+ *
+ * @param {Array<{cpLoss:number, cpWhite:number|null, mateIn:number|null, legalMovesBefore:number}>} samples
+ * @returns {{strength:number|null, se:number|null, n:number, ase:number|null, sd:number, p75Loss:number|null}}
+ */
+export function playingStrength(samples) {
+  const eligible = samples.filter(s =>
+    s.legalMovesBefore > 1 &&
+    s.mateIn === null &&
+    s.cpWhite !== null &&
+    Math.abs(s.cpWhite) <= STRENGTH_DECIDED_CP,
+  );
+
+  const n = eligible.length;
+
+  if (n === 0) return { strength: null, se: null, n: 0, ase: null, sd: 0, p75Loss: null };
+
+  const scaledLosses = eligible.map(s => scaledError(s.cpLoss));
+  const ase = scaledLosses.reduce((sum, v) => sum + v, 0) / n;
+
+  // Sample standard deviation (n-1 denominator); defined as 0 for n < 2 to avoid NaN.
+  const sd = n < 2
+    ? 0
+    : Math.sqrt(scaledLosses.reduce((sum, v) => sum + (v - ase) ** 2, 0) / (n - 1));
+
+  // p75Loss: 75th percentile of winsorised cpLoss over eligible plies, ascending.
+  const winsorised = eligible.map(s => Math.min(s.cpLoss, STRENGTH_CP_CAP)).sort((a, b) => a - b);
+  const idx = 0.75 * (n - 1);
+  const lo = Math.floor(idx), hi = Math.ceil(idx), frac = idx - lo;
+  const p75Loss = winsorised[lo] + frac * (winsorised[hi] - winsorised[lo]);
+
+  if (n < STRENGTH_MIN_PLIES) return { strength: null, se: null, n, ase, sd, p75Loss };
+
+  const raw = STRENGTH_ANCHOR_ELO - STRENGTH_ELO_PER_ASE * (ase - STRENGTH_ANCHOR_ASE);
+  const strength = Math.round(Math.max(STRENGTH_ELO_MIN, Math.min(STRENGTH_ELO_MAX, raw)));
+  const se = Math.round(STRENGTH_ELO_PER_ASE * sd / Math.sqrt(n));
+
+  return { strength, se, n, ase, sd, p75Loss };
+}
+
 export function gameAccuracy(accs) {
   if (!accs.length) return 0;
 

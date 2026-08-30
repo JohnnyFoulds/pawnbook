@@ -1,0 +1,371 @@
+[
+  {
+    "ply": 1,
+    "mover": "opponent",
+    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "cpWhite": 38,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 20
+  },
+  {
+    "ply": 2,
+    "mover": "player",
+    "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+    "cpWhite": 35,
+    "cpLoss": 33,
+    "mateIn": null,
+    "legalMovesBefore": 20
+  },
+  {
+    "ply": 3,
+    "mover": "opponent",
+    "fen": "rnbqkbnr/1ppppppp/p7/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "cpWhite": 68,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 30
+  },
+  {
+    "ply": 4,
+    "mover": "player",
+    "fen": "rnbqkbnr/1ppppppp/p7/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 2",
+    "cpWhite": 71,
+    "cpLoss": 39,
+    "mateIn": null,
+    "legalMovesBefore": 19
+  },
+  {
+    "ply": 5,
+    "mover": "opponent",
+    "fen": "rnbqkbnr/2pppppp/p7/1p6/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3",
+    "cpWhite": 110,
+    "cpLoss": 8,
+    "mateIn": null,
+    "legalMovesBefore": 37
+  },
+  {
+    "ply": 6,
+    "mover": "player",
+    "fen": "rnbqkbnr/2pppppp/p7/1p6/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 1 3",
+    "cpWhite": 102,
+    "cpLoss": 7,
+    "mateIn": null,
+    "legalMovesBefore": 19
+  },
+  {
+    "ply": 7,
+    "mover": "opponent",
+    "fen": "rn1qkbnr/1bpppppp/p7/1p6/3PP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 2 4",
+    "cpWhite": 109,
+    "cpLoss": 17,
+    "mateIn": null,
+    "legalMovesBefore": 35
+  },
+  {
+    "ply": 8,
+    "mover": "player",
+    "fen": "rn1qkbnr/1bpppppp/p7/1p6/3PP3/3B1N2/PPP2PPP/RNBQK2R b KQkq - 3 4",
+    "cpWhite": 92,
+    "cpLoss": 48,
+    "mateIn": null,
+    "legalMovesBefore": 23
+  },
+  {
+    "ply": 9,
+    "mover": "opponent",
+    "fen": "rn1qkbnr/1bp1pppp/p2p4/1p6/3PP3/3B1N2/PPP2PPP/RNBQK2R w KQkq - 0 5",
+    "cpWhite": 140,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 37
+  },
+  {
+    "ply": 10,
+    "mover": "player",
+    "fen": "rn1qkbnr/1bp1pppp/p2p4/1p6/3PP3/3B1N2/PPP2PPP/RNBQ1RK1 b kq - 1 5",
+    "cpWhite": 144,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 25
+  },
+  {
+    "ply": 11,
+    "mover": "opponent",
+    "fen": "r2qkbnr/1bpnpppp/p2p4/1p6/3PP3/3B1N2/PPP2PPP/RNBQ1RK1 w kq - 2 6",
+    "cpWhite": 136,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 33
+  },
+  {
+    "ply": 12,
+    "mover": "player",
+    "fen": "r2qkbnr/1bpnpppp/p2p4/1p6/3PP3/3B1N2/PPP2PPP/RNBQR1K1 b kq - 3 6",
+    "cpWhite": 143,
+    "cpLoss": 26,
+    "mateIn": null,
+    "legalMovesBefore": 29
+  },
+  {
+    "ply": 13,
+    "mover": "opponent",
+    "fen": "r2qkbnr/1bpnpp1p/p2p2p1/1p6/3PP3/3B1N2/PPP2PPP/RNBQR1K1 w kq - 0 7",
+    "cpWhite": 169,
+    "cpLoss": 43,
+    "mateIn": null,
+    "legalMovesBefore": 35
+  },
+  {
+    "ply": 14,
+    "mover": "player",
+    "fen": "r2qkbnr/1bpnpp1p/p2p2p1/1p6/3PP3/2PB1N2/PP3PPP/RNBQR1K1 b kq - 0 7",
+    "cpWhite": 126,
+    "cpLoss": 1,
+    "mateIn": null,
+    "legalMovesBefore": 30
+  },
+  {
+    "ply": 15,
+    "mover": "opponent",
+    "fen": "r2qk1nr/1bpnppbp/p2p2p1/1p6/3PP3/2PB1N2/PP3PPP/RNBQR1K1 w kq - 1 8",
+    "cpWhite": 127,
+    "cpLoss": 9,
+    "mateIn": null,
+    "legalMovesBefore": 37
+  },
+  {
+    "ply": 16,
+    "mover": "player",
+    "fen": "r2qk1nr/1bpnppbp/p2p2p1/1p6/3PP3/2PB1N2/PP1N1PPP/R1BQR1K1 b kq - 2 8",
+    "cpWhite": 118,
+    "cpLoss": 4,
+    "mateIn": null,
+    "legalMovesBefore": 35
+  },
+  {
+    "ply": 17,
+    "mover": "opponent",
+    "fen": "r2qk2r/1bpnppbp/p2p1np1/1p6/3PP3/2PB1N2/PP1N1PPP/R1BQR1K1 w kq - 3 9",
+    "cpWhite": 122,
+    "cpLoss": 79,
+    "mateIn": null,
+    "legalMovesBefore": 34
+  },
+  {
+    "ply": 18,
+    "mover": "player",
+    "fen": "r2qk2r/1bpnppbp/p2p1np1/1p6/3PP3/2PB1N2/PP3PPP/R1BQRNK1 b kq - 4 9",
+    "cpWhite": 43,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 35
+  },
+  {
+    "ply": 19,
+    "mover": "opponent",
+    "fen": "r2q1rk1/1bpnppbp/p2p1np1/1p6/3PP3/2PB1N2/PP3PPP/R1BQRNK1 w - - 5 10",
+    "cpWhite": 38,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 37
+  },
+  {
+    "ply": 20,
+    "mover": "player",
+    "fen": "r2q1rk1/1bpnppbp/p2p1np1/1p6/3PP3/2PB1NN1/PP3PPP/R1BQR1K1 b - - 6 10",
+    "cpWhite": 38,
+    "cpLoss": 43,
+    "mateIn": null,
+    "legalMovesBefore": 33
+  },
+  {
+    "ply": 21,
+    "mover": "opponent",
+    "fen": "r2q1rk1/1b1nppbp/p1pp1np1/1p6/3PP3/2PB1NN1/PP3PPP/R1BQR1K1 w - - 0 11",
+    "cpWhite": 81,
+    "cpLoss": 13,
+    "mateIn": null,
+    "legalMovesBefore": 40
+  },
+  {
+    "ply": 22,
+    "mover": "player",
+    "fen": "r2q1rk1/1b1nppbp/p1pp1np1/1p2P3/3P4/2PB1NN1/PP3PPP/R1BQR1K1 b - - 0 11",
+    "cpWhite": 68,
+    "cpLoss": 4,
+    "mateIn": null,
+    "legalMovesBefore": 32
+  },
+  {
+    "ply": 23,
+    "mover": "opponent",
+    "fen": "r2q1rk1/1b1nppbp/p1p2np1/1p2p3/3P4/2PB1NN1/PP3PPP/R1BQR1K1 w - - 0 12",
+    "cpWhite": 72,
+    "cpLoss": 110,
+    "mateIn": null,
+    "legalMovesBefore": 46
+  },
+  {
+    "ply": 24,
+    "mover": "player",
+    "fen": "r2q1rk1/1b1nppbp/p1p2np1/1p2N3/3P4/2PB2N1/PP3PPP/R1BQR1K1 b - - 0 12",
+    "cpWhite": -38,
+    "cpLoss": 107,
+    "mateIn": null,
+    "legalMovesBefore": 30
+  },
+  {
+    "ply": 25,
+    "mover": "opponent",
+    "fen": "r4rk1/1bqnppbp/p1p2np1/1p2N3/3P4/2PB2N1/PP3PPP/R1BQR1K1 w - - 1 13",
+    "cpWhite": 69,
+    "cpLoss": 2,
+    "mateIn": null,
+    "legalMovesBefore": 52
+  },
+  {
+    "ply": 26,
+    "mover": "player",
+    "fen": "r4rk1/1bqnppbp/p1p2np1/1p2N3/3P1B2/2PB2N1/PP3PPP/R2QR1K1 b - - 2 13",
+    "cpWhite": 67,
+    "cpLoss": 33,
+    "mateIn": null,
+    "legalMovesBefore": 36
+  },
+  {
+    "ply": 27,
+    "mover": "opponent",
+    "fen": "r1q2rk1/1b1nppbp/p1p2np1/1p2N3/3P1B2/2PB2N1/PP3PPP/R2QR1K1 w - - 3 14",
+    "cpWhite": 100,
+    "cpLoss": 55,
+    "mateIn": null,
+    "legalMovesBefore": 54
+  },
+  {
+    "ply": 28,
+    "mover": "player",
+    "fen": "r1q2rk1/1b1nppbp/p1p2np1/1p2N3/3P1B2/2PB2N1/PP1Q1PPP/R3R1K1 b - - 4 14",
+    "cpWhite": 45,
+    "cpLoss": 77,
+    "mateIn": null,
+    "legalMovesBefore": 27
+  },
+  {
+    "ply": 29,
+    "mover": "opponent",
+    "fen": "r1q2rk1/1b1nppbp/p1p3p1/1p1nN3/3P1B2/2PB2N1/PP1Q1PPP/R3R1K1 w - - 5 15",
+    "cpWhite": 122,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 50
+  },
+  {
+    "ply": 30,
+    "mover": "player",
+    "fen": "r1q2rk1/1b1nppbp/p1p3pB/1p1nN3/3P4/2PB2N1/PP1Q1PPP/R3R1K1 b - - 6 15",
+    "cpWhite": 133,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 32
+  },
+  {
+    "ply": 31,
+    "mover": "opponent",
+    "fen": "r1q2rk1/1b2ppbp/p1p3pB/1p1nn3/3P4/2PB2N1/PP1Q1PPP/R3R1K1 w - - 0 16",
+    "cpWhite": 130,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 49
+  },
+  {
+    "ply": 32,
+    "mover": "player",
+    "fen": "r1q2rk1/1b2ppbp/p1p3pB/1p1nP3/8/2PB2N1/PP1Q1PPP/R3R1K1 b - - 0 16",
+    "cpWhite": 140,
+    "cpLoss": 40,
+    "mateIn": null,
+    "legalMovesBefore": 32
+  },
+  {
+    "ply": 33,
+    "mover": "opponent",
+    "fen": "r1q2rk1/1b2ppbp/p5pB/1ppnP3/8/2PB2N1/PP1Q1PPP/R3R1K1 w - - 0 17",
+    "cpWhite": 180,
+    "cpLoss": 67,
+    "mateIn": null,
+    "legalMovesBefore": 48
+  },
+  {
+    "ply": 34,
+    "mover": "player",
+    "fen": "r1q2rk1/1b2ppBp/p5p1/1ppnP3/8/2PB2N1/PP1Q1PPP/R3R1K1 b - - 0 17",
+    "cpWhite": 113,
+    "cpLoss": 5,
+    "mateIn": null,
+    "legalMovesBefore": 32
+  },
+  {
+    "ply": 35,
+    "mover": "opponent",
+    "fen": "r1q2r2/1b2ppkp/p5p1/1ppnP3/8/2PB2N1/PP1Q1PPP/R3R1K1 w - - 0 18",
+    "cpWhite": 118,
+    "cpLoss": 11,
+    "mateIn": null,
+    "legalMovesBefore": 45
+  },
+  {
+    "ply": 36,
+    "mover": "player",
+    "fen": "r1q2r2/1b2ppkp/p5p1/1ppnP3/4B3/2P3N1/PP1Q1PPP/R3R1K1 b - - 1 18",
+    "cpWhite": 107,
+    "cpLoss": 64,
+    "mateIn": null,
+    "legalMovesBefore": 35
+  },
+  {
+    "ply": 37,
+    "mover": "opponent",
+    "fen": "r1q2r2/1b2ppkp/p5p1/1p1nP3/2p1B3/2P3N1/PP1Q1PPP/R3R1K1 w - - 0 19",
+    "cpWhite": 171,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 43
+  },
+  {
+    "ply": 38,
+    "mover": "player",
+    "fen": "r1q2r2/1b2ppkp/p5p1/1p1BP3/2p5/2P3N1/PP1Q1PPP/R3R1K1 b - - 0 19",
+    "cpWhite": 187,
+    "cpLoss": 259,
+    "mateIn": null,
+    "legalMovesBefore": 29
+  },
+  {
+    "ply": 39,
+    "mover": "opponent",
+    "fen": "r1q2r2/4ppkp/p5p1/1p1bP3/2p5/2P3N1/PP1Q1PPP/R3R1K1 w - - 0 20",
+    "cpWhite": 446,
+    "cpLoss": 0,
+    "mateIn": null,
+    "legalMovesBefore": 38
+  },
+  {
+    "ply": 40,
+    "mover": "player",
+    "fen": "r1q2r2/4ppkp/p5p1/1p1QP3/2p5/2P3N1/PP3PPP/R3R1K1 b - - 0 20",
+    "cpWhite": 450,
+    "cpLoss": 6,
+    "mateIn": null,
+    "legalMovesBefore": 29
+  },
+  {
+    "ply": 41,
+    "mover": "opponent",
+    "fen": "r1qr4/4ppkp/p5p1/1p1QP3/2p5/2P3N1/PP3PPP/R3R1K1 w - - 1 21",
+    "cpWhite": 456,
+    "cpLoss": 903,
+    "mateIn": null,
+    "legalMovesBefore": 44
+  }
+]

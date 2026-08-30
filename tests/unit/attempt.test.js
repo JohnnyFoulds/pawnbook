@@ -107,6 +107,13 @@ describe('parseAccepted edge cases', () => {
     const result = gradeAttempt(puzzleNull, { move: 'e2e4', msTaken: 5000 });
     expect(result.correct).toBe(false);
   });
+
+  it('non-array JSON scalar triggers [parsed] branch (not catch, not array)', () => {
+    // JSON.parse('"e7e5"') returns the string "e7e5" — Array.isArray(str) is false → [parsed]
+    const puzzle = { acceptedMovesJson: '"e7e5"', followupUci: null };
+    const result = gradeAttempt(puzzle, { move: 'e7e5', msTaken: 5000 });
+    expect(result.correct).toBe(true);
+  });
 });
 
 describe('gradeFollowup', () => {

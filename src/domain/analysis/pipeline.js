@@ -10,7 +10,7 @@ import { logger } from '../../config.js';
 import { FINDABILITY_MIN, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
 import { getTracer } from '../../telemetry.js';
 
-import { classify, winPct, moveAccuracy, gameAccuracy } from './grade.js';
+import { classify, winPct, moveAccuracy, gameAccuracy, playingStrength } from './grade.js';
 import { probeFindability } from './findability.js';
 
 const log = logger.child({ mod: 'analysis-pipeline' });
@@ -40,10 +40,10 @@ export async function runAnalysis({
   const positions = [];
 
   // Build position list: startpos + each position after every ply
-  positions.push({ fen: chess.fen(), ply: 0, moveSan: null });
+  positions.push({ fen: chess.fen(), ply: 0, moveSan: null, legalMoves: chess.moves().length });
   for (const uci of plies) {
     const moveResult = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
-    positions.push({ fen: chess.fen(), ply: positions.length, moveSan: moveResult?.san ?? null });
+    positions.push({ fen: chess.fen(), ply: positions.length, moveSan: moveResult?.san ?? null, legalMoves: chess.moves().length });
   }
 
   const total = positions.length;
@@ -72,7 +72,8 @@ export async function runAnalysis({
     for (let i = 0; i < positions.length; i++) {
       const { fen } = positions[i];
       const stored = storedEvalByIdx.get(i);
-      const evalResult = stored?.bestmove ? stored : await sfClient.eval(fen, { depth: 18 });
+      // movetime cap keeps total analysis time predictable; depth 18 is a target not a floor.
+      const evalResult = stored?.bestmove ? stored : await sfClient.eval(fen, { depth: 18, movetime: 3000 });
       pass1Results.push({ ...positions[i], ...evalResult });
 
       const pct = Math.round(((i + 1) / total) * 100 * PASS_WEIGHTS[0]);
@@ -92,6 +93,8 @@ export async function runAnalysis({
   const moveEvals = [];
   const playerAccuracies = [];
   const opponentAccuracies = [];
+  const playerStrengthSamples = [];
+  const opponentStrengthSamples = [];
 
   for (let i = 0; i < plies.length; i++) {
     const before = pass1Results[i];
@@ -137,8 +140,13 @@ export async function runAnalysis({
     });
     const accuracy = moveAccuracy(winBefore, winAfter);
 
-    if (mover === 'player') playerAccuracies.push(accuracy);
-    else opponentAccuracies.push(accuracy);
+    if (mover === 'player') {
+      playerAccuracies.push(accuracy);
+      playerStrengthSamples.push({ cpLoss, cpWhite: before.cp, mateIn: before.mate, legalMovesBefore: before.legalMoves });
+    } else {
+      opponentAccuracies.push(accuracy);
+      opponentStrengthSamples.push({ cpLoss, cpWhite: before.cp, mateIn: before.mate, legalMovesBefore: before.legalMoves });
+    }
 
     moveEvals.push({
       gameId: null, // filled in by caller
@@ -171,7 +179,7 @@ export async function runAnalysis({
   try {
     for (let i = 0; i < candidates.length; i++) {
       const c = candidates[i];
-      const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3 });
+      const deepEval = await sfClient.eval(c.fen, { depth: 22, multiPV: 3, movetime: 6000 });
       // lines is sorted deepest-first; deduplicate by first move so each unique
       // alt move is evaluated at its deepest (most accurate) depth only.
       const seenMoves = new Set([c.bestMoveUci]);
@@ -251,6 +259,8 @@ export async function runAnalysis({
 
   const accuracy = gameAccuracy(playerAccuracies);
   const opponentAcc = gameAccuracy(opponentAccuracies);
+  const playerStrength = playingStrength(playerStrengthSamples);
+  const opponentStrength = playingStrength(opponentStrengthSamples);
 
   selectSpan?.setStatus({ code: 1 });
   selectSpan?.end();
@@ -259,6 +269,8 @@ export async function runAnalysis({
     moveEvals,
     accuracy,
     opponentAccuracy: opponentAcc,
+    playerStrength,
+    opponentStrength,
     puzzleCandidates,
   };
 }

@@ -1,6 +1,6 @@
 # API contract — auto-repertoire
 
-**Status:** Phase 17 — 2026-08-29  
+**Status:** Phase 37 — 2026-08-30 (updated for field renames in Phases 20–22, journey route added in Phase 36)  
 Machine-readable counterpart: Zod schemas in `src/schemas/messages.js` and route handlers in
 `src/api/routes/repertoire.js` (created in Phase 22). This document is the authoritative shape
 description; the Zod schemas are the enforcement.
@@ -161,14 +161,15 @@ Returns the book DAG for display in `public/repertoire.html`.
 
 ### `GET /api/repertoire/challenges`
 
-Returns open and recently-resolved challenges (last 90 days). Read-only.
+Returns open challenges. Read-only.
 
 **Response 200:**
 ```json
 {
-  "open": [ { "id": 1, "epd": "...", "incumbentUci": "e7e5", "challengerUci": "c7c5",
-              "challengerPlays": 1, "incumbentPlays": 0, "engineDelta": null } ],
-  "recent": [ { "id": 2, "status": "promoted", "rule": "3", "resolvedAt": 1234567890 } ]
+  "challenges": [
+    { "id": 1, "epd": "...", "incumbentUci": "e7e5", "challengerUci": "c7c5",
+      "challengerPlays": 1, "incumbentPlays": 0, "engineDelta": null, "status": "open" }
+  ]
 }
 ```
 
@@ -210,7 +211,7 @@ Book change feed, most recent first.
 **Response 200:**
 ```json
 {
-  "changes": [
+  "entries": [
     {
       "id": 5,
       "at": 1234567890,
@@ -218,13 +219,48 @@ Book change feed, most recent first.
       "kind": "promote",
       "fromUci": "e7e5",
       "toUci": "c7c5",
+      "fromSan": "e5",
+      "toSan": "c5",
       "rule": "3",
-      "detail": { "challengerPlays": 2, "engineDelta": -0.4, "resultChallengerN": 0 },
+      "detailJson": "{ \"challengerPlays\": 2, \"engineDelta\": -0.4 }",
       "reversible": true
     }
   ]
 }
 ```
+
+### `GET /api/repertoire/journey`
+
+Player-facing history view derived by replaying `rep_changelog`. No snapshot table — all three
+fields are computed on-the-fly from the append-only log.
+
+**Response 200:**
+```json
+{
+  "timeline": [
+    {
+      "date": "2025-06-01",
+      "entries": [
+        { "id": "c1", "at": 1748736000000, "kind": "confirm", "fromSan": null,
+          "toSan": "e4", "rule": null, "detailJson": null }
+      ]
+    }
+  ],
+  "growthSeries": [
+    { "date": "2025-06-01", "confirms": 1, "promotes": 0, "retires": 0, "refuses": 0, "total": 1 }
+  ],
+  "milestones": {
+    "firstConfirm":   { "at": 1748736000000, "kind": "confirm" },
+    "coachWoke":      null,
+    "firstPromotion": null,
+    "firstRefusal":   null,
+    "firstReversal":  null
+  }
+}
+```
+
+`growthSeries` values are cumulative as of each `date`. `total = confirms + promotes − retires`.
+Milestones are `null` until reached. `coachWoke` fires at the 20th cumulative confirm.
 
 ### `POST /api/repertoire/changelog/:id/reverse`
 
