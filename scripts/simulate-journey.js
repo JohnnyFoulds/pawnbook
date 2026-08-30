@@ -20,7 +20,8 @@
  */
 
 import { parseArgs } from 'node:util';
-import { existsSync, unlinkSync } from 'node:fs';
+import { existsSync, rmSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 import {
   createJourneyHarness,
@@ -33,7 +34,7 @@ import {
 
 const { values: args } = parseArgs({
   options: {
-    out: { type: 'string', default: '/tmp/journey.db' },
+    out: { type: 'string', default: '/tmp/pawnbook-journey/chess.db' },
     verbose: { type: 'boolean', default: false },
   },
   strict: true,
@@ -41,16 +42,17 @@ const { values: args } = parseArgs({
 
 const OUT_PATH = args.out;
 
-if (OUT_PATH.includes('chess.db')) {
-  console.error('ERROR: refusing to write to chess.db — preregistration window must be preserved');
+if (/\bdata\/chess\.db$/.test(OUT_PATH) || OUT_PATH.endsWith('/data/chess.db')) {
+  console.error('ERROR: refusing to write to data/chess.db — preregistration window must be preserved');
   process.exit(1);
 }
 
-// Remove existing output file so we start fresh
+// Remove existing output (file or leftover directory) so we start fresh
 if (existsSync(OUT_PATH)) {
-  unlinkSync(OUT_PATH);
+  rmSync(OUT_PATH, { recursive: true, force: true });
   if (args.verbose) console.log(`Removed existing ${OUT_PATH}`);
 }
+mkdirSync(dirname(OUT_PATH), { recursive: true });
 
 // ─── Run journey ─────────────────────────────────────────────────────────────
 

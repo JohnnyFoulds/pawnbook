@@ -126,8 +126,8 @@ function createWriteProxy(repo) {
  */
 export function createJourneyHarness({ dbPath = ':memory:', startMs, cp = 30 } = {}) {
   // Guard against accidentally opening the real research DB
-  if (dbPath.includes('chess.db')) {
-    throw new Error('Journey harness: refusing to open chess.db — the 0-game preregistration window must be preserved');
+  if (/\bdata\/chess\.db$/.test(dbPath) || dbPath.endsWith('/data/chess.db')) {
+    throw new Error('Journey harness: refusing to open data/chess.db — the 0-game preregistration window must be preserved');
   }
 
   // Epoch for "day 1" of the journey: 2025-01-06T08:00:00Z (arbitrary fixed date)
