@@ -212,12 +212,12 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | Field | Value |
 |---|---|
 | **Severity** | medium |
-| **Status** | OPEN |
+| **Status** | **CLOSED** (Phase 33) |
 | **Evidence** | `src/domain/repertoire/reach.js` — exports `computeReach`; zero call sites |
 | **Description** | FR-REP-REACH-1/2/3/5: reach probability, coverage %, and gap report all depend on `rep_policy` being populated by background Maia policy probes. `reach.js` has no caller. `rep_policy` is always empty. |
 | **Closing phase** | Phase 33 |
-| **Test** | Journey stage 3.3 (coverage % and gap report) |
-| **Closing note** | — |
+| **Test** | `tests/unit/ws/reach-service.test.js` — `runReachProbes`, `computeCoverage`, `computeGapReport` |
+| **Closing note** | Fixed: `src/api/ws/reach-service.js` added. `runReachProbes` BFS from START_FEN through canonical moves, queries Maia policy for opponent positions, distributes reach prob. `updateNodeReachProb` persists results. `computeCoverage` and `computeGapReport` wired as `GET /api/repertoire/coverage` and `GET /api/repertoire/gaps`. Maia probes run as part of `runBookMaintenance`. `reachableBookUcis` and `nodeHasDrillHistory` wired into `_checkBookAlert` so `order_slip` and `lapse` can fire. Stage 6 of journey now asserts `order_slip`. |
 
 ---
 
@@ -385,9 +385,9 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | **Status** | OPEN |
 | **Evidence** | `public/repertoire.html` — no gap panel |
 | **Description** | FR-REP-REACH-5: the gap report must list opponent replies with high policy probability for which the player has no response. No UI surface exists. |
-| **Closing phase** | Phase 33 |
-| **Test** | Journey stage 3.3 (gap report DOM probe) |
-| **Closing note** | — |
+| **Closing phase** | Phase 34 |
+| **Test** | DOM probe (Phase 34) |
+| **Closing note** | Phase 33 added `GET /api/repertoire/gaps` backed by `computeGapReport`. UI panel deferred to Phase 34. |
 
 ---
 
@@ -399,9 +399,9 @@ B2, B1, B11 (blocking→high→high) and B13, B14, B9 (medium) and U9, U6 (high,
 | **Status** | OPEN |
 | **Evidence** | `public/repertoire.html` |
 | **Description** | `rep_nodes.line_loss` is computed correctly but never surfaced in the UI. The player cannot see which lines are most at risk. |
-| **Closing phase** | Phase 33 |
-| **Test** | DOM probe (Phase 33) |
-| **Closing note** | — |
+| **Closing phase** | Phase 34 |
+| **Test** | DOM probe (Phase 34) |
+| **Closing note** | Phase 33 added `reach_prob` to node data; line health UI deferred to Phase 34. |
 
 ---
 

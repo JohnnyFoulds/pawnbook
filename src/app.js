@@ -53,6 +53,7 @@ export function createApp({ db, clock = null, scheduler = null, enginePool = nul
     scheduler: _scheduler,
     enginePool,
     repertoireRepo,
+    puzzleRepo,
   });
 
   return { handleMessage, gameRepo, puzzleRepo, settingsRepo, repertoireRepo, clock: _clock };

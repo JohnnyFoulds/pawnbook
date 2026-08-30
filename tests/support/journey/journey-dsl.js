@@ -128,7 +128,7 @@ export async function advanceDay(harness, gapDays = 1, { maintenance } = {}) {
   const nowMs = harness.clock.now().getTime();
   const provenanceId = getProvenanceId(harness.repertoireRepo);
   const bookVersion = harness.repertoireRepo.getCurrentBookVersion();
-  await runBookMaintenance({ repertoireRepo: harness.repertoireRepo, nowMs, provenanceId, bookVersion });
+  await runBookMaintenance({ repertoireRepo: harness.repertoireRepo, nowMs, provenanceId, bookVersion, enginePool: harness.enginePool });
 }
 
 // ─── Snapshot ────────────────────────────────────────────────────────────────

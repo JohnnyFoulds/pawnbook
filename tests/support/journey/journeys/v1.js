@@ -201,15 +201,14 @@ async function stage5_firstAlert(harness) {
 
 /**
  * Stage 6: Day 11. Player plays order_slip — right moves, wrong order.
- * FR-REP-COACH-5: alert kind should be 'order_slip', not 'lapse'.
- * B2: deviation.js never called, so order_slip cannot fire.
+ * FR-REP-COACH-5: alert kind is 'order_slip' (reachableBookUcis wired in Phase 33).
  */
 async function stage6_orderSlip(harness) {
   await advanceDay(harness, 1);
 
   // Nf3 before e4 — a reordering of the canonical Italian line.
-  // Phase 32: fires as 'novelty' (reachableBookUcis = null until Phase 33).
-  // Phase 33 will change this to 'order_slip' once reachable moves are tracked.
+  // Phase 33: reachableBookUcis is now computed; g1f3 matches Nf3 in the canonical line
+  // → classifyDeviation fires 'order_slip'.
   const orderSlipMoves = [
     { uci: 'g1f3', san: 'Nf3' },
     { uci: 'e2e4', san: 'e4' },
@@ -220,13 +219,12 @@ async function stage6_orderSlip(harness) {
     resign: true,
   });
 
-  // B2 fix (Phase 32): deviation.js is now called — an alert must fire.
-  // 'order_slip' specifically requires reachableBookUcis (Phase 33).
   const alert = ws.lastOfType('repertoire_alert');
   if (!alert) {
-    throw new Error(
-      'Stage 6 (B2): no repertoire_alert fired for deviant move — deviation.js not routing correctly.'
-    );
+    throw new Error('Stage 6: expected repertoire_alert for order_slip, got none.');
+  }
+  if (alert.kind !== 'order_slip') {
+    throw new Error(`Stage 6: expected alert kind 'order_slip', got '${alert.kind}'.`);
   }
 }
 
@@ -393,14 +391,14 @@ export const V1_JOURNEY = [
   {
     name: 'Stage 8: Challenger promotion (day 14)',
     fn: stage8_challengerPromotion,
-    expectFail: true,  // B7: engineDelta never computed
+    expectFail: true,  // stage8 promotion assertion: soft fail until Phase 31 audit path confirmed end-to-end in journey
     failDefects: ['B7'],
   },
   {
     name: 'Stage 9: Reversal (day 16)',
     fn: stage9_reversal,
-    expectFail: true,  // U3/B7: no promotions to reverse
-    failDefects: ['U3', 'B7'],
+    expectFail: true,  // U3: reverse button not tested at journey level (UI-only)
+    failDefects: ['U3'],
   },
   {
     name: 'Stage 10: Timeout no-challenge (day 18)',

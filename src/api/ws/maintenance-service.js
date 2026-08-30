@@ -14,6 +14,8 @@ import { candidateExpired, reAuditQuarantined } from '../../domain/repertoire/st
 import { REP_CANDIDATE_TTL_ENCOUNTERS } from '../../shared/balance.js';
 import { logger } from '../../config.js';
 
+import { runReachProbes } from './reach-service.js';
+
 const log = logger.child({ mod: 'maintenance-service' });
 
 /**
@@ -25,14 +27,18 @@ const log = logger.child({ mod: 'maintenance-service' });
  * @param {number} opts.nowMs
  * @param {number} opts.provenanceId
  * @param {number} opts.bookVersion
- * @returns {Promise<{ elections: number, expirations: number, reaudits: number }>}
+ * @param {object|null} [opts.enginePool] — if provided, Maia reach probes run as part of maintenance
+ * @returns {Promise<{ elections: number, expirations: number, reaudits: number, reachProbed: number }>}
  */
-export async function runBookMaintenance({ repertoireRepo, nowMs, provenanceId, bookVersion }) {
-  const counts = { elections: 0, expirations: 0, reaudits: 0 };
+export async function runBookMaintenance({ repertoireRepo, nowMs, provenanceId, bookVersion, enginePool = null }) {
+  const counts = { elections: 0, expirations: 0, reaudits: 0, reachProbed: 0 };
   try {
     counts.elections  = _runCanonicalElection({ repertoireRepo, nowMs, provenanceId, bookVersion });
     counts.expirations = _runCandidateExpiry({ repertoireRepo, nowMs, provenanceId, bookVersion });
     counts.reaudits   = _runQuarantineReaudit({ repertoireRepo, nowMs, provenanceId, bookVersion });
+    // B8: run Maia reach probes so coverage % and gap report have real probabilities
+    const { probed } = await runReachProbes({ repertoireRepo, enginePool });
+    counts.reachProbed = probed;
     log.debug(counts, 'book maintenance complete');
   } catch (err) {
     log.warn({ err }, 'book maintenance failed — swallowed');

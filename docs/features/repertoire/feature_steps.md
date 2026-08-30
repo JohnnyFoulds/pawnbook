@@ -581,3 +581,46 @@ coverage ≥ 90%; invariant 16 test passes.
 
 **DoD:** `make verify` green; 873 tests pass (+ 2 expected-fail); coverage ≥ 90.09% branches;
 `npm run journey` green (15/15 stages); B1, B2, B9, B11, B13, B14, U6, U9 closed.
+
+---
+
+## Phase 33 — Reach, coverage, gaps (Complete — 2026-08-30)
+
+**Goal:** Wire `reachableBookUcis` and `nodeHasDrillHistory` so `order_slip` and `lapse`
+deviation kinds can fire; implement Maia-based reach probability via BFS; add `/coverage`
+and `/gaps` API endpoints. Closes B8.
+
+**Files changed:**
+
+- `src/api/ws/reach-service.js` — NEW: `runReachProbes` (BFS from START_FEN, Maia policy,
+  `updateNodeReachProb`), `computeCoverage`, `computeGapReport`
+- `src/api/ws/maintenance-service.js` — `runReachProbes` called in `runBookMaintenance`;
+  `enginePool` param added; `reachProbed` count in return value
+- `src/api/ws/handlers.js` — `puzzleRepo` dep added; `_getReachableBookUcis` helper added;
+  `reachableBookUcis` and `nodeHasDrillHistory` wired in `_checkBookAlert`
+- `src/api/routes/repertoire.js` — `GET /api/repertoire/coverage` and `GET /api/repertoire/gaps`
+  added; backed by `computeCoverage` and `computeGapReport`
+- `src/adapters/memory/repositories.js` — `hasDrilledCard(fen)` added to
+  `InMemoryPuzzleRepository`; `updateNodeReachProb(epd, side, reachProb)` added to
+  `InMemoryRepertoireRepository`
+- `src/adapters/sqlite/repositories.js` — `hasDrilledCard(fen)` added to
+  `SqlitePuzzleRepository`; `updateNodeReachProb(epd, side, reachProb)` added to
+  `SqliteRepertoireRepository`
+- `src/app.js` — `puzzleRepo` passed to `makeMessageHandler`
+- `tests/support/journey/journey-dsl.js` — `enginePool` passed to `runBookMaintenance`
+- `tests/support/journey/journeys/v1.js` — Stage 6 now asserts `alert.kind === 'order_slip'`
+- `tests/unit/ws/reach-service.test.js` — NEW: 23 tests covering all three exported functions
+- `tests/unit/ws/maintenance-service.test.js` — `reachProbed: 0` added to error-swallowing expectation
+- `tests/unit/repertoire/routes.test.js` — `/gaps` happy path + error tests; `/coverage` error
+  test; `/refusals` error test; `/changelog` error test added
+- `tests/contract/repositories.test.js` — `hasDrilledCard` contract tests (3 cases);
+  `updateNodeReachProb` contract test added
+- `docs/features/repertoire/defect_register.md` — B8 closed; U4/U12 closing phase moved to 34
+
+**Journey result after Phase 33:**
+- All 15 stages pass; Stage 6 asserts `order_slip` kind
+- Stage 8 (`expectFail: true`) — requires explicit-keep path in journey (not auto-timeout);
+  deferred
+
+**DoD:** `make verify` green; 910 tests pass (+ 2 expected-fail); coverage 90.01% branches;
+`npm run journey` green (15/15 stages); B8 closed.

@@ -208,6 +208,21 @@ export class InMemoryPuzzleRepository {
     if (p) p.acceptedMovesJson = acceptedMovesJson;
   }
 
+  /**
+   * Returns true if an opening puzzle for this FEN has been drilled at least once.
+   * @param {string} fen
+   * @returns {boolean}
+   */
+  hasDrilledCard(fen) {
+    for (const [id, p] of this._puzzles) {
+      if (p.fen === fen && p.kind === 'opening') {
+        const card = this._cards.get(id);
+        if (card && card.reps > 0) return true;
+      }
+    }
+    return false;
+  }
+
   findById(id) {
     const puzzle = this._puzzles.get(id);
     if (!puzzle) throw new PuzzleNotFoundError(`Puzzle '${id}' not found`);
@@ -434,6 +449,12 @@ export class InMemoryRepertoireRepository {
         return (a.moveUci ?? '') < (b.moveUci ?? '') ? -1 : 1;
       })
       .map(m => ({ ...m }));
+  }
+
+  updateNodeReachProb(epd, side, reachProb) {
+    const key = `${epd}:${side}`;
+    const existing = this._nodes.get(key);
+    if (existing) this._nodes.set(key, { ...existing, reachProb, reachStale: false });
   }
 
   upsertPolicy(policy) {
