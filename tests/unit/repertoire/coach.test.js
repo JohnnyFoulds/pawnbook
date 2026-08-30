@@ -54,7 +54,7 @@ const BASE_MOVE = {
   firstPlayed: 0, lastPlayed: 0,
 };
 
-/** Build a bootstrapped repo (20 confirmed-proxy nodes + optional extra moves). */
+/** Build a bootstrapped repo (20 confirmed nodes with canonical moves + optional extra moves). */
 function makeRepo(extraMoves = []) {
   const repo = new InMemoryRepertoireRepository();
   repo.getOrCreateProvenance({
@@ -62,12 +62,15 @@ function makeRepo(extraMoves = []) {
     sfVersion: null, sfDepth: null, sfMultipv: null, maiaWeightsId: null,
   });
   for (let i = 0; i < 20; i++) {
+    const epd = `fake-epd-${i}`;
     repo.upsertNode({
-      epd: `fake-epd-${i}`, side: 'white', fen: `fake-fen-${i}`,
+      epd, side: 'white', fen: `fake-fen-${i}`,
       encounters: 2, timesReached: 2, minPly: 1,
       firstSeen: 0, lastSeen: 0, reachProb: null, reachStale: false,
       lineLoss: 0, voteFrozenUntilEncounter: null,
     });
+    // B13: countCanonicalNodes() counts nodes with canonical moves, not just node rows.
+    repo.upsertMove({ ...BASE_MOVE, epd, moveUci: 'e2e4', moveSan: 'e4', role: 'canonical' });
   }
   for (const m of extraMoves) repo.upsertMove(m);
   return repo;
@@ -138,7 +141,9 @@ describe('repertoire coach (Phase 21)', () => {
     expect(alert.bookSan).toBe('e3');
   });
 
-  it('fires alert (lapse) when player plays a retired move with canonical present', async () => {
+  it('fires alert (novelty) when player plays a retired move with canonical present', async () => {
+    // Phase 32: classifyDeviation routes 'retired' to Row 7 (novelty) because
+    // nodeHasDrillHistory=false. 'lapse' requires drill history (Phase 33).
     const repo = makeRepo([
       { ...BASE_MOVE, epd: START_EPD, moveUci: 'e2e4', moveSan: 'e4', role: 'retired' },
       { ...BASE_MOVE, epd: START_EPD, moveUci: 'e2e3', moveSan: 'e3', role: 'canonical' },
@@ -148,7 +153,7 @@ describe('repertoire coach (Phase 21)', () => {
     await handler(ws, JSON.stringify({ type: 'move', uci: 'e2e4' }));
     const alert = ws._messages.find(m => m.type === 'repertoire_alert');
     expect(alert).toBeDefined();
-    expect(alert.kind).toBe('lapse');
+    expect(alert.kind).toBe('novelty');
   });
 
   it('repertoire_choice without a pending move returns NO_PENDING_MOVE error', async () => {

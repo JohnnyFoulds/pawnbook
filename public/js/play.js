@@ -22,7 +22,6 @@ async function api(path, opts) {
 
 let ws = null;
 let gameId = null;
-let currentFen = null; // eslint-disable-line no-unused-vars -- U9: read guard added Phase 32
 let legalMoves = [];
 let youPlay = null;
 let selectedOpponentId = null;
@@ -32,7 +31,8 @@ let ranked = true;
 let board = null;
 let isRanked = true;
 let analysisRunning = false;
-let coachAlertPending = false; // eslint-disable-line no-unused-vars -- U9: consulted in handlePlayerMove Phase 32
+let coachAlertPending = false;
+let coachEnabled = true;
 let coachAlertTimer = null;
 
 // Resolved when the board DOM is initialised and ready to receive setPosition calls.
@@ -162,6 +162,10 @@ function setupSetupHandlers() {
     ranked = e.target.checked;
   });
 
+  document.getElementById('coach-toggle').addEventListener('change', (e) => {
+    coachEnabled = e.target.checked;
+  });
+
   document.getElementById('start-btn').addEventListener('click', startGame);
 }
 
@@ -189,6 +193,7 @@ function startGame() {
       opponentId: selectedOpponentId,
       color: selectedColor,
       ranked: ranked,
+      coachEnabled,
       timeControl: selectedTc
         ? { initialSec: selectedTc[0], incSec: selectedTc[1] }
         : null,
@@ -399,6 +404,7 @@ async function initBoard(fen, orientation) {
 }
 
 function handlePlayerMove({ from, to }) {
+  if (coachAlertPending) return; // U9: freeze input while coach overlay is open
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
   const matchedMoves = legalMoves.filter((m) => m.uci.startsWith(from + to));
@@ -483,7 +489,6 @@ document.getElementById('coach-btn-keep').addEventListener('click', () => _sendC
 // ── Coach alert ─────────────────────────────────────────────────────────────
 
 function onMoveAccepted(msg) {
-  currentFen = msg.fen;
   legalMoves = msg.legalMoves ?? [];
   if (board) {
     board.clearMarkers();

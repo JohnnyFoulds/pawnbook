@@ -929,6 +929,14 @@ export class SqliteRepertoireRepository {
     return this._db.prepare('SELECT * FROM rep_nodes ORDER BY epd, side').all().map(_nodeRow);
   }
 
+  /** Returns the number of (epd, side) nodes that have at least one canonical move (B13). */
+  countCanonicalNodes() {
+    const row = this._db.prepare(
+      "SELECT COUNT(DISTINCT epd || '|' || side) AS n FROM rep_moves WHERE role = 'canonical'"
+    ).get();
+    return row?.n ?? 0;
+  }
+
   /** @param {Object} move @returns {void} */
   upsertMove(move) {
     this._db.prepare(`

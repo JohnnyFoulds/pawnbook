@@ -23,6 +23,7 @@
 import { advanceDay, playGame, snapshotBook } from '../journey-dsl.js';
 import {
   assertRepertoireUpdate,
+  assertRankedChanged,
   checkAllInvariants, changelogByKind,
 } from '../probes.js';
 
@@ -39,6 +40,36 @@ const OPENING_MOVES_WHITE = [
 // A divergent move (e4 → d4 on move 1) — triggers a book alert after book is established
 const DIVERGENT_MOVE_WHITE = [
   { uci: 'd2d4', san: 'd4', fen: 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1' },
+];
+
+// Italian extended — continues OPENING_MOVES_WHITE with 7 more moves (total 10).
+// Positions 4-10 are new nodes not covered by OPENING_MOVES_WHITE.
+// Play this line 3× to confirm those 7 nodes (REP_CONFIRM_OBS = 2).
+const LONG_LINE_1 = [
+  ...OPENING_MOVES_WHITE,           // e4, Nf3, Bc4 (re-confirms the existing 3 nodes)
+  { uci: 'd2d3', san: 'd3' },       // Giuoco Piano: d3
+  { uci: 'c2c3', san: 'c3' },       // c3 prep
+  { uci: 'b1d2', san: 'Nbd2' },     // Nbd2 (d-pawn on d3 frees d2)
+  { uci: 'e1g1', san: 'O-O' },      // castle (f1 clear via Bc4, g1 clear via Nf3)
+  { uci: 'f1e1', san: 'Rfe1' },     // rook to e1 (after O-O, h-rook on f1)
+  { uci: 'h2h3', san: 'h3' },       // luft
+  { uci: 'a2a4', san: 'a4' },       // space
+];
+
+// Queen's pawn line — completely different opening, all 10 positions are new nodes.
+// Play this line 3× to confirm all 10 new nodes.
+const LONG_LINE_2 = [
+  { uci: 'd2d4', san: 'd4' },       // QP opening — shares starting node with OPENING_MOVES_WHITE
+  { uci: 'e2e3', san: 'e3' },       // solid centre
+  { uci: 'g1f3', san: 'Nf3' },      // Nf3
+  { uci: 'f1e2', san: 'Be2' },      // Be2 (e2 empty after e-pawn to e3)
+  { uci: 'e1g1', san: 'O-O' },      // castle (f1 clear via Be2, g1 clear via Nf3)
+  { uci: 'c2c4', san: 'c4' },       // c4
+  { uci: 'b1c3', san: 'Nc3' },      // Nc3 (c3 empty after c-pawn to c4)
+  { uci: 'd1c2', san: 'Qc2' },      // Qc2 (c2 empty after c-pawn to c4)
+  { uci: 'f1d1', san: 'Rfd1' },     // Rfd1 (d1 empty after Qc2; f1 is the rook post-O-O)
+  { uci: 'a2a3', san: 'a3' },       // a3
+  { uci: 'b2b3', san: 'b3' },       // b3 — 11th move gives 10 new nodes (move 1 shares starting node)
 ];
 
 // ─── Act I — Onboarding (days 1–9) ──────────────────────────────────────────
@@ -101,19 +132,26 @@ async function stage2_firstConfirmations(harness) {
 async function stage3_bootstrapSilence(harness) {
   await advanceDay(harness, 3);
 
-  // Play 6 more games, 3 moves each
+  // Play 6 more games with the base opening to repeat existing nodes
   for (let i = 0; i < 6; i++) {
-    await playGame(harness, {
-      moves: OPENING_MOVES_WHITE,
-      resign: true,
-    });
+    await playGame(harness, { moves: OPENING_MOVES_WHITE, resign: true });
     await advanceDay(harness, 1);
   }
 
-  // Coach should NOT have fired (bootstrap threshold not reached)
-  // This is difficult to assert without the alert message, so we check
-  // that no ranked_changed events occurred (B1 — coach alerts change ranked status).
-  // Stage 3 is currently a soft pass.
+  // Play LONG_LINE_1 three times — confirms 7 new Italian-extension nodes (positions 4-10)
+  for (let i = 0; i < 3; i++) {
+    await playGame(harness, { moves: LONG_LINE_1, resign: true });
+    await advanceDay(harness, 1);
+  }
+
+  // Play LONG_LINE_2 three times — confirms 10 new Queen's-pawn nodes
+  for (let i = 0; i < 3; i++) {
+    await playGame(harness, { moves: LONG_LINE_2, resign: true });
+    await advanceDay(harness, 1);
+  }
+
+  // Total confirmed canonical nodes: 3 (base) + 7 (LONG_LINE_1 new) + 10 (LONG_LINE_2 new, 11 moves - 1 shared start) = 20.
+  // The coach is now able to wake in Stage 4. No alert fires yet (game lines are all in-book).
 }
 
 /**
@@ -128,13 +166,10 @@ async function stage4_coachWakes(harness) {
 
   const snap = snapshotBook(harness);
 
-  // If we haven't reached 20 confirmed nodes, the coach can't wake.
-  // This is the B3 failure point — expected in Phase 28.
   if (snap.confirmedNodes < 20) {
-    // Document the failure explicitly rather than silently passing
     throw new Error(
-      `Stage 4 (B3): expected ≥20 confirmed nodes to wake the coach, got ${snap.confirmedNodes}. ` +
-      `B3: electCanonical is never called — closing in Phase 29.`
+      `Stage 4: expected ≥20 confirmed nodes to wake the coach, got ${snap.confirmedNodes}. ` +
+      `Check that LONG_LINE_1 and LONG_LINE_2 were played 3× each in stage3_bootstrapSilence.`
     );
   }
 }
@@ -149,21 +184,19 @@ async function stage4_coachWakes(harness) {
 async function stage5_firstAlert(harness) {
   await advanceDay(harness, 1);
 
-  // Play divergent move — should trigger alert
   const { ws } = await playGame(harness, {
     moves: DIVERGENT_MOVE_WHITE,
     resign: true,
   });
 
-  // This assertion fails until B3 is fixed (no canonical nodes → no alerts)
-  const alert = ws.lastOfType('book_alert');
+  const alert = ws.lastOfType('repertoire_alert');
   if (!alert) {
-    throw new Error(`Stage 5 (B2/B3): expected book_alert for divergent move, got none. ` +
-      `Depends on B3 (electCanonical) and B2 (deviation.js routing). Closing in Phases 29+32.`);
+    throw new Error('Stage 5: expected repertoire_alert for divergent move, got none. ' +
+      'Requires canonical nodes (electCanonical, Phase 29) and deviation routing (Phase 32).');
   }
 
-  // B1: ranked_changed should be emitted when alert fires
-  // assertRankedChanged(ws); // B1 failure — disabled until Phase 32
+  // B1: ranked_changed must be emitted alongside the alert (Phase 32)
+  assertRankedChanged(ws);
 }
 
 /**
@@ -174,10 +207,12 @@ async function stage5_firstAlert(harness) {
 async function stage6_orderSlip(harness) {
   await advanceDay(harness, 1);
 
-  // Play Nf3 before e4 — a transposition/order slip
+  // Nf3 before e4 — a reordering of the canonical Italian line.
+  // Phase 32: fires as 'novelty' (reachableBookUcis = null until Phase 33).
+  // Phase 33 will change this to 'order_slip' once reachable moves are tracked.
   const orderSlipMoves = [
-    { uci: 'g1f3', san: 'Nf3', fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1' },
-    { uci: 'e2e4', san: 'e4',  fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq e3 0 2' },
+    { uci: 'g1f3', san: 'Nf3' },
+    { uci: 'e2e4', san: 'e4' },
   ];
 
   const { ws } = await playGame(harness, {
@@ -185,19 +220,12 @@ async function stage6_orderSlip(harness) {
     resign: true,
   });
 
-  // B2 failure: order_slip requires deviation.js to be called AND canonical nodes to exist (B3).
-  // The assertion must fail on EITHER missing alert OR wrong alertKind.
-  const alert = ws.lastOfType('book_alert');
+  // B2 fix (Phase 32): deviation.js is now called — an alert must fire.
+  // 'order_slip' specifically requires reachableBookUcis (Phase 33).
+  const alert = ws.lastOfType('repertoire_alert');
   if (!alert) {
     throw new Error(
-      `Stage 6 (B2/B3): no book_alert fired for order_slip position. ` +
-      `Requires canonical nodes (B3) and deviation.js routing (B2). Closing in Phases 29+32.`
-    );
-  }
-  if (alert.alertKind !== 'order_slip') {
-    throw new Error(
-      `Stage 6 (B2): got book_alert but alertKind='${alert.alertKind}', expected 'order_slip'. ` +
-      `B2: deviation.js never called. Closing in Phase 32.`
+      'Stage 6 (B2): no repertoire_alert fired for deviant move — deviation.js not routing correctly.'
     );
   }
 }
@@ -345,20 +373,17 @@ export const V1_JOURNEY = [
   {
     name: 'Stage 4: Coach wakes (day 9)',
     fn: stage4_coachWakes,
-    expectFail: true,  // B3 prevents 20 confirmed nodes
-    failDefects: ['B3'],
+    expectFail: false,
   },
   {
     name: 'Stage 5: First alert (day 10)',
     fn: stage5_firstAlert,
-    expectFail: true,  // B3 + B2: no canonical nodes → no alerts
-    failDefects: ['B3', 'B2'],
+    expectFail: false,
   },
   {
     name: 'Stage 6: Order slip (day 11)',
     fn: stage6_orderSlip,
-    expectFail: true,  // B2: deviation.js not called
-    failDefects: ['B2'],
+    expectFail: false,
   },
   {
     name: 'Stage 7: First refusal (day 12)',

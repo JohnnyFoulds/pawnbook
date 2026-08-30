@@ -39,7 +39,7 @@ const log = logger.child({ mod: 'analysis-service' });
 export async function analyseGame({
   gameId, session, result, ws, gameRepo, puzzleRepo, settingsRepo, enginePool, repertoireRepo, clock = null,
 }) {
-  const { opponent, playerColor, ranked } = session;
+  const { opponent, playerColor, ranked, alertsInGame = 0 } = session;
 
   log.info({ gameId, opponentId: opponent.id, playerColor, ranked }, 'analysis initiated');
 
@@ -200,15 +200,14 @@ export async function analyseGame({
       }
     }
 
-    // Strength-sample guard: skip if coach interrupted this game.
-    // The coach changes the player's moves, biasing strength estimation.
-    // session.alertsInGame > 0 means the coach intervened; session.ranked is already false.
-    // When saveStrengthSample is added, guard it with: session.alertsInGame === 0.
-
-    // Update ELO if ranked game with a known opponent ELO
+    // B9: Exclude coach-interrupted games from strength estimation.
+    // The coach changes the player's moves, biasing the outcome.
+    // Both ranked===false and alertsInGame===0 encode the same condition; the explicit
+    // alertsInGame guard is the enforcement point so future saveStrengthSample calls
+    // inherit the same exclusion automatically.
     let eloBefore = null;
     let eloAfter = null;
-    if (ranked && opponent.elo != null) {
+    if (ranked && alertsInGame === 0 && opponent.elo != null) {
       const gamesPlayed = gameRepo.getEloHistory().length;
       const score = result.result === 'win' ? 1 : result.result === 'draw' ? 0.5 : 0;
       const { newElo } = updateElo({ myElo: playerElo, oppElo: opponent.elo, score, gamesPlayed });

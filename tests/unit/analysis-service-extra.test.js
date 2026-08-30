@@ -331,4 +331,23 @@ describe('analyseGame — extra branch coverage', () => {
 
     expect(puzzleRepo.listAll()[0].wasTimed).toBe(1);
   });
+
+  // B9: coach-interrupted games must not contribute to strength estimation
+  it('B9: ranked game with alertsInGame > 0 skips ELO update', async () => {
+    const session = makeSession({ ranked: true, alertsInGame: 1 });
+    const ws = makeWs();
+    await analyseGame({ gameId: GAME_ID, session, result: { result: 'win', termination: 'checkmate' },
+      ws, gameRepo, puzzleRepo, settingsRepo, enginePool: makeEnginePool() });
+
+    expect(gameRepo.getEloHistory()).toHaveLength(0);
+  });
+
+  it('B9: ranked game with alertsInGame = 0 still updates ELO', async () => {
+    const session = makeSession({ ranked: true, alertsInGame: 0 });
+    const ws = makeWs();
+    await analyseGame({ gameId: GAME_ID, session, result: { result: 'win', termination: 'checkmate' },
+      ws, gameRepo, puzzleRepo, settingsRepo, enginePool: makeEnginePool() });
+
+    expect(gameRepo.getEloHistory()).toHaveLength(1);
+  });
 });

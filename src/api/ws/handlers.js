@@ -5,14 +5,15 @@
 
 import { randomUUID } from 'crypto';
 
+import { Chess } from 'chess.js';
 import { ZodError } from 'zod';
 
 import { InboundMessageSchema } from '../../schemas/messages.js';
 import { GameSession } from '../../domain/game/session.js';
 import { getOpponent } from '../../domain/game/roster.js';
 import { ErrorCode, errorCodeFor } from '../../errors.js';
+import { classifyDeviation } from '../../domain/repertoire/deviation.js';
 import { extractEpd, sideFromFen } from '../../domain/repertoire/epd.js';
-import { ALERTING_SET } from '../../domain/repertoire/state.js';
 import {
   REP_BOOTSTRAP_CONFIRMED_MIN,
   REP_ALERTS_PER_GAME_MAX,
@@ -236,7 +237,8 @@ async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, session
   const decisionMs = Date.now() - pending.alertedAt;
   const uciToApply = msg.choice === 'correct' ? pending.bookUci : pending.uci;
   const resolution = msg.choice === 'correct' ? 'alerted_corrected' : 'alerted_kept';
-  const openChallenge = resolution === 'alerted_kept' && pending.kind === 'refused_repeat';
+  // B11: any deliberate keep opens a challenge (not just refused_repeat)
+  const openChallenge = resolution === 'alerted_kept';
 
   await _applyChoiceMove(ws, session, uciToApply,
     { resolution, decisionMs, pending, openChallenge, gameRepo, settingsRepo, repertoireRepo });
@@ -338,25 +340,50 @@ async function _checkBookAlert(ws, uci, session, deps) {
   if (session.coachEnabled === false) return false;
   // B12: enforce REP_PLY_MAX — coach is silent beyond the book horizon
   if (session.moves.length + 1 > REP_PLY_MAX) return false;
-  const confirmedCount = deps.repertoireRepo.listNodes().filter(n => n.encounters >= 2).length;
+  // B13: bootstrap guard counts confirmed canonical nodes, not node encounters
+  const confirmedCount = deps.repertoireRepo.countCanonicalNodes();
   if (confirmedCount < REP_BOOTSTRAP_CONFIRMED_MIN) return false;
   if (session.alertsInGame >= REP_ALERTS_PER_GAME_MAX) return false;
 
   const epd = extractEpd(session.fen);
   const side = sideFromFen(session.fen);
   const playerMove = deps.repertoireRepo.getMove(epd, side, uci);
-  if (!playerMove || !ALERTING_SET.has(playerMove.role)) return false;
-
   const bookMoves = deps.repertoireRepo.getMovesForNode(epd, side);
+  const nodeHasCanonical = bookMoves.some(m => m.role === 'canonical');
+
+  // B2: detect transpositions by checking if the resulting EPD is a known book node
+  let resultingEpdInBook = false;
+  try {
+    const chess = new Chess(session.fen);
+    chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] ?? undefined });
+    const oppSide = side === 'white' ? 'black' : 'white';
+    resultingEpdInBook = !!deps.repertoireRepo.getNode(extractEpd(chess.fen()), oppSide);
+  } catch { /* illegal move — resultingEpdInBook stays false */ }
+
+  // B2: classify using the full deviation table instead of ALERTING_SET
+  const { kind, alert } = classifyDeviation({
+    playedUci: uci,
+    nodeRole: playerMove?.role ?? null,
+    nodeHasCanonical,
+    resultingEpdInBook,
+    nodeHasDrillHistory: false, // Phase 33: wire FSRS drill history
+    reachableBookUcis: null,    // Phase 33: wire transposition look-ahead
+  });
+
+  if (!alert) return false;
+
   const canonical = bookMoves.find(m => m.role === 'canonical') ?? bookMoves.find(m => m.role === 'alt');
   if (!canonical) return false;
 
-  const kind = playerMove.role === 'refused' ? 'refused_repeat' : 'lapse';
   const legalMoves = session.legalMoves;
   const playerSan = legalMoves.find(m => m.uci === uci)?.san ?? uci;
   const bookSan = legalMoves.find(m => m.uci === canonical.moveUci)?.san ?? canonical.moveUci;
 
-  if (session.ranked) session.setUnranked();
+  // B1: emit ranked_changed so the client can show the unranked badge
+  if (session.ranked) {
+    session.setUnranked();
+    send(ws, { type: 'ranked_changed', ranked: false });
+  }
   session.alertsInGame++;
 
   pendingMoves.set(ws, {
@@ -370,6 +397,7 @@ async function _checkBookAlert(ws, uci, session, deps) {
     bookSan,
     kind,
     alertedAt: Date.now(),
+    preAlertElapsedMs: session.elapsedMs(), // B14: capture pre-alert thinking time
   });
 
   const handle = scheduler.schedule(() => _handleAlertTimeout(ws, deps), REP_ALERT_TIMEOUT_SEC * 1000);
@@ -382,7 +410,7 @@ async function _checkBookAlert(ws, uci, session, deps) {
     playerSan,
     bookUci: canonical.moveUci,
     bookSan,
-    costWinPts: playerMove.meanWinLossPts ?? 0,
+    costWinPts: playerMove?.meanWinLossPts ?? 0,
   });
 
   return true;
@@ -392,8 +420,8 @@ async function _checkBookAlert(ws, uci, session, deps) {
  * Apply a move chosen via repertoire_choice (or auto-applied on timeout).
  */
 async function _applyChoiceMove(ws, session, uci, { resolution, decisionMs, pending, openChallenge, gameRepo, settingsRepo, repertoireRepo }) {
-  // Pause clock: reset baseline so alert display time is not charged
-  session.resetClockBaseline();
+  // B14: charge only the pre-alert thinking time; decision time is not counted
+  session.chargeElapsedMs(pending.preAlertElapsedMs ?? 0);
   const moveResult = session.applyMove(uci);
   const gameMove = session.moves[session.moves.length - 1];
 
@@ -479,7 +507,8 @@ function _handleAlertTimeout(ws, deps) {
   pendingMoves.delete(ws);
   alertTimeouts.delete(ws);
 
-  session.resetClockBaseline();
+  // B14: charge only the pre-alert thinking time; the alert window is not counted
+  session.chargeElapsedMs(pending.preAlertElapsedMs ?? 0);
   let moveResult;
   try {
     moveResult = session.applyMove(pending.uci);

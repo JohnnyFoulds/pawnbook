@@ -147,6 +147,12 @@ export class GameSession {
   /** Reset the clock baseline to now so alert display time is not debited. */
   resetClockBaseline() { this._lastMoveAt = this.clock.now(); }
 
+  /** Returns ms elapsed since the last move baseline (snapshot before an alert fires). */
+  elapsedMs() { return Math.max(0, this.clock.now() - this._lastMoveAt); }
+
+  /** Sets the baseline so exactly `ms` is debited on the next applyMove (B14 clock pause). */
+  chargeElapsedMs(ms) { this._lastMoveAt = new Date(this.clock.now() - ms); }
+
   resign() {
     if (this.isOver) throw new GameAlreadyOverError(`Game '${this.id}' is already over`);
     this._status = 'finished';

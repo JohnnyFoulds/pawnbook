@@ -92,14 +92,14 @@ export function assertNotReceived(ws, type, context = '') {
 }
 
 /**
- * Assert that a book_alert was received with a specific kind.
+ * Assert that a repertoire_alert was received with a specific kind.
  */
 export function assertAlertKind(ws, kind) {
-  const alerts = ws.messagesOfType('book_alert');
-  if (!alerts.length) throw new Error(`assertAlertKind(${kind}): no book_alert received`);
+  const alerts = ws.messagesOfType('repertoire_alert');
+  if (!alerts.length) throw new Error(`assertAlertKind(${kind}): no repertoire_alert received`);
   const last = alerts[alerts.length - 1];
-  if (last.alertKind !== kind) {
-    throw new Error(`assertAlertKind: expected "${kind}" but got "${last.alertKind}"`);
+  if (last.kind !== kind) {
+    throw new Error(`assertAlertKind: expected "${kind}" but got "${last.kind}"`);
   }
   return last;
 }
