@@ -84,7 +84,6 @@ async function rateLimitedFetch(url) {
   if (gap < 1050) await sleep(1050 - gap);  // ≤ 1 req/s with a 50 ms margin
   _lastRequest = Date.now();
 
-  let attempt = 0;
   while (true) {
     const res = await fetch(url, {
       headers: {
@@ -96,7 +95,6 @@ async function rateLimitedFetch(url) {
       const retryAfter = parseInt(res.headers.get('retry-after') || '60', 10);
       console.warn(`429 rate limit hit — backing off ${retryAfter}s`);
       await sleep(retryAfter * 1000);
-      attempt++;
       continue;
     }
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
@@ -184,7 +182,6 @@ async function main() {
     }
 
     const epd = fenToEpd(data.fen ?? START_FEN);
-    const bandCounts = (data.moves ?? []).reduce((acc, _m, _i) => acc, BANDS.map(() => 0));
 
     // Aggregate total games across all bands from the white/black/draws breakdown
     // The Explorer returns { white, draws, black } per band and the total via topMoves.

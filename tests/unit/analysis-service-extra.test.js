@@ -69,11 +69,14 @@ function makePuzzle(overrides = {}) {
   };
 }
 
+const EMPTY_STRENGTH = { n: 0, ase: 0, sd: 0, p75Loss: null };
 const DEFAULT_RESULT = {
   moveEvals: [{ ply: 1, uci: 'e2e4', gameId: GAME_ID }],
   accuracy: 80,
   opponentAccuracy: 75,
   puzzleCandidates: [],
+  playerStrength: EMPTY_STRENGTH,
+  opponentStrength: EMPTY_STRENGTH,
 };
 
 describe('analyseGame — extra branch coverage', () => {

@@ -182,7 +182,7 @@ async function drillAllPuzzles(db) {
       });
       attempted++;
       if (res.correct) correct++;
-    } catch (e) {
+    } catch {
       errors++;
     }
 
@@ -315,7 +315,7 @@ async function main() {
     const { opponentId, color } = SCHEDULE[i];
     process.stdout.write(`[${i + 1}/${SCHEDULE.length}] ${opponentId} (${color}) … `);
 
-    let gameId = null;
+    let gameId;
     try {
       gameId = await playGame({ opponentId, color });
       if (!gameId) throw new Error('no gameId returned');
