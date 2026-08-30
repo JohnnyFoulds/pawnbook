@@ -1,6 +1,6 @@
 # Traceability matrix — auto-repertoire
 
-**Status:** Phase 36 complete — 2026-08-30; U13 closed  
+**Status:** Phase 37 complete — 2026-08-30; D1/D2/D3 closed; defect register fully reconciled; Phase 26 review amended  
 All `FR-REP-*` codes from `feature_spec.md`.
 
 | Requirement | Test(s) | File(s) |
@@ -41,7 +41,7 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | FR-REP-COACH-11 | `handleMove: repertoire error swallowed; move proceeds` | `src/api/ws/handlers.js` |
 | FR-REP-COACH-12 | `handleMove: repertoireRepo injected not singleton` | `src/api/ws/handlers.js` |
 | FR-REP-COACH-13 | `handleMove: coach_enabled=0 no alert` | `src/api/ws/handlers.js` |
-| FR-REP-COACH-14 | `analysis-service: saveStrengthSample guarded` | `src/api/ws/analysis-service.js` |
+| FR-REP-COACH-14 | `B9: ranked game with alertsInGame > 0 skips ELO update` | `tests/unit/analysis-service-extra.test.js` |
 | FR-REP-CHAL-1 | `handleMove: rep_challenges row committed with move` | `src/api/ws/handlers.js` |
 | FR-REP-CHAL-2 | `challenge: neither move alerts while open` | `src/domain/repertoire/challenge.js` |
 | FR-REP-CHAL-3 | regression test 1 | `src/domain/repertoire/challenge.js` |
@@ -58,17 +58,17 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | FR-REP-CHAL-6 | `challenge: Elo-adjusted performance formula` | `src/domain/repertoire/challenge.js` |
 | FR-REP-CHAL-7 | `challenge: promotion writes retired + canonical + changelog` | `src/domain/repertoire/challenge.js` |
 | FR-REP-CHAL-8 | regression test 5 | `src/domain/repertoire/challenge.js`, `src/api/routes/repertoire.js` |
-| FR-REP-REACH-1 | `reach: reach_prob formula` | `src/domain/repertoire/reach.js` |
-| FR-REP-REACH-2 | `reach: cached per (epd, weights_id)` | `src/adapters/sqlite/repositories.js` |
-| FR-REP-REACH-3 | `coverage: coverage_pct formula` | `src/domain/repertoire/reach.js` |
-| FR-REP-REACH-4 | `coverage: expected_depth weighted` | `src/domain/repertoire/reach.js` |
-| FR-REP-REACH-5 | `gap: returns replies above threshold` | `src/domain/repertoire/reach.js` |
-| FR-REP-REACH-6 | `reach: frontier threshold` | `src/domain/repertoire/reach.js` |
-| FR-REP-DRILL-1 | `drill: canonical confirmation writes puzzle + fsrs_cards` | `src/domain/repertoire/build.js` |
-| FR-REP-DRILL-2 | `drill: accepted_moves_json canonical+alts+challenger` | `src/domain/repertoire/build.js` |
-| FR-REP-DRILL-3 | `drill: opening cards exempt from FINDABILITY_MIN` (×3 files) | `src/domain/puzzles/select.js`, `src/domain/review/queue.js`, `src/domain/review/rating.js` |
-| FR-REP-DRILL-4 | schema migration test | `src/adapters/sqlite/schema.js` |
-| FR-REP-DRILL-5 | `drill: due cards sorted by reach descending` | `src/domain/review/queue.js` |
+| FR-REP-REACH-1 | `reach_prob = product of maia policy probabilities` | `tests/unit/repertoire/domain.test.js` |
+| FR-REP-REACH-2 | `uses Maia policy probabilities when available` | `tests/unit/ws/reach-service.test.js` |
+| FR-REP-REACH-3 | `coverage_pct = sum(reach covered) / sum(reach all) × 100` | `tests/unit/repertoire/domain.test.js` |
+| FR-REP-REACH-4 | `expected_depth weighted by reach` | `tests/unit/repertoire/domain.test.js` |
+| FR-REP-REACH-5 | `gap list contains replies above 1/REP_COVERAGE_GOAL not covered` | `tests/unit/repertoire/domain.test.js` |
+| FR-REP-REACH-6 | `buildGapReport sort: two uncovered frontier nodes sorted by reach descending` | `tests/unit/repertoire/domain.test.js` |
+| FR-REP-DRILL-1 | `drill: canonical confirmation writes puzzle + fsrs_cards` | `tests/unit/repertoire/build.test.js` |
+| FR-REP-DRILL-2 | `drill: accepted_moves_json canonical+alts+challenger` | `tests/unit/repertoire/build.test.js` |
+| FR-REP-DRILL-3 | `drill: opening cards exempt from FINDABILITY_MIN` (×3 files) | `tests/unit/select.test.js`, `tests/unit/queue.test.js`, `tests/unit/rating.test.js` |
+| FR-REP-DRILL-4 | schema migration test | `tests/unit/adapters/phase-27-adapters.test.js` |
+| FR-REP-DRILL-5 | `opening cards sort before tactical when over DUE_SOFT_CAP` *(partial — reach-weighted sort within kind deferred)* | `tests/unit/queue.test.js` |
 | FR-REP-STORE-1 | invariant 3 test | `src/adapters/sqlite/repositories.js` |
 | FR-REP-STORE-2 | invariants 11, 12 tests | `src/adapters/sqlite/repositories.js` |
 | FR-REP-STORE-3 | rebuild determinism test | `scripts/seed-repertoire.js` |
@@ -220,3 +220,16 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | FR-REP-JOURNEY-6: `getChangelogRange` SQLite — cursor | `cursor acts as exclusive lower bound` | `tests/unit/ws/maintenance-service.test.js` |
 | FR-REP-JOURNEY-6: `getChangelogRange` SQLite — limit | `respects limit` | `tests/unit/ws/maintenance-service.test.js` |
 | U13: journey panel in `repertoire.html` | `#journey-milestones`, `#journey-growth`, `#journey-panel` elements present | `public/repertoire.html` |
+
+## Phase 37 additions
+
+Documentation reconciliation only — no new requirements; no new tests.
+
+| Item | Action | Evidence |
+|---|---|---|
+| D1: `balance.md` 5-col REP_* table | CLOSED | Table reformatted to 4 columns; `tests/unit/config.test.js` tightened to require `` \| `CONSTANT` `` format |
+| D2: `api_contract.md` stale fields | CLOSED | `changes`→`entries`, `{open,recent}`→`{challenges}`, `GET /journey` documented |
+| D3: `traceability.md` wrong test refs | CLOSED | FR-REP-COACH-14, FR-REP-REACH-1..6, FR-REP-DRILL-1..5 corrected to test files |
+| `defect_register.md` Phase 29–31 gaps | Reconciled | B3/B4/B5/B10/B12 → CLOSED Phase 29; B6/B7 → CLOSED Phase 31; U3/U5/U8 → CLOSED Phase 30 |
+| U12 (line-health panel) | ACCEPTED | `line_loss` computed at DB level; UI surface deprioritized |
+| `phase-26-review.md` | Amended | 2026-08-30 amendment explains review method's blind spot; references `defect_register.md` |

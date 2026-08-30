@@ -19,9 +19,10 @@ describe('config', () => {
     const path = await import('path');
     const root = new URL('../..', import.meta.url).pathname;
 
-    // Read balance.md and collect every UPPER_SNAKE_CASE word — these are the parameter names
+    // Read balance.md and collect constants that appear in table rows (| `CONSTANT` format).
+    // Prose mentions don't count — the constant must be the first cell of a table row.
     const balanceMd = fs.readFileSync(path.join(root, 'docs/game/balance.md'), 'utf8');
-    const docNames = new Set(balanceMd.match(/\b[A-Z][A-Z0-9_]+\b/g) ?? []);
+    const docNames = new Set([...balanceMd.matchAll(/\| `([A-Z][A-Z0-9_]+)`/g)].map(m => m[1]));
 
     // Dynamically import balance.js to get all exported constant names
     const balanceMod = await import('../../src/shared/balance.js');
