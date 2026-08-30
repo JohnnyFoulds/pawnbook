@@ -690,3 +690,27 @@ Branch: `feat/phase-36-journey-view`
 - `tests/unit/repertoire/routes.test.js` — 3 `GET /journey` route tests
 
 **DoD:** `make verify` green; 958 tests pass (+ 2 expected-fail); coverage 90.07% branches; U13 closed; `computeRq2` and `GET /journey` share `buildGrowthSeries` — UI and paper cannot diverge.
+
+---
+
+## Phase 37 — Reconciliation and re-review
+
+Branch: `feat/phase-37-reconciliation`
+
+### Objective
+
+Close documentation defects D1, D2, D3 from the defect register; reconcile the defect register
+status for all defects fixed in Phases 29–31 that were not marked at the time; add an amendment note
+to the Phase 26 review explaining what its review method missed.
+
+### Files changed
+
+- `docs/game/balance.md` — REP_* table reformatted from 5 columns to 4 (`Parameter|Default|Range/Units|Notes`)
+- `tests/unit/config.test.js` — balance constant test tightened: now requires `` | `CONSTANT` `` table-row format; prose mentions no longer pass
+- `docs/features/repertoire/api_contract.md` — `changes` → `entries`; `{open,recent}` → `{challenges}`; `GET /journey` route documented in full
+- `docs/features/repertoire/traceability.md` — FR-REP-COACH-14, FR-REP-REACH-1..6, FR-REP-DRILL-1..5 corrected to point at test files with exact test names
+- `docs/features/repertoire/defect_register.md` — B3/B4/B5/B6/B7/B10/B12 → CLOSED (Phase 29/31); U3/U5/U8 → CLOSED (Phase 30); U12 → ACCEPTED; D1/D2/D3 → CLOSED (Phase 37)
+- `docs/features/repertoire/phase-26-review.md` — Amendment section added (2026-08-30) explaining the review method's blind spot and how the journey harness addresses it
+- `docs/features/repertoire/feature_steps.md` — Phase 37 entry (this section)
+
+**DoD:** `make verify` green; no OPEN defects in the register (one ACCEPTED); D1/D2/D3 all CLOSED; Phase 26 review amended; traceability.md accurate.
