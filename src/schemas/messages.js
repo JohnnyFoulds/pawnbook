@@ -15,6 +15,7 @@ export const NewGameMessageSchema = z.object({
   color: z.enum(['white', 'black', 'random']),
   ranked: z.boolean().default(true),
   timeControl: TimeControlSchema.optional().default(null),
+  coachEnabled: z.boolean().optional().default(true),
 });
 
 export const MoveMessageSchema = z.object({

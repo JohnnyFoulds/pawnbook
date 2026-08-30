@@ -60,14 +60,14 @@ export class SqliteGameRepository {
     const stmt = this._db.prepare(`
       INSERT INTO games (
         id, started_at, opponent_id, opponent_elo, player_color,
-        status, ranked, time_control_initial_sec, time_control_inc_sec,
+        status, ranked, coach_enabled, time_control_initial_sec, time_control_inc_sec,
         clock_white_ms, clock_black_ms,
         result, termination, pgn, played_at,
         elo_before, elo_after, accuracy, opponent_accuracy,
         analysis_state, analysis_error, analysed_at
       ) VALUES (
         @id, @started_at, @opponent_id, @opponent_elo, @player_color,
-        @status, @ranked, @time_control_initial_sec, @time_control_inc_sec,
+        @status, @ranked, @coach_enabled, @time_control_initial_sec, @time_control_inc_sec,
         @clock_white_ms, @clock_black_ms,
         @result, @termination, @pgn, @played_at,
         @elo_before, @elo_after, @accuracy, @opponent_accuracy,
@@ -97,6 +97,7 @@ export class SqliteGameRepository {
       player_color: game.playerColor,
       status: game.status ?? 'in_progress',
       ranked: game.ranked ? 1 : 0,
+      coach_enabled: game.coachEnabled === false ? 0 : 1,
       time_control_initial_sec: game.timeControlInitialSec ?? null,
       time_control_inc_sec: game.timeControlIncSec ?? null,
       clock_white_ms: game.clockWhiteMs ?? null,
@@ -285,6 +286,7 @@ export class SqliteGameRepository {
       termination: row.termination,
       pgn: row.pgn,
       ranked: row.ranked === 1,
+      coachEnabled: row.coach_enabled !== 0,
       timeControlInitialSec: row.time_control_initial_sec,
       timeControlIncSec: row.time_control_inc_sec,
       clockWhiteMs: row.clock_white_ms,

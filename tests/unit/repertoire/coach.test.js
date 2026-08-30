@@ -73,9 +73,9 @@ function makeRepo(extraMoves = []) {
   return repo;
 }
 
-async function startGame(handler, ws) {
+async function startGame(handler, ws, extra = {}) {
   await handler(ws, JSON.stringify({
-    type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: true,
+    type: 'new_game', opponentId: 'sf-1400', color: 'white', ranked: true, ...extra,
   }));
   return ws._messages.find(m => m.type === 'game_started');
 }
@@ -260,5 +260,19 @@ describe('repertoire coach (Phase 21)', () => {
 
     const savedGame = gameRepo.findById(started.gameId);
     expect(savedGame.ranked).toBe(false);
+  });
+
+  it('coach_enabled=false silences all alerts regardless of book state — FR-REP-COACH-13', async () => {
+    const repo = makeRepo([
+      { ...BASE_MOVE, epd: START_EPD, moveUci: 'e2e4', moveSan: 'e4', role: 'refused' },
+      { ...BASE_MOVE, epd: START_EPD, moveUci: 'e2e3', moveSan: 'e3', role: 'canonical' },
+    ]);
+    const handler = makeMessageHandler({ gameRepo, settingsRepo: MOCK_SETTINGS, clock: CLOCK, repertoireRepo: repo });
+    // Start with coachEnabled explicitly disabled
+    await startGame(handler, ws, { coachEnabled: false });
+    await handler(ws, JSON.stringify({ type: 'move', uci: 'e2e4' }));
+    // Move should be accepted immediately — no repertoire_alert
+    expect(ws.lastMessage().type).toBe('move_accepted');
+    expect(ws._messages.some(m => m.type === 'repertoire_alert')).toBe(false);
   });
 });

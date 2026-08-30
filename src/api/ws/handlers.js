@@ -110,6 +110,8 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
   let playerColor = msg.color;
   if (playerColor === 'random') playerColor = Math.random() < 0.5 ? 'white' : 'black';
 
+  const coachEnabled = msg.coachEnabled !== false;
+
   const session = new GameSession({
     gameId: randomUUID(),
     opponent,
@@ -118,6 +120,7 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
     timeControl: msg.timeControl ?? null,
     clock,
   });
+  session.coachEnabled = coachEnabled;
 
   gameRepo.save({
     id: session.id,
@@ -130,6 +133,7 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
     timeControlIncSec: msg.timeControl?.incSec ?? null,
     clockWhiteMs: session._clockWhiteMs,
     clockBlackMs: session._clockBlackMs,
+    coachEnabled: coachEnabled ? 1 : 0,
   });
 
   sessions.set(ws, session);
@@ -288,6 +292,7 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
     savedClockBlackMs: game.clockBlackMs,
   }, savedMoves);
 
+  session.coachEnabled = game.coachEnabled !== false;
   sessions.set(ws, session);
 
   log.info({ gameId: msg.gameId, ply: savedMoves.length, opponentId: game.opponentId }, 'game resumed');
@@ -318,6 +323,7 @@ async function handleResume(ws, msg, { gameRepo, clock, sessions }) {
 async function _checkBookAlert(ws, uci, session, deps) {
   const { pendingMoves, alertTimeouts } = deps;
 
+  if (session.coachEnabled === false) return false;
   const confirmedCount = deps.repertoireRepo.listNodes().filter(n => n.encounters >= 2).length;
   if (confirmedCount < REP_BOOTSTRAP_CONFIRMED_MIN) return false;
   if (session.alertsInGame >= REP_ALERTS_PER_GAME_MAX) return false;
