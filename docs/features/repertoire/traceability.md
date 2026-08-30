@@ -93,3 +93,34 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | Journey harness: Stage 3 bootstrap silence | `Stage 3: Bootstrap silence (days 5-8)` | `tests/journey/repertoire-v1.test.js` |
 | Journey harness: structural invariants hold | `final: all structural invariants pass` | `tests/journey/repertoire-v1.test.js` |
 
+
+## Phase 29–30 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| B3: `electCanonical` caller exists | `switches canonical to more recently played move` | `tests/unit/ws/maintenance-service.test.js` |
+| B4: `candidateExpired` caller exists | `expires candidate at TTL encounters → retired` | `tests/unit/ws/maintenance-service.test.js` |
+| B5: `reAuditQuarantined` caller exists | `promotes quarantined move to alt when mean win loss improves` | `tests/unit/ws/maintenance-service.test.js` |
+| Invariant 16: maintenance idempotence | `running twice produces no second changelog entry` | `tests/unit/ws/maintenance-service.test.js` |
+| B12: `REP_PLY_MAX` guard on coach path | wired via balance import in `_checkBookAlert` | `src/api/ws/handlers.js` |
+| B10: refusal committed with move or not at all | catch block returns without re-applying | `src/api/ws/handlers.js` |
+| U8: changelog renders SAN | `enriches entries with fromSan/toSan SAN fields` | `tests/unit/repertoire/routes.test.js` |
+| U3: Reverse button reachable | render test + reverse route coverage | `public/js/repertoire.js`, `src/api/routes/repertoire.js` |
+| U5: `repertoire_update` handled in clients | play.js handler + repertoire.js WS listener | `public/js/play.js`, `public/js/repertoire.js` |
+
+## Phase 31 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| B6: `rep_audits` rows written per challenge | `writes two audit rows — one per move` | `tests/unit/ws/audit-service.test.js` |
+| B7: `engineDeltaWinPts` computed and persisted | `writes engineDeltaWinPts to the challenge row` | `tests/unit/ws/audit-service.test.js` |
+| B7: `gateVerdict` computed and persisted | `writes gateVerdict to the challenge row` | `tests/unit/ws/audit-service.test.js` |
+| B7: null delta when engine returns null cp | `writes engineDelta null when engine returns cp: null, mate: null` | `tests/unit/ws/audit-service.test.js` |
+| B7: trend at +[2,4,6] plies | `populates trendChallenger when game evals exist at trend plies` | `tests/unit/ws/audit-service.test.js` |
+| B7: result performance — challenger | `computes resultChallengerPerf from finished games` | `tests/unit/ws/audit-service.test.js` |
+| B7: result performance — incumbent | `computes resultIncumbentPerf from incumbent games` | `tests/unit/ws/audit-service.test.js` |
+| B7: draw result perf | `draw result produces a non-null perf between 0 and 1` | `tests/unit/ws/audit-service.test.js` |
+| Audit error swallowing | `swallows errors and returns without throwing` | `tests/unit/ws/audit-service.test.js` |
+| Gate verdict error catch | `gateVerdict falls back to null when position eval throws` | `tests/unit/ws/audit-service.test.js` |
+| Trend/result error catches | `swallows errors from getObservationsForNode` | `tests/unit/ws/audit-service.test.js` |
+| `REP_AUTO_PROMOTE` kill switch | `balance: every parameter in balance.js is documented` | `tests/unit/config.test.js` |

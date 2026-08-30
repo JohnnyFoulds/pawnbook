@@ -72,6 +72,7 @@ any of them.
 | `REP_AUDIT_MULTIPV` | 3 | count | Keep bad moves out | Matches pass-2 multipv |
 | `REP_BOOTSTRAP_CONFIRMED_MIN` | 20 | confirmed nodes | Interaction cost | Too low: coach fires before the book knows anything. Too high: coach never activates |
 | `REP_CANDIDATE_TTL_ENCOUNTERS` | 8 | node encounters | Let in moves he likes | Too low: rare nodes never confirm. Too high: misclicks linger |
+| `REP_AUTO_PROMOTE` | true | bool | Phase gate | Flipped `true` in Phase 31 once depth-22 engine audit evidence was live. Set to `false` to disable all automatic challenge promotions (emergency kill switch) |
 | `REP_CHALLENGE_REPEAT_CONFIRM` | 2 | challenger plays | Let in moves he likes | Too low: a misclick might promote. Too high: delays adoption of genuine preference |
 | `REP_CHALLENGE_MIN_GAMES` | 6 | games | Sound outcomes | Too low: noise promotes prematurely. Too high: delays on trend/result signals |
 | `REP_CHALLENGE_ENGINE_TOL` | 3 | win% pts cost | Sound outcomes | The **cost** the challenger may impose. Sign: positive = challenger worse. Too high: accepts blunders. Too low: rejects style moves |

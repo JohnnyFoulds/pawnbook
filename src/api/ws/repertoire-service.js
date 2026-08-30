@@ -60,8 +60,9 @@ export function getProvenanceId(repertoireRepo) {
  * @param {object} [opts.puzzleRepo]
  * @param {import('ws').WebSocket} [opts.ws]
  * @param {import('../../ports/clock.js').Clock} [opts.clock] — injected clock; defaults to wall time
+ * @param {object} [opts.enginePool] — injected engine pool for challenge audits
  */
-export async function updateRepertoire({ gameId, playerColor, gameResult, gameRepo, repertoireRepo, puzzleRepo, ws, clock = null }) {
+export async function updateRepertoire({ gameId, playerColor, gameResult, gameRepo, repertoireRepo, puzzleRepo, ws, clock = null, enginePool = null }) {
   try {
     const gameMoves = gameRepo.getMoves(gameId);
     if (!gameMoves.length) return;
@@ -124,7 +125,7 @@ export async function updateRepertoire({ gameId, playerColor, gameResult, gameRe
     });
 
     // Resolve any open challenges with the freshly-written observations
-    await resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId, nowMs });
+    await resolveOpenChallenges({ repertoireRepo, bookVersion, provenanceId, nowMs, enginePool, gameRepo });
 
     // Create/update opening FSRS cards for all confirmed canonical nodes
     if (puzzleRepo) {

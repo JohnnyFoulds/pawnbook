@@ -45,6 +45,9 @@ export function applySchema(db) {
     `);
   }
 
+  // Phase 31: add gate_verdict column to rep_challenges
+  try { db.exec("ALTER TABLE rep_challenges ADD COLUMN gate_verdict TEXT"); } catch { /* already exists */ }
+
   // Phase 23: add kind column to puzzles and fix UNIQUE(fen) → UNIQUE(fen, kind)
   try { db.exec("ALTER TABLE puzzles ADD COLUMN kind TEXT NOT NULL DEFAULT 'tactical'"); } catch { /* already exists */ }
   const _puzzlesInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='puzzles'").get();
@@ -381,6 +384,7 @@ export function applySchema(db) {
       resolved_at           INTEGER,
       resolved_by           TEXT    CHECK(resolved_by IN ('algorithm','user_override')),
       gate_reason           TEXT,
+      gate_verdict          TEXT,
       provenance_id         INTEGER NOT NULL REFERENCES rep_provenance(id),
       book_version          INTEGER NOT NULL
     );

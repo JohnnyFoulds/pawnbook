@@ -253,6 +253,9 @@ function handleMessage(msg) {
     case 'ranked_changed':
       onRankedChanged(msg);
       break;
+    case 'repertoire_update':
+      onRepertoireUpdate(msg);
+      break;
     case 'error':
       console.error('Server error:', msg.message);
       break;
@@ -559,6 +562,15 @@ function onRankedChanged(msg) {
   if (!msg.ranked) {
     const badge = document.getElementById('coach-unranked-badge');
     if (badge) badge.style.display = '';
+  }
+}
+
+function onRepertoireUpdate(msg) {
+  if (!msg.confirmedCount) return;
+  const label = document.getElementById('analysis-label');
+  if (label) {
+    const n = msg.confirmedCount;
+    label.textContent += ` · Book: ${n} move${n > 1 ? 's' : ''} confirmed`;
   }
 }
 
