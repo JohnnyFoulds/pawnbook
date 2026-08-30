@@ -81,3 +81,15 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | FR-REP-API-3 | no-classification test | `src/schemas/messages.js` |
 | FR-REP-API-4 | integration: routes reachable via server | `src/server.js` |
 
+## Phase 27–28 additions
+
+| Requirement | Test name | File |
+|---|---|---|
+| B15 fix: `getEvals` returns snake_case from both repos | `normaliseMoveEval: getEvals shape` | `tests/unit/adapters/phase-27-adapters.test.js` |
+| ManualTimer fires registered callbacks | `ManualTimer fires all` | `tests/unit/adapters/phase-27-adapters.test.js` |
+| SequentialIds never repeats | `SequentialIds: unique` | `tests/unit/adapters/phase-27-adapters.test.js` |
+| FakeEnginePool returns valid evals | `FakeEnginePool: eval shape` | `tests/unit/adapters/phase-27-adapters.test.js` |
+| Journey harness: Stage 1 candidates created | `Stage 1: First candidates (days 1-2)` | `tests/journey/repertoire-v1.test.js` |
+| Journey harness: Stage 3 bootstrap silence | `Stage 3: Bootstrap silence (days 5-8)` | `tests/journey/repertoire-v1.test.js` |
+| Journey harness: structural invariants hold | `final: all structural invariants pass` | `tests/journey/repertoire-v1.test.js` |
+

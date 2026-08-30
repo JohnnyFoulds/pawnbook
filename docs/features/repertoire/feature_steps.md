@@ -381,3 +381,56 @@ Format: numbered findings `D1…Dn`, each resolved or explicitly accepted, in th
 - `make verify` green
 
 **DoD:** Phase-26-review.md merged; every finding is resolved or accepted with justification.
+
+---
+
+## Phase 27 — Composition root, injected clock/scheduler/ids/engine, B15 fix
+
+**Status:** Complete — 2026-08-30
+
+**Branch:** `feat/phase-27-composition-root`  
+**Commit:** `756834d`
+
+**Covers:**
+- `src/app.js` extracted as the composition root: `createApp({db, clock, scheduler, enginePool})`
+- `clock` threaded into `updateRepertoire`, `resolveOpenChallenges`, `_checkBookAlert`, `_applyChoiceMove`
+- `scheduler` port + `ManualTimer` / `RealTimer` adapters; `setTimeout` replaced in `handlers.js`
+- `ids` port + `SequentialIds` / `UuidIds` adapters; `randomUUID` replaced in `handlers.js`
+- `src/adapters/engine/fake-engine-pool.js` — deterministic eval engine for tests; `ENGINE_MODE=fake`
+- **B15 fixed:** `InMemoryGameRepository._normaliseMoveEval()` now returns snake_case fields so
+  `getEvals()` contracts match SQLite; gate verdicts no longer silently `admitted` in in-memory tests
+- `tests/unit/adapters/phase-27-adapters.test.js` — 19 tests covering all new adapters
+
+**DoD:** `make verify` green; branch coverage ≥ 90%; B15 contract test passes.
+
+---
+
+## Phase 28 — The journey harness
+
+**Status:** Complete — 2026-08-30
+
+**Branch:** `feat/phase-28-journey-harness`
+
+**Covers:**
+- `tests/support/journey/` harness — `harness.js`, `eval-model.js`, `journey-dsl.js`, `probes.js`,
+  `journeys/v1.js`, `index.js`
+- `tests/journey/repertoire-v1.test.js` — 15-test vitest suite running V1_JOURNEY
+- `scripts/simulate-journey.js` — CLI writing populated DB for Playwright visual testing
+- `docs/features/repertoire/user_journey.md` — 30-day narrative in three acts
+- `docs/features/repertoire/longitudinal_test_plan.md` — harness architecture and assertion taxonomy
+- `docs/features/repertoire/simulation_fixtures.md` — eval model and scripted game lines
+- `docs/features/repertoire/defect_register.md` — full defect register (32 open, 1 closed)
+- `package.json` — `"journey"` script added
+
+**Key decisions:**
+1. Always SQLite (`:memory:` under vitest, tmpfile for Playwright) — never `InMemoryGameRepository`
+2. Programmatic CP-band eval model derived from `balance.js` and validated at load time
+3. Write-counting repository proxy (`WriteProxy`) guards against direct state setup
+
+**Journey result at Phase 28:**
+- Stage 2 xpass (basic candidate confirmation works without `electCanonical`)
+- Stages 4, 5, 6, 8, 9 correctly xfail (open defects B3, B2, B7, U3)
+- All other stages pass or soft-pass
+
+**DoD:** `npm run journey` green; all xfail defects documented in `defect_register.md`; every
+xpass is a confirmed or intentional behaviour change.
