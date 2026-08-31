@@ -416,33 +416,33 @@ describe('engine checkmate via engine_turn (connection.js lines 97-119)', () => 
     await new Promise(resolve => httpServer8.listen(0, '127.0.0.1', resolve));
     const port8 = httpServer8.address().port;
 
+    let ws8;
     try {
-      const ws = new WebSocket(`ws://127.0.0.1:${port8}/ws`);
-      await waitForOpen(ws);
+      ws8 = new WebSocket(`ws://127.0.0.1:${port8}/ws`);
+      await waitForOpen(ws8);
 
       // Start as black so engine (white) moves first
-      ws.send(JSON.stringify({ type: 'new_game', opponentId: 'maia-1100', color: 'black', ranked: false }));
+      ws8.send(JSON.stringify({ type: 'new_game', opponentId: 'sf-1400', color: 'black', ranked: false }));
 
       // Engine plays e2e4 first
-      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'e2e4', 8000);
+      await waitForMessage(ws8, m => m.type === 'engine_move' && m.uci === 'e2e4', 8000);
 
       // Black plays e7e5
-      ws.send(JSON.stringify({ type: 'move', uci: 'e7e5' }));
-      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'f1c4', 8000);
+      ws8.send(JSON.stringify({ type: 'move', uci: 'e7e5' }));
+      await waitForMessage(ws8, m => m.type === 'engine_move' && m.uci === 'f1c4', 8000);
 
       // Black plays Nc6
-      ws.send(JSON.stringify({ type: 'move', uci: 'b8c6' }));
-      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'd1h5', 8000);
+      ws8.send(JSON.stringify({ type: 'move', uci: 'b8c6' }));
+      await waitForMessage(ws8, m => m.type === 'engine_move' && m.uci === 'd1h5', 8000);
 
       // Black plays Nf6?? (blunder)
-      ws.send(JSON.stringify({ type: 'move', uci: 'g8f6' }));
+      ws8.send(JSON.stringify({ type: 'move', uci: 'g8f6' }));
 
       // Engine plays h5f7# — game_over should follow
-      const gameOverMsg = await waitForMessage(ws, m => m.type === 'game_over', 10000);
+      const gameOverMsg = await waitForMessage(ws8, m => m.type === 'game_over', 10000);
       expect(gameOverMsg.termination).toBe('checkmate');
-
-      ws.close();
     } finally {
+      ws8?.terminate();
       await new Promise(resolve => httpServer8.close(resolve));
     }
   });
@@ -465,27 +465,27 @@ describe('timed game engine_turn covers clockUpdate branches (lines 79-80, 92-93
     await new Promise(resolve => httpServer9.listen(0, '127.0.0.1', resolve));
     const port9 = httpServer9.address().port;
 
+    let ws9;
     try {
-      const ws = new WebSocket(`ws://127.0.0.1:${port9}/ws`);
-      await waitForOpen(ws);
+      ws9 = new WebSocket(`ws://127.0.0.1:${port9}/ws`);
+      await waitForOpen(ws9);
 
       // Player is black → engine (white) moves first immediately
-      ws.send(JSON.stringify({
+      ws9.send(JSON.stringify({
         type: 'new_game',
-        opponentId: 'maia-1100',
+        opponentId: 'sf-1400',
         color: 'black',
         ranked: false,
         timeControl: { initialSec: 300, incSec: 3 },
       }));
 
       // Engine move should include clock field (covers lines 92-93)
-      const engineMsg = await waitForMessage(ws, m => m.type === 'engine_move', 8000);
+      const engineMsg = await waitForMessage(ws9, m => m.type === 'engine_move', 8000);
       expect(engineMsg.clock).toBeDefined();
       expect(engineMsg.clock.whiteMs).toBeDefined();
       expect(engineMsg.clock.blackMs).toBeDefined();
-
-      ws.close();
     } finally {
+      ws9?.terminate();
       await new Promise(resolve => httpServer9.close(resolve));
     }
   });
