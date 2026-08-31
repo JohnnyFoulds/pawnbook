@@ -64,6 +64,8 @@ No engine call. Runs in < 1 ms in the browser.
 |---|---|
 | `hanging_piece` | A player piece is attacked and has zero defenders after the move |
 | `fork` | A single opponent piece (non-king) attacks 2+ player pieces worth ≥ a knight |
+| `back_rank` | After the move, the player's king is on the back rank with no pawn cover and the opponent has a rook or queen |
+| `missed_capture` | Before the move, a winning capture was available (undefended target, or cheapest attacker < target value) but the player moved elsewhere |
 | `null` | No detectable motif |
 
 Tags are stored in `puzzles.motif_tag` at analysis time and returned on every puzzle card payload.

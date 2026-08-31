@@ -58,8 +58,10 @@ async function boot() {
 }
 
 const MOTIF_LABEL = {
-  hanging_piece: 'hanging-piece',
+  hanging_piece: 'hanging piece',
   fork: 'fork',
+  back_rank: 'back rank',
+  missed_capture: 'missed capture',
 };
 
 function renderAll(stats, state) {
