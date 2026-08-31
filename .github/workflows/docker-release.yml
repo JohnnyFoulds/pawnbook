@@ -1,0 +1,151 @@
+name: Docker — build, scan, and release
+
+# Build and Trivy-scan the image on every push to master.
+# Push versioned tags to Docker Hub only on semver tags (v*.*.*).
+#
+# Required repository secrets:
+#   DOCKERHUB_USERNAME  — your Docker Hub username
+#   DOCKERHUB_TOKEN     — Docker Hub access token (hub.docker.com → Account Settings → Security)
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write       # for GitHub Release creation
+  packages: write
+  security-events: write
+
+env:
+  IMAGE_NAME: johnnyfoulds/pawnbook
+
+jobs:
+  # ── Build ─────────────────────────────────────────────────────────────────
+
+  build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            # semver tag: v1.2.3 → 1.2.3, 1.2, 1, latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # master branch → latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            # PR → pr-<number>
+            type=ref,event=pr
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build (and push on non-PR)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GitHub Actions layer cache — dramatically speeds up repeat builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Pass TARGETARCH so Stockfish/Drawfish pick the right ARCH flag
+          build-args: |
+            TARGETARCH=amd64
+
+  # ── SAST — Trivy container scan ───────────────────────────────────────────
+
+  trivy:
+    name: Trivy image scan
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:latest'
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-container
+
+  # ── GitHub Release ─────────────────────────────────────────────────────────
+
+  release:
+    name: GitHub Release
+    needs: [build, trivy]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "pawnbook ${{ github.ref_name }}"
+          body: |
+            ## pawnbook ${{ github.ref_name }}
+
+            ### Docker
+
+            ```bash
+            docker pull ${{ env.IMAGE_NAME }}:${{ steps.changelog.outputs.version }}
+            ```
+
+            Or use the `latest` tag for the most recent release.
+
+            ### What's changed
+
+            See the [commit history](https://github.com/JohnnyFoulds/pawnbook/commits/${{ github.ref_name }}) for details.
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true

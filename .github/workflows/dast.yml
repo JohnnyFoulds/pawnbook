@@ -1,0 +1,72 @@
+name: DAST — ZAP baseline scan
+
+# Run a passive ZAP scan against the running server.
+# Triggered on push to master (not PRs — avoids noise on WIP branches).
+# Results are uploaded to GitHub Security → Code scanning alerts.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  zap-scan:
+    name: ZAP baseline
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci --omit=dev
+
+      # Start the server with a throw-away SQLite DB and no real engine binaries.
+      # Most REST endpoints are satisfied by the DB alone; engine-dependent
+      # endpoints (new_game, analyse) will return 503 — which is fine for a
+      # passive HTTP scan.
+      - name: Start server
+        run: |
+          mkdir -p /tmp/pawnbook-dast
+          DATA_DIR=/tmp/pawnbook-dast \
+          PORT=3000 \
+          LOG_LEVEL=warn \
+          STOCKFISH_PATH=/dev/null \
+          LC0_PATH=/dev/null \
+          NODE_ENV=production \
+          node src/server.js &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for server to be ready
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3000/api/state > /dev/null; then
+              echo "Server ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server did not start in time" && exit 1
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://localhost:3000'
+          # Passive scan only — no active attacks
+          rules_file_name: '.zap/rules.tsv'
+          # Don't fail the build on findings; upload them as alerts instead
+          fail_action: false
+          # Allow-list known informational findings that don't apply to a
+          # self-hosted single-user tool (no CORS, no CSP headers on API)
+          cmd_options: '-a'
+
+      - name: Stop server
+        if: always()
+        run: kill "$SERVER_PID" 2>/dev/null || true

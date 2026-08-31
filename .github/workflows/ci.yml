@@ -2,51 +2,98 @@ name: CI
 
 on:
   push:
-    branches: [development]
+    branches: [development, master]
   pull_request:
-    branches: [master, development]
+    branches: [development, master]
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
+  # ── fast jobs (run in parallel) ──────────────────────────────────────────
+
   lint:
-    name: lint
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: npm
       - run: npm ci
       - run: npm run lint
 
   test:
-    name: test
+    name: Test & coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: npm
       - run: npm ci
       - run: npm run test:coverage
-      - name: Upload coverage
-        uses: actions/upload-artifact@v7
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage
           path: coverage/
+          retention-days: 7
 
   audit:
-    name: audit
+    name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-      # node-uci@1.3.4 ships rollup@1.32.1 as a build artifact (bundled at publish time).
-      # Those highs are in its own build toolchain, never executed at runtime.
-      # Audit production deps only; the build-chain highs disappear.
+          cache: npm
+      - run: npm ci
+      # node-uci ships rollup@1.32.1 as a bundled build artifact (never executed
+      # at runtime). Auditing prod deps only eliminates those false-positives.
       - run: npm audit --audit-level=high --omit=dev
+
+  docs-check:
+    name: Docs build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:build
+
+  # ── SAST (CodeQL) ─────────────────────────────────────────────────────────
+
+  codeql:
+    name: CodeQL SAST
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # Exclude test files and generated artefacts from the scan surface
+          config: |
+            paths-ignore:
+              - tests/
+              - site/
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript
+          upload: true
