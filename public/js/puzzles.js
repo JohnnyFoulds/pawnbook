@@ -21,6 +21,7 @@ const MOTIF_EXPLANATION = {
   overloaded_defender: 'One of your pieces was carrying two defensive jobs at once. When a single piece guards two targets, the opponent can pick one off and the overloaded guardian can only save the other.',
   pinned_piece: 'After this move one of your pieces was pinned — it was stuck in place because moving it would expose a more valuable piece behind it to capture.',
   skewer: 'After this move an opponent slider targeted one of your valuable pieces, and a less valuable piece was sitting behind it. When the attacked piece moves to safety, the piece behind is captured for free.',
+  discovered_attack: 'Moving this piece uncovered a hidden attack by an opponent — a slider that was blocked by your piece can now reach another one of your pieces.',
 };
 
 /**

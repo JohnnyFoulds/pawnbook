@@ -101,6 +101,22 @@ describe('classifyMotif', () => {
     expect(classifyMotif(fen, 'h1h2', 'white')).toBe(null);
   });
 
+  // ── discovered_attack ─────────────────────────────────────────────────────
+
+  it('detects discovered_attack — moving a rook uncovers a slider attack on a defended knight', () => {
+    // White Rg4 blocks Black Rh4 from attacking White Nd4.
+    // White plays Rg4-g2 (moves off the rank-4 ray). Now Rh4 attacks Nd4, which
+    // was not attacked before the move. Nd4 is defended by Rd2 so not hanging.
+    const fen = '7k/8/8/8/3N2Rr/K7/3R4/7r w - - 0 1';
+    expect(classifyMotif(fen, 'g4g2', 'white')).toBe('discovered_attack');
+  });
+
+  it('discovered_attack does not fire when no piece becomes newly attacked', () => {
+    // White pawns on f2/g2/h2 shield from Bh4. Ke1-e2 does not uncover any new attack.
+    const fen = 'k7/8/8/8/7b/8/5PPP/4K3 w - - 0 1';
+    expect(classifyMotif(fen, 'e1e2', 'white')).toBe(null);
+  });
+
   // ── skewer ────────────────────────────────────────────────────────────────
 
   it('detects skewer — black bishop skewers white queen onto white rook behind', () => {

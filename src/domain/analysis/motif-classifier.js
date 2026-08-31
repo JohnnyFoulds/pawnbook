@@ -16,6 +16,7 @@ export const MOTIF_DIMENSION = {
   overloaded_defender: 'defense',
   pinned_piece: 'tactics',
   skewer: 'tactics',
+  discovered_attack: 'tactics',
 };
 
 /**
@@ -25,7 +26,7 @@ export const MOTIF_DIMENSION = {
  * @param {string} fen - FEN before the move
  * @param {string} playedMoveUci - UCI string of the move played (e.g. 'e2e4', 'e7e8q')
  * @param {'white'|'black'} sideToMove
- * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|'overloaded_defender'|'pinned_piece'|'skewer'|null}
+ * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|'overloaded_defender'|'pinned_piece'|'skewer'|'discovered_attack'|null}
  */
 export function classifyMotif(fen, playedMoveUci, sideToMove) {
   if (!fen || !playedMoveUci || !sideToMove) return null;
@@ -34,6 +35,16 @@ export function classifyMotif(fen, playedMoveUci, sideToMove) {
     const playerColor = sideToMove === 'white' ? 'w' : 'b';
     const oppColor = playerColor === 'w' ? 'b' : 'w';
     const to = playedMoveUci.slice(2, 4);
+
+    // PRE-MOVE: capture which player pieces are currently attacked (for discovered_attack)
+    const preAttacked = new Set();
+    for (const row of chess.board()) {
+      for (const cell of row) {
+        if (cell && cell.color === playerColor && chess.isAttacked(cell.square, oppColor)) {
+          preAttacked.add(cell.square);
+        }
+      }
+    }
 
     // PRE-MOVE: check for missed_capture (evaluated before the move is applied)
     const missedCapture = _hasMissedCapture(chess, playerColor, oppColor, to);
@@ -87,6 +98,9 @@ export function classifyMotif(fen, playedMoveUci, sideToMove) {
 
     // POST-MOVE: skewer — opponent slider attacks a more valuable player piece; less valuable piece behind it is lost when the first moves
     if (_hasSkewer(chess, playerColor, oppColor)) return 'skewer';
+
+    // POST-MOVE: discovered_attack — the moved piece was shielding a valuable player piece from an opponent slider; now that slider attacks it
+    if (_hasDiscoveredAttack(chess, playerColor, oppColor, to, preAttacked)) return 'discovered_attack';
 
     return null;
   } catch {
@@ -215,6 +229,20 @@ function _hasPinnedPiece(chess, playerColor, oppColor) {
           r += dr;
         }
       }
+    }
+  }
+  return false;
+}
+
+function _hasDiscoveredAttack(chess, playerColor, oppColor, movedTo, preAttacked) {
+  for (const row of chess.board()) {
+    for (const cell of row) {
+      if (!cell || cell.color !== playerColor) continue;
+      if (cell.square === movedTo) continue; // destination handled by hanging_piece/fork
+      if ((PIECE_VALUE[cell.type] ?? 0) < 3) continue; // pawns excluded — too common to be useful
+      if (!chess.isAttacked(cell.square, oppColor)) continue; // must be attacked now
+      if (preAttacked.has(cell.square)) continue; // was already attacked before the move
+      return true;
     }
   }
   return false;
