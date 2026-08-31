@@ -8,7 +8,7 @@
  * A meter growing the wrong way (R11 finding) is fixed by this ratio.
  */
 
-import { drawSparkline, renderBreakdownBar, renderQueueMeter } from './lib/chart.js';
+import { drawSparkline, drawActivityBars, renderBreakdownBar, renderQueueMeter } from './lib/chart.js';
 import { QUALITY } from '/shared/quality.js';
 
 const BASE = '';
@@ -86,6 +86,7 @@ function renderStyleTile(stats) {
 function renderAll(stats, state) {
   renderEloTile(stats, state);
   renderStreakTile(state);
+  renderDrillAccuracyTile(stats);
   renderStyleTile(stats);
   renderRetiredTile(stats);
   renderResultsTile(stats);
@@ -95,6 +96,35 @@ function renderAll(stats, state) {
   renderFocusCard(stats);
   renderWeaknessTile(stats);
   renderQualityMix(stats);
+}
+
+function renderDrillAccuracyTile(stats) {
+  const tile = document.getElementById('drill-accuracy-tile');
+  const history = stats.drillHistory ?? [];
+  if (!history.length) { tile.style.display = 'none'; return; }
+  tile.style.display = '';
+
+  const totalAttempted = history.reduce((s, d) => s + d.attempted, 0);
+  const totalCorrect = history.reduce((s, d) => s + d.correct, 0);
+  const pct = totalAttempted > 0 ? Math.round(100 * totalCorrect / totalAttempted) : null;
+  document.getElementById('drill-accuracy-val').textContent = pct != null ? `${pct}%` : '—';
+
+  const recent = history.slice(-7);
+  const recentAttempted = recent.reduce((s, d) => s + d.attempted, 0);
+  const recentCorrect = recent.reduce((s, d) => s + d.correct, 0);
+  const recentPct = recentAttempted > 0 ? Math.round(100 * recentCorrect / recentAttempted) : null;
+  const deltaEl = document.getElementById('drill-accuracy-delta');
+  if (recentPct != null && pct != null && recentAttempted >= 3) {
+    const diff = recentPct - pct;
+    deltaEl.textContent = diff > 2 ? `↑ trending up` : diff < -2 ? `↓ trending down` : `→ steady`;
+  } else {
+    deltaEl.textContent = `${totalAttempted} drill${totalAttempted === 1 ? '' : 's'}`;
+  }
+
+  drawActivityBars(
+    document.getElementById('spark-drill-accuracy'),
+    history.map(d => d.attempted > 0 ? Math.round(100 * d.correct / d.attempted) : 0),
+  );
 }
 
 function renderStreakTile(state) {

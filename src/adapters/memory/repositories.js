@@ -357,6 +357,21 @@ export class InMemoryPuzzleRepository {
     }
     return Object.values(agg);
   }
+
+  getDrillAccuracyHistory(limitDays = 30) {
+    const byDay = new Map();
+    for (const r of (this._reviews ?? [])) {
+      if (r.practice || r.attemptNo !== 1) continue;
+      const day = _activityDayKey(r.reviewedAt);
+      const entry = byDay.get(day) ?? { day, attempted: 0, correct: 0 };
+      entry.attempted++;
+      if (r.correct) entry.correct++;
+      byDay.set(day, entry);
+    }
+    return [...byDay.values()]
+      .sort((a, b) => (a.day < b.day ? -1 : 1))
+      .slice(-limitDays);
+  }
 }
 
 export class InMemorySettingsRepository {

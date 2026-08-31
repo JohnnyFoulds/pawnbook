@@ -323,6 +323,27 @@ describe('GET /api/stats', () => {
     const res = await request(app).get('/api/stats');
     expect(res.body.focusMotif).toBeNull();
   });
+
+  it('includes drillHistory with day/attempted/correct per day', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const pid = addPuzzle(puzzleRepo);
+    const reviewedAt = new Date('2026-08-20T10:00:00Z').getTime();
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt, correct: true, attemptNo: 1, practice: false, suspectRecall: false });
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt, correct: false, attemptNo: 1, practice: false, suspectRecall: false });
+    const res = await request(app).get('/api/stats');
+    const history = res.body.drillHistory;
+    expect(Array.isArray(history)).toBe(true);
+    const day = history.find(d => d.day === '2026-08-20');
+    expect(day).toBeDefined();
+    expect(day.attempted).toBe(2);
+    expect(day.correct).toBe(1);
+  });
+
+  it('returns empty drillHistory when no drill reviews exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.drillHistory).toEqual([]);
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────

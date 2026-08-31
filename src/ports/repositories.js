@@ -132,6 +132,13 @@
  * @returns {Array<{motifTag: string, total: number, correct: number}>}
  */
 
+/**
+ * @function
+ * @name PuzzleRepository#getDrillAccuracyHistory
+ * @param {number} [limitDays=30]
+ * @returns {Array<{day: string, attempted: number, correct: number}>} sorted ascending
+ */
+
 // ────────────────────────────────────────────────────────────────
 
 /**
