@@ -369,6 +369,12 @@ export class SqliteGameRepository {
     const rows = this._db.prepare('SELECT day FROM activity ORDER BY day DESC').all();
     return _deriveStreak(rows.map(r => r.day), _activityDayKey(todayTimestampMs));
   }
+
+  getActivityHistory(limitDays = 30) {
+    return this._db.prepare(
+      'SELECT day, games, reviews FROM activity ORDER BY day DESC LIMIT ?'
+    ).all(limitDays).reverse();
+  }
 }
 
 export class SqlitePuzzleRepository {

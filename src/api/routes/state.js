@@ -68,6 +68,7 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
         dueCount,
         showStreak,
         streak,
+        activityHistory: gameRepo.getActivityHistory?.(30) ?? [],
         status: 'ok',
         gamesPlayed,
         eloDelta,

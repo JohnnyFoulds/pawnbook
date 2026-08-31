@@ -178,6 +178,13 @@ export class InMemoryGameRepository {
     return _deriveStreak([...this._activity.keys()], _activityDayKey(todayTimestampMs));
   }
 
+  getActivityHistory(limitDays = 30) {
+    return [...this._activity.entries()]
+      .map(([day, v]) => ({ day, games: v.games, reviews: v.reviews }))
+      .sort((a, b) => (a.day < b.day ? -1 : 1))
+      .slice(-limitDays);
+  }
+
   saveStrengthSample({ gameId, side, n, ase, sd, p75Loss, wasTimed, coeffVersion }) {
     this._strengthSamples.set(`${gameId}:${side}`, { gameId, side, n, ase, sd, p75Loss: p75Loss ?? null, wasTimed: !!wasTimed, coeffVersion });
   }
