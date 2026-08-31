@@ -326,6 +326,32 @@ describe('GET /api/games/:id/review', () => {
     const mistake = res.body.mistakes[0];
     expect(mistake.engineOnly).toBe(true);
   });
+
+  it('includes motifExplanation as a string when motifTag and playedMoveUci are present', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    // Nf3-g5: knight moves to g5, attacked by h6-pawn — hanging_piece fires
+    addPuzzle(puzzleRepo, {
+      sourceGameId: gameId,
+      fen: '4k3/8/7p/8/8/5N2/8/4K3 w - - 0 1',
+      sideToMove: 'white',
+      playedMoveUci: 'f3g5',
+      motifTag: 'hanging_piece',
+    });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    const mistake = res.body.mistakes[0];
+    expect(mistake.motifExplanation).toBeTypeOf('string');
+    expect(mistake.motifExplanation.length).toBeGreaterThan(10);
+  });
+
+  it('includes motifExplanation as null when motifTag is null', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    addPuzzle(puzzleRepo, { sourceGameId: gameId, motifTag: null });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    const mistake = res.body.mistakes[0];
+    expect(mistake.motifExplanation).toBeNull();
+  });
 });
 
 // ─── strength fields on review and games-list routes ─────────────────────────

@@ -105,6 +105,12 @@ export function gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }) 
           engineOnly: tags.includes('engine_only'),
           sourcePly: p.source_ply,
           motifTag: p.motif_tag ?? p.motifTag ?? null,
+          motifExplanation: explainMotif(
+            p.fen,
+            p.played_move_uci ?? p.playedMoveUci ?? '',
+            p.side_to_move ?? p.sideToMove,
+            p.motif_tag ?? p.motifTag ?? null,
+          ) ?? null,
         };
       });
 

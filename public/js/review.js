@@ -225,6 +225,9 @@ function renderMistakeList(review) {
       : '';
     const MOTIF_LABEL = { hanging_piece: 'hanging piece', fork: 'fork', back_rank: 'back rank', missed_capture: 'missed capture', overloaded_defender: 'overloaded defender', pinned_piece: 'pin', skewer: 'skewer', discovered_attack: 'discovered attack' };
     const motifBadge = m.motifTag ? `<span class="mistake-row__tag mistake-row__tag--motif">${MOTIF_LABEL[m.motifTag] ?? m.motifTag.replace(/_/g, ' ')}</span>` : '';
+    const explainHtml = m.motifExplanation
+      ? `<div class="mistake-row__explain">${m.motifExplanation}</div>`
+      : '';
     return `<div class="mistake-row">
       <div class="mistake-row__head">
         ${chip}
@@ -238,6 +241,7 @@ function renderMistakeList(review) {
           ? ` — ${m.maiaNearestModel ?? 'Maia'} finds it ${Math.round(m.findability * 100)}% of the time`
           : ''}
       </div>
+      ${explainHtml}
     </div>`;
   };
 
