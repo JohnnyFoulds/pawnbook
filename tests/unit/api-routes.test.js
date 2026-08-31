@@ -379,6 +379,22 @@ describe('GET /api/stats', () => {
     const res = await request(app).get('/api/stats');
     expect(res.body.winRateHistory).toEqual([]);
   });
+
+  it('includes rollingStrength and rollingSe when sufficient samples exist', async () => {
+    const { app, gameRepo } = buildApp();
+    const gid = addFinishedGame(gameRepo);
+    gameRepo.saveStrengthSample({ gameId: gid, side: 'player', n: 20, ase: 0.2638, sd: 0.09, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+    const res = await request(app).get('/api/stats');
+    expect(typeof res.body.rollingStrength).toBe('number');
+    expect(typeof res.body.rollingSe).toBe('number');
+  });
+
+  it('returns rollingStrength null when no eligible samples exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.rollingStrength).toBeNull();
+    expect(res.body.rollingSe).toBeNull();
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────
