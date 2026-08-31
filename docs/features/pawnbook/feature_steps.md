@@ -1077,3 +1077,55 @@ After: *"Your knight on d4 is pinned by the opponent's bishop on b2 — moving i
 - `docs/features/pawnbook/feature_steps.md` — phases 37–40 appended
 
 **DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
+
+## Phase 42 — Today's drill stats in API and drill empty-state session summary (Complete — 2026-08-31)
+
+**Goal:** Give players immediate session feedback when they clear their drill queue by showing today's correct/attempted count and active streak on the empty-state screen, and expose the same data from `GET /api/state` for dashboard use.
+
+**Design:** `PuzzleRepository#getTodayDrillStats(nowMs)` counts `attempt_no=1, practice=0` reviews where the review day (04:00 boundary) matches today. SQLite adapter uses an inline `strftime` expression; memory adapter uses the module-private `_activityDayKey` helper. `GET /api/state` adds `todayDrills:{attempted,correct}`. The drill page `enrichEmptyState()` function fetches `/api/state` on queue-empty, populates `#empty-session-summary` (e.g. "Today: 8 correct / 10 attempted (80%)") and `#empty-streak-line` (e.g. "5-day streak"), and hides the generic "Play a game or drill ahead" subtext once drills have been done.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `PuzzleRepository#getTodayDrillStats`
+- `src/adapters/sqlite/repositories.js` — SQL with inline today-key expression
+- `src/adapters/memory/repositories.js` — in-memory implementation using `_activityDayKey`
+- `src/api/routes/state.js` — `todayDrills` added to response
+- `public/puzzles.html` — `#empty-session-summary`, `#empty-streak-line`, `#empty-sub` elements added
+- `public/js/puzzles.js` — `enrichEmptyState()` function; called from `boot()` on empty queue
+- `tests/unit/api-routes.test.js` — 2 new tests: non-zero today stats; zero on fresh repo
+
+**DoD:** 2 new tests; 1350 total; 90.32% branch coverage; `make verify` clean.
+
+## Phase 43 — Dashboard drill-progress card enrichment (Complete — 2026-08-31)
+
+**Goal:** Surface today's drill session progress on the dashboard so players can see their daily drill performance without navigating to the drill page.
+
+**Design:** `dashboard.js` reads `state.todayDrills` (already in `/api/state`). When `attempted > 0`, the Drill action card subtext changes from "from your own games" to "N correct · M done today (X%)". The `#drill-today-sub` id is added to the subtext element for targeted DOM updates.
+
+**Files changed:**
+- `public/index.html` — `id="drill-today-sub"` added to drill card subtext
+- `public/js/dashboard.js` — today's drill progress logic reading `state.todayDrills`
+- `tests/unit/ui-phase9.test.js` — 2 new static-analysis tests
+
+**DoD:** 2 new static-analysis tests; 1352 total; 90.32% branch coverage; `make verify` clean.
+
+## Phase 44 — Resume-game indicator on dashboard Play card (Complete — 2026-08-31)
+
+**Goal:** Make it immediately obvious on the dashboard when a game is in progress so players don't accidentally start a second game.
+
+**Design:** `dashboard.js` reads `state.inProgressGameId` and `state.inProgressOpponentId` (already in `/api/state`). When an in-progress game exists, the Play card heading changes from "Play" to "Resume" and the subtext shows "vs {opponent} →". `id="play-card-heading"` is added to the heading element for targeted updates. Falls back to suggested-opponent behaviour when no game is in progress.
+
+**Files changed:**
+- `public/index.html` — `id="play-card-heading"` added to Play card heading
+- `public/js/dashboard.js` — resume prompt logic reading `state.inProgressGameId`
+- `tests/unit/ui-phase9.test.js` — 1 new static-analysis test
+
+**DoD:** 1 new static-analysis test; 1353 total; 90.32% branch coverage; `make verify` clean.
+
+## Phase 45 — Document phases 42–44 in feature_steps.md (Complete — 2026-08-31)
+
+**Goal:** Catch up the `feature_steps.md` process log, which was 3 phases behind (phases 42–44 undocumented).
+
+**Files changed:**
+- `docs/features/pawnbook/feature_steps.md` — phases 42–44 appended
+
+**DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
