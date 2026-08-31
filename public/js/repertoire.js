@@ -12,12 +12,14 @@ async function init() {
 }
 
 let _treeNodes = [];
+let _lineBudget = 20;
 
 async function loadTree() {
   try {
     const r = await fetch('/api/repertoire/tree');
     const data = await r.json();
     _treeNodes = (data.nodes ?? []).sort((a, b) => (a.minPly ?? 0) - (b.minPly ?? 0) || a.epd.localeCompare(b.epd));
+    if (data.lineBudget != null) _lineBudget = data.lineBudget;
     renderTree();
     renderLineHealth();
   } catch (err) {
@@ -64,7 +66,7 @@ function renderTree() {
     const reachStr = node.reachProb != null ? ` <span style="color:var(--ink-muted)">(${(node.reachProb * 100).toFixed(1)}%)</span>` : '';
     const loss = node.lineLoss;
     const healthStr = loss != null && loss > 0
-      ? ` <span style="color:${loss >= 20 ? '#d9534f' : loss >= 10 ? '#e8a020' : '#888'};font-size:11px" title="cumulative line loss (gate fires ≥20)">−${loss}</span>`
+      ? ` <span style="color:${loss >= _lineBudget ? '#d9534f' : loss >= _lineBudget / 2 ? '#e8a020' : '#888'};font-size:11px" title="cumulative line loss (gate fires ≥${_lineBudget})">−${loss}</span>`
       : '';
     rows.push(`<div style="white-space:pre">${indent}<span style="color:var(--ink-muted);font-size:11px">${moveNo ? moveNo + (ply % 2 === 1 ? '.' : '…') + ' ' : ''}</span>${moveParts}${reachStr}${healthStr}</div>`);
   }
@@ -74,7 +76,6 @@ function renderTree() {
 function renderLineHealth() {
   const el = document.getElementById('line-health-list');
   if (!el) return;
-  const REP_LINE_BUDGET = 20;
   const sick = _treeNodes
     .filter(n => n.lineLoss != null && n.lineLoss > 0)
     .sort((a, b) => b.lineLoss - a.lineLoss)
@@ -86,8 +87,8 @@ function renderLineHealth() {
   const SIDE_LABEL = { white: 'W', black: 'B' };
   const rows = sick.map(n => {
     const loss = n.lineLoss;
-    const pct = Math.min(100, Math.round((loss / REP_LINE_BUDGET) * 100));
-    const color = loss >= REP_LINE_BUDGET ? '#d9534f' : loss >= 10 ? '#e8a020' : '#888';
+    const pct = Math.min(100, Math.round((loss / _lineBudget) * 100));
+    const color = loss >= _lineBudget ? '#d9534f' : loss >= _lineBudget / 2 ? '#e8a020' : '#888';
     const ply = n.minPly ?? 0;
     const moveLabel = ply ? `move ${Math.ceil(ply / 2)}` : 'root';
     const side = SIDE_LABEL[n.side] ?? n.side;
@@ -99,10 +100,10 @@ function renderLineHealth() {
       <span style="color:var(--ink-muted);font-size:11px;flex-shrink:0">${side} ${moveLabel}</span>
     </div>`;
   });
-  const overBudget = sick.filter(n => n.lineLoss >= REP_LINE_BUDGET).length;
+  const overBudget = sick.filter(n => n.lineLoss >= _lineBudget).length;
   const summary = overBudget > 0
-    ? `<div style="color:#d9534f;font-size:12px;margin-bottom:8px">${overBudget} line${overBudget > 1 ? 's' : ''} over budget (≥${REP_LINE_BUDGET} pts) — gate 3 would veto these positions</div>`
-    : `<div style="color:var(--ink-muted);font-size:12px;margin-bottom:8px">No lines over the ${REP_LINE_BUDGET}-pt budget yet.</div>`;
+    ? `<div style="color:#d9534f;font-size:12px;margin-bottom:8px">${overBudget} line${overBudget > 1 ? 's' : ''} over budget (≥${_lineBudget} pts) — gate 3 would veto these positions</div>`
+    : `<div style="color:var(--ink-muted);font-size:12px;margin-bottom:8px">No lines over the ${_lineBudget}-pt budget yet.</div>`;
   el.innerHTML = summary + rows.join('');
 }
 

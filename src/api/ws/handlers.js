@@ -169,7 +169,7 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
 async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
-  if (session.isOver) return; // stale engine turn after game ended
+  if (session.isOver) return; // stale browser move after game ended
 
   // Ignore moves while a repertoire_choice is pending
   if (pendingMoves.has(ws)) return;

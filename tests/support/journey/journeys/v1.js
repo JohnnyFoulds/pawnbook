@@ -42,9 +42,9 @@ const OPENING_MOVES_WHITE = [
 // Using a 3-move divergence ensures the node at move 3 has far fewer encounters
 // than the starting node, preventing immediate TTL expiry.
 const DIVERGENT_MOVE_WHITE = [
-  { uci: 'e2e4', san: 'e4' },
-  { uci: 'g1f3', san: 'Nf3' },
-  { uci: 'f1b5', san: 'Bb5' }, // Ruy Lopez — book expects Bc4
+  { uci: 'e2e4', san: 'e4',  fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1' },
+  { uci: 'g1f3', san: 'Nf3', fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2' },
+  { uci: 'f1b5', san: 'Bb5', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3' }, // Ruy Lopez — book expects Bc4
 ];
 
 // Italian extended — continues OPENING_MOVES_WHITE with 7 more moves (total 10).
