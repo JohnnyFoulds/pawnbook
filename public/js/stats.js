@@ -246,8 +246,8 @@ function renderWeaknessTile(stats) {
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const [topTag, topCount] = sorted[0];
   const label = MOTIF_LABEL[topTag] ?? topTag.replace(/_/g, ' ');
-  textEl.textContent =
-    `Top pattern: ${label} (${topCount}). Keep an eye on these in your drill queue.`;
+  textEl.innerHTML =
+    `Top pattern: ${label} (${topCount}). &nbsp;<a href="puzzles.html?motif=${encodeURIComponent(topTag)}" style="color:var(--accent);font-size:12px">Drill this →</a>`;
 
   const max = topCount;
   barsEl.innerHTML = sorted.map(([tag, n]) => {
@@ -259,6 +259,7 @@ function renderWeaknessTile(stats) {
         <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px"></div>
       </div>
       <div style="width:28px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums">${n}</div>
+      <a href="puzzles.html?motif=${encodeURIComponent(tag)}" style="font-size:11px;color:var(--ink-muted);white-space:nowrap" title="Drill only ${lbl}">drill →</a>
     </div>`;
   }).join('');
 }

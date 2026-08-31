@@ -566,6 +566,27 @@ describe('GET /api/puzzles/due', () => {
     const res = await request(app).get('/api/puzzles/due');
     expect(res.body.cards[0].motifExplanation).toBeNull();
   });
+
+  it('?motif= filter returns only cards with the specified motif tag', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const forkId = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    const hangId = addPuzzle(puzzleRepo, { motifTag: 'hanging_piece', fen: '4k3/8/8/8/8/8/8/4K3 w - - 0 1' });
+    puzzleRepo.saveCard({ puzzleId: forkId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    puzzleRepo.saveCard({ puzzleId: hangId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due?motif=fork');
+    expect(res.body.cards.every(c => c.motifTag === 'fork')).toBe(true);
+    expect(res.body.cards.length).toBe(1);
+  });
+
+  it('?motif= filter returns all cards when motif param is absent', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const forkId = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    const hangId = addPuzzle(puzzleRepo, { motifTag: 'hanging_piece', fen: '4k3/8/8/8/8/8/8/4K3 w - - 0 1' });
+    puzzleRepo.saveCard({ puzzleId: forkId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    puzzleRepo.saveCard({ puzzleId: hangId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due');
+    expect(res.body.cards.length).toBe(2);
+  });
 });
 
 // ─── GET /api/puzzles/practice ────────────────────────────────────────────────
