@@ -91,9 +91,19 @@ let currentBoard = null;
 
 async function boot() {
   try {
-    const due = await api('/api/puzzles/due');
+    const motifFilter = new URLSearchParams(location.search).get('motif');
+    const duePath = motifFilter ? `/api/puzzles/due?motif=${encodeURIComponent(motifFilter)}` : '/api/puzzles/due';
+    const due = await api(duePath);
     const cards = due.cards ?? [];
     const total = due.total ?? cards.length;
+
+    // Show filter banner if drilling a specific motif
+    if (motifFilter) {
+      const banner = document.getElementById('motif-filter-banner');
+      const labelEl = document.getElementById('motif-filter-label');
+      if (banner) banner.style.display = '';
+      if (labelEl) labelEl.textContent = motifFilter.replace(/_/g, ' ');
+    }
 
     // Update badge
     const dueLabel = total > DUE_SOFT_CAP ? `${DUE_SOFT_CAP}+` : String(total);

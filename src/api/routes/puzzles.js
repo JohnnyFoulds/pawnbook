@@ -39,7 +39,9 @@ export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _set
   router.get('/due', (req, res, next) => {
     try {
       const now = clock.now().getTime();
-      const allDue = puzzleRepo.getDueCards(now);
+      const motifFilter = req.query.motif ?? null;
+      let allDue = puzzleRepo.getDueCards(now);
+      if (motifFilter) allDue = allDue.filter(c => (c.motif_tag ?? c.motifTag) === motifFilter);
       const { overCap } = formatDueCount(allDue.length);
       const weakDimension = _topWeakDimension(allDue);
       const sorted = sortDueCards(allDue, clock.now(), weakDimension);
@@ -49,6 +51,7 @@ export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _set
         cards: cards.map(formatCard),
         total: allDue.length,
         displayTotal: overCap ? `${DUE_SOFT_CAP}+` : String(allDue.length),
+        motifFilter: motifFilter ?? null,
       });
     } catch (err) {
       next(err);
