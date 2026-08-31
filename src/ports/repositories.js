@@ -110,6 +110,22 @@
  * @returns {void}
  */
 
+/**
+ * @function
+ * @name PuzzleRepository#getByFenAndKind
+ * @param {string} fen
+ * @param {string} kind
+ * @returns {Object|null}
+ */
+
+/**
+ * @function
+ * @name PuzzleRepository#updateFindability
+ * @param {string} id
+ * @param {{ findability: number, temptation: number, instructiveness: number, maiaModel: string, policyTemperature: number }} fields
+ * @returns {void}
+ */
+
 // ────────────────────────────────────────────────────────────────
 
 /**

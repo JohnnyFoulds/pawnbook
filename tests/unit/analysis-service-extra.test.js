@@ -353,4 +353,23 @@ describe('analyseGame — extra branch coverage', () => {
 
     expect(gameRepo.getEloHistory()).toHaveLength(1);
   });
+
+  it('dedupe: repeated puzzle FEN from two games bumps times_seen instead of inserting a second row', async () => {
+    const puzzle = makePuzzle();
+    selectPuzzles.mockReturnValue([puzzle]);
+
+    const session = makeSession();
+    await analyseGame({ gameId: GAME_ID, session, result: { result: 'win', termination: 'checkmate' },
+      ws: makeWs(), gameRepo, puzzleRepo, settingsRepo, enginePool: makeEnginePool() });
+
+    const GAME_ID_2 = 'test-game-002';
+    gameRepo.save({ id: GAME_ID_2, opponentId: 'maia-1100', opponentElo: 1100, playerColor: 'white', ranked: false, status: 'in_progress' });
+    gameRepo.appendMove(GAME_ID_2, { ply: 1, uci: 'e2e4', san: 'e4', msTaken: null });
+    await analyseGame({ gameId: GAME_ID_2, session, result: { result: 'win', termination: 'checkmate' },
+      ws: makeWs(), gameRepo, puzzleRepo, settingsRepo, enginePool: makeEnginePool() });
+
+    const all = puzzleRepo.listAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].timesSeen).toBe(2);
+  });
 });
