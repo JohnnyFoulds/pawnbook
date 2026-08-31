@@ -37,9 +37,14 @@ const OPENING_MOVES_WHITE = [
   { uci: 'f1c4', san: 'Bc4', fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3' },
 ];
 
-// A divergent move (e4 → d4 on move 1) — triggers a book alert after book is established
+// A divergent line (e4, Nf3, Bb5 — Ruy Lopez instead of canonical Bc4 at move 3).
+// Bb5 is never played in OPENING_MOVES_WHITE/LONG_LINE_1/LONG_LINE_2 so it is absent from the book.
+// Using a 3-move divergence ensures the node at move 3 has far fewer encounters
+// than the starting node, preventing immediate TTL expiry.
 const DIVERGENT_MOVE_WHITE = [
-  { uci: 'd2d4', san: 'd4', fen: 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1' },
+  { uci: 'e2e4', san: 'e4' },
+  { uci: 'g1f3', san: 'Nf3' },
+  { uci: 'f1b5', san: 'Bb5' }, // Ruy Lopez — book expects Bc4
 ];
 
 // Italian extended — continues OPENING_MOVES_WHITE with 7 more moves (total 10).
@@ -184,9 +189,13 @@ async function stage4_coachWakes(harness) {
 async function stage5_firstAlert(harness) {
   await advanceDay(harness, 1);
 
+  // alertAction:'book' — player accepts the book move so Bb5 gets no observation.
+  // This prevents Bb5 from accumulating a pre-challenge challengerRecentCount that would
+  // trigger Rule 9 (alternation) before Rule 3 (repeat-plus-neutral) fires in Stage 8.
   const { ws } = await playGame(harness, {
     moves: DIVERGENT_MOVE_WHITE,
     resign: true,
+    alertAction: 'book',
   });
 
   const alert = ws.lastOfType('repertoire_alert');
@@ -236,15 +245,13 @@ async function stage6_orderSlip(harness) {
 async function stage7_firstRefusal(harness) {
   await advanceDay(harness, 1);
 
-  // Play divergent move to trigger alert, then refuse (keep the player move)
+  // Play divergent move to trigger alert; use 'keep' to explicitly refuse the book move.
+  // 'keep' sends repertoire_choice:keep which opens a challenge (invariant: timeout does NOT).
   await playGame(harness, {
     moves: DIVERGENT_MOVE_WHITE,
     resign: true,
+    alertAction: 'keep',
   });
-
-  // For now: challenge count is checked in stage 9.
-  // B7 failure: no challenge will progress to promotion
-  // (Documented, not asserted here — asserted in stage 9)
 }
 
 /**
@@ -257,17 +264,23 @@ async function stage8_challengerPromotion(harness) {
 
   const priorPromotions = changelogByKind(harness, 'promote');
 
+  // Play divergent line again — timeout fires (no new challenge, invariant 15).
+  // Bb5 is still 'candidate' (1 obs from Stage 7) so alert fires; timeout applies it.
+  // After analysis this becomes the 2nd Bb5 observation → canPromote=true.
+  // challengerRecentCount = 2 (Stage 7 + Stage 8) < REP_ALT_ALTERNATION_MIN (3), so
+  // Rule 9 (alternation) doesn't fire. challengerPlays = 2 → Rule 3 fires.
   await playGame(harness, {
     moves: DIVERGENT_MOVE_WHITE,
     resign: true,
+    alertAction: 'timeout',
   });
 
   await advanceDay(harness, 0); // trigger maintenance
 
   const afterPromotions = changelogByKind(harness, 'promote');
   if (afterPromotions.length <= priorPromotions.length) {
-    throw new Error(`Stage 8 (B7): expected a promotion changelog entry after player played challenger. ` +
-      `B7: engineDelta is never computed so challenge rules 2-5 cannot fire. Closing in Phase 31.`);
+    throw new Error(`Stage 8: expected a promotion changelog entry after challenger played twice. ` +
+      `Check: challenge opened in Stage 7, challengerPlays >= 2, engineDelta non-null.`);
   }
 }
 
@@ -391,14 +404,12 @@ export const V1_JOURNEY = [
   {
     name: 'Stage 8: Challenger promotion (day 14)',
     fn: stage8_challengerPromotion,
-    expectFail: true,  // stage8 promotion assertion: soft fail until Phase 31 audit path confirmed end-to-end in journey
-    failDefects: ['B7'],
+    expectFail: false,  // B7 fixed: clock injection + alertAction:keep + Bb5 divergence
   },
   {
     name: 'Stage 9: Reversal (day 16)',
     fn: stage9_reversal,
-    expectFail: true,  // U3: reverse button not tested at journey level (UI-only)
-    failDefects: ['U3'],
+    expectFail: false,  // promotions now exist after B7 fix
   },
   {
     name: 'Stage 10: Timeout no-challenge (day 18)',

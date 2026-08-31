@@ -52,7 +52,7 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
   /** @type {WeakMap<object, ReturnType<typeof setTimeout>>} per-connection alert timeout handles */
   const alertTimeouts = new WeakMap();
 
-  const deps = { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, puzzleRepo, scheduler: _scheduler };
+  const deps = { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, puzzleRepo, scheduler: _scheduler, clock };
 
   return async function handleMessage(ws, raw) {
     // Register cleanup once per ws object so sessions Map doesn't grow unboundedly
@@ -169,6 +169,7 @@ async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
 async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
+  if (session.isOver) return; // stale engine turn after game ended
 
   // Ignore moves while a repertoire_choice is pending
   if (pendingMoves.has(ws)) return;
@@ -215,7 +216,7 @@ async function handleMove(ws, msg, { gameRepo, settingsRepo, sessions, pendingMo
   ws.emit('engine_turn', session);
 }
 
-async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler }) {
+async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, repertoireRepo, scheduler, clock }) {
   const session = sessions.get(ws);
   if (!session) return sendError(ws, 'no active game');
 
@@ -242,7 +243,7 @@ async function handleRepertoireChoice(ws, msg, { gameRepo, settingsRepo, session
   const openChallenge = resolution === 'alerted_kept';
 
   await _applyChoiceMove(ws, session, uciToApply,
-    { resolution, decisionMs, pending, openChallenge, gameRepo, settingsRepo, repertoireRepo });
+    { resolution, decisionMs, pending, openChallenge, gameRepo, settingsRepo, repertoireRepo, clock });
 }
 
 async function handleResign(ws, { gameRepo, settingsRepo, sessions, pendingMoves, alertTimeouts, scheduler }) {
@@ -428,7 +429,7 @@ async function _checkBookAlert(ws, uci, session, deps) {
 /**
  * Apply a move chosen via repertoire_choice (or auto-applied on timeout).
  */
-async function _applyChoiceMove(ws, session, uci, { resolution, decisionMs, pending, openChallenge, gameRepo, settingsRepo, repertoireRepo }) {
+async function _applyChoiceMove(ws, session, uci, { resolution, decisionMs, pending, openChallenge, gameRepo, settingsRepo, repertoireRepo, clock }) {
   // B14: charge only the pre-alert thinking time; decision time is not counted
   session.chargeElapsedMs(pending.preAlertElapsedMs ?? 0);
   const moveResult = session.applyMove(uci);
@@ -466,7 +467,7 @@ async function _applyChoiceMove(ws, session, uci, { resolution, decisionMs, pend
             challengerUci: pending.uci,
             openedGameId: session.id,
             openedPly: pending.ply,
-            openedAt: Date.now(),
+            openedAt: clock ? clock.now().getTime() : Date.now(),
             status: 'open',
             provenanceId,
             bookVersion,

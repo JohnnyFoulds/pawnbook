@@ -30,6 +30,10 @@ const DEFAULT_OPPONENT = 'maia-1100';
  * @param {boolean} [opts.ranked=true]
  * @param {boolean} [opts.coachEnabled=true]
  * @param {boolean} [opts.resign=false] — if true, player resigns after all moves
+ * @param {'timeout'|'keep'|'book'} [opts.alertAction='timeout'] — how to respond to a book alert:
+ *   'timeout' fires the scheduler timeout (auto-applies move, no challenge opens — invariant 15),
+ *   'keep' sends repertoire_choice:keep (opens challenge for deliberate refusal),
+ *   'book' sends repertoire_choice:correct (accepts the book move).
  * @param {object}  [opts.playerBand] — eval quality band for player moves
  * @param {object}  [opts.engineBand] — eval quality band for engine moves
  * @returns {Promise<{ws: FakeWs, gameId: string, moves: object[]}>}
@@ -41,6 +45,7 @@ export async function playGame(harness, {
   ranked = true,
   coachEnabled = true,
   resign = false,
+  alertAction = 'timeout',
 } = {}) {
   const ws = harness.newWs();
 
@@ -62,14 +67,22 @@ export async function playGame(harness, {
   for (const move of moves) {
     await harness.send(ws, { type: 'move', uci: move.uci });
 
-    // Handle repertoire alerts: if a repertoire_alert arrives, auto-continue
-    // If an alert is pending (pendingMoves), fire the alert timeout
-    // which causes the handler to auto-apply the move after timeout
-    if (ws.messagesOfType('repertoire_alert').length > 0 &&
-        ws.lastOfType('repertoire_alert') &&
-        !ws.lastOfType('move_accepted')) {
-      // Timer fires → auto-continues
-      harness.scheduler.fireAll();
+    // Handle repertoire alerts based on alertAction.
+    // Check the chronologically last message — if it's an alert the move is pending.
+    const lastMsg = ws._messages[ws._messages.length - 1];
+    const hasAlert = lastMsg?.type === 'repertoire_alert';
+    if (hasAlert) {
+      if (alertAction === 'keep') {
+        await harness.send(ws, { type: 'repertoire_choice', choice: 'keep' });
+      } else if (alertAction === 'book') {
+        const alert = ws.lastOfType('repertoire_alert');
+        await harness.send(ws, { type: 'repertoire_choice', choice: 'correct', uci: alert.bookUci });
+      } else {
+        // 'timeout': fire the alert timeout → auto-applies move, no challenge (invariant 15)
+        harness.scheduler.fireAll();
+        // drain engine microtasks so engine reply completes before next player move
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
     }
 
     appliedMoves.push({ uci: move.uci, san: move.san, fen: move.fen });

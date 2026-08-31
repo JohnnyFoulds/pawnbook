@@ -142,7 +142,7 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | B9: coached game skips ELO update | `B9: ranked game with alertsInGame > 0 skips ELO update` | `tests/unit/analysis-service-extra.test.js` |
 | B9: uncoached game still updates ELO | `B9: ranked game with alertsInGame = 0 still updates ELO` | `tests/unit/analysis-service-extra.test.js` |
 | U6: coach toggle silences alerts | `coach_enabled=false silences all alerts regardless of book state` | `tests/unit/repertoire/coach.test.js` |
-| Journey stage 4: bootstrap silence until 20 nodes | stage4_bootstrapWakes passes | `tests/journey/repertoire-v1.test.js` |
+| Journey stage 4: bootstrap silence until 20 nodes | stage4_coachWakes passes | `tests/journey/repertoire-v1.test.js` |
 | Journey stage 5: first alert + ranked_changed | stage5_firstAlert passes + assertRankedChanged | `tests/journey/repertoire-v1.test.js` |
 | Journey stage 6: alert fires for deviant move | stage6_orderSlip passes | `tests/journey/repertoire-v1.test.js` |
 
