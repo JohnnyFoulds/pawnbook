@@ -1,0 +1,18 @@
+# ZAP passive scan rule overrides for pawnbook
+# Format: rule-id TAB action TAB reason
+# Actions: IGNORE | WARN | FAIL
+#
+# pawnbook is a self-hosted single-user tool with no authentication.
+# Several standard web-security headers don't apply in this context.
+
+10015	IGNORE	Incomplete or No Cache-control Header — API responses are intentionally uncached
+10016	IGNORE	Web Browser XSS Protection Not Enabled — deprecated header, not a finding
+10017	IGNORE	Cross-Domain JavaScript Source File Inclusion — cm-chessboard loaded locally
+10020	IGNORE	X-Frame-Options Header Not Set — no embedding threat for a self-hosted tool
+10021	IGNORE	X-Content-Type-Options Header Missing — acceptable for a local tool
+10035	IGNORE	Strict-Transport-Security Header Not Set — not running HTTPS locally
+10036	IGNORE	Server Leaks Version Information via "Server" HTTP Response Header Field
+10038	IGNORE	Content Security Policy (CSP) Header Not Set — self-hosted, no third-party injection threat
+10063	IGNORE	Permissions Policy Header Not Set — not applicable
+10096	IGNORE	Timestamp Disclosure — Epoch timestamps in API responses are intentional
+10098	IGNORE	Cross-Domain Misconfiguration — no CORS needed for same-origin SPA

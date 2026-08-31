@@ -1,5 +1,6 @@
-# Stage 1: build lc0 v0.32.1 for linux/arm64
+# Stage 1: build lc0 v0.32.1 (multi-platform: arm64 + amd64)
 FROM debian:bookworm AS lc0-build
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git build-essential ninja-build meson pkg-config python3 ca-certificates \
     zlib1g-dev libeigen3-dev libopenblas-dev \
@@ -7,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 RUN git clone --depth 1 --branch v0.32.1 https://github.com/LeelaChessZero/lc0.git
 WORKDIR /build/lc0
+# -Dnative_arch=false produces a portable binary for the target platform
 RUN ./build.sh release \
     -Dgtest=false \
     -Dnative_arch=false \
@@ -15,8 +17,9 @@ RUN ./build.sh release \
 RUN strip build/release/lc0
 RUN cp build/release/lc0 /usr/local/bin/lc0
 
-# Stage 2: build Stockfish 18 and Drawfish for linux/arm64
+# Stage 2: build Stockfish 18 and Drawfish (multi-platform: arm64 + amd64)
 FROM debian:bookworm AS engines-build
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git build-essential clang ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
@@ -25,7 +28,12 @@ WORKDIR /build
 # Stockfish 18 (needs network for NNUE download during build)
 RUN git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
 WORKDIR /build/Stockfish/src
-RUN make -j$(nproc) profile-build ARCH=armv8-dotprod COMP=gcc
+RUN SFARCH=$(case "${TARGETARCH}" in \
+      arm64) echo "armv8-dotprod" ;; \
+      amd64) echo "x86-64-modern" ;; \
+      *) echo "x86-64" ;; \
+    esac) && \
+    make -j$(nproc) profile-build ARCH=$SFARCH COMP=gcc
 RUN strip stockfish
 RUN cp stockfish /usr/local/bin/stockfish
 
@@ -33,7 +41,12 @@ RUN cp stockfish /usr/local/bin/stockfish
 WORKDIR /build
 RUN git clone --depth 1 https://github.com/nmrugg/Drawfish.git
 WORKDIR /build/Drawfish/src
-RUN make -j$(nproc) build ARCH=armv8 COMP=clang
+RUN DFARCH=$(case "${TARGETARCH}" in \
+      arm64) echo "armv8" ;; \
+      amd64) echo "x86-64-modern" ;; \
+      *) echo "x86-64" ;; \
+    esac) && \
+    make -j$(nproc) build ARCH=$DFARCH COMP=clang
 RUN strip drawfish
 RUN cp drawfish /usr/local/bin/drawfish
 
