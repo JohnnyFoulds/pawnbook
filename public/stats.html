@@ -98,6 +98,14 @@
         </div>
       </div>
 
+      <!-- Win rate tile -->
+      <div class="stat-tile" id="win-rate-tile" style="display:none">
+        <div class="stat-tile__label">Win rate</div>
+        <div class="stat-tile__value" id="win-rate-val">—</div>
+        <div class="stat-tile__delta" id="win-rate-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+        <canvas class="sparkline" id="spark-win-rate" width="120" height="28" style="display:block;margin-top:8px"></canvas>
+      </div>
+
       <!-- Queue health meter (R11: due / DUE_SOFT_CAP) -->
       <div class="stat-tile">
         <div class="stat-tile__label">Queue health</div>

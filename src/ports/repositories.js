@@ -155,6 +155,13 @@
  */
 
 /**
+ * @function
+ * @name GameRepository#getWinRateHistory
+ * @param {number} [limitDays=90]
+ * @returns {Array<{day: string, played: number, won: number, lost: number, drawn: number}>} sorted ascending
+ */
+
+/**
  * @interface SettingsRepository
  */
 

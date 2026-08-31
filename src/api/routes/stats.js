@@ -107,6 +107,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
       }
 
       const drillHistory = puzzleRepo.getDrillAccuracyHistory?.() ?? [];
+      const winRateHistory = gameRepo.getWinRateHistory?.() ?? [];
 
       res.json({
         elo,
@@ -129,6 +130,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         rollingStyleScore,
         motifAccuracy,
         drillHistory,
+        winRateHistory,
         focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {

@@ -87,6 +87,7 @@ function renderAll(stats, state) {
   renderEloTile(stats, state);
   renderStreakTile(state);
   renderDrillAccuracyTile(stats);
+  renderWinRateTile(stats);
   renderStyleTile(stats);
   renderRetiredTile(stats);
   renderResultsTile(stats);
@@ -96,6 +97,35 @@ function renderAll(stats, state) {
   renderFocusCard(stats);
   renderWeaknessTile(stats);
   renderQualityMix(stats);
+}
+
+function renderWinRateTile(stats) {
+  const tile = document.getElementById('win-rate-tile');
+  const history = stats.winRateHistory ?? [];
+  if (!history.length) { tile.style.display = 'none'; return; }
+  tile.style.display = '';
+
+  const totalPlayed = history.reduce((s, d) => s + d.played, 0);
+  const totalWon = history.reduce((s, d) => s + d.won, 0);
+  const pct = totalPlayed > 0 ? Math.round(100 * totalWon / totalPlayed) : null;
+  document.getElementById('win-rate-val').textContent = pct != null ? `${pct}%` : '—';
+
+  const recent = history.slice(-14);
+  const recentPlayed = recent.reduce((s, d) => s + d.played, 0);
+  const recentWon = recent.reduce((s, d) => s + d.won, 0);
+  const recentPct = recentPlayed > 0 ? Math.round(100 * recentWon / recentPlayed) : null;
+  const deltaEl = document.getElementById('win-rate-delta');
+  if (recentPct != null && pct != null && recentPlayed >= 3) {
+    const diff = recentPct - pct;
+    deltaEl.textContent = diff > 4 ? '↑ trending up' : diff < -4 ? '↓ trending down' : '→ steady';
+  } else {
+    deltaEl.textContent = `${totalPlayed} game${totalPlayed === 1 ? '' : 's'}`;
+  }
+
+  drawActivityBars(
+    document.getElementById('spark-win-rate'),
+    history.map(d => d.played > 0 ? Math.round(100 * d.won / d.played) : 0),
+  );
 }
 
 function renderDrillAccuracyTile(stats) {
