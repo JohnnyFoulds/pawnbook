@@ -391,6 +391,22 @@ export class SqliteGameRepository {
     return _computeBestStreak(rows.map(r => r.day));
   }
 
+  getWinRateHistory(limitDays = 90) {
+    return this._db.prepare(`
+      SELECT
+        strftime('%Y-%m-%d', datetime((played_at / 1000) - 14400, 'unixepoch')) AS day,
+        COUNT(*) AS played,
+        CAST(SUM(CASE WHEN result = 'win'  THEN 1 ELSE 0 END) AS INTEGER) AS won,
+        CAST(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS INTEGER) AS lost,
+        CAST(SUM(CASE WHEN result = 'draw' THEN 1 ELSE 0 END) AS INTEGER) AS drawn
+      FROM games
+      WHERE status = 'finished' AND played_at IS NOT NULL AND ranked = 1
+      GROUP BY day
+      ORDER BY day DESC
+      LIMIT ?
+    `).all(limitDays).reverse();
+  }
+
   getActivityHistory(limitDays = 30) {
     return this._db.prepare(
       'SELECT day, games, reviews FROM activity ORDER BY day DESC LIMIT ?'

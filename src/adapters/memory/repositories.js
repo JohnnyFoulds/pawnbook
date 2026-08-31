@@ -197,6 +197,23 @@ export class InMemoryGameRepository {
     return _computeBestStreak(days);
   }
 
+  getWinRateHistory(limitDays = 90) {
+    const byDay = new Map();
+    for (const g of this._games.values()) {
+      if (g.status !== 'finished' || !g.playedAt || !g.ranked) continue;
+      const day = _activityDayKey(g.playedAt);
+      const entry = byDay.get(day) ?? { day, played: 0, won: 0, lost: 0, drawn: 0 };
+      entry.played++;
+      if (g.result === 'win') entry.won++;
+      else if (g.result === 'loss') entry.lost++;
+      else if (g.result === 'draw') entry.drawn++;
+      byDay.set(day, entry);
+    }
+    return [...byDay.values()]
+      .sort((a, b) => (a.day < b.day ? -1 : 1))
+      .slice(-limitDays);
+  }
+
   getActivityHistory(limitDays = 30) {
     return [...this._activity.entries()]
       .map(([day, v]) => ({ day, games: v.games, reviews: v.reviews }))

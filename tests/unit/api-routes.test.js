@@ -344,6 +344,26 @@ describe('GET /api/stats', () => {
     const res = await request(app).get('/api/stats');
     expect(res.body.drillHistory).toEqual([]);
   });
+
+  it('includes winRateHistory with day/played/won per day', async () => {
+    const { app, gameRepo } = buildApp();
+    const playedAt = new Date('2026-08-20T12:00:00Z').getTime();
+    addFinishedGame(gameRepo, { playedAt, result: 'win' });
+    addFinishedGame(gameRepo, { playedAt, result: 'loss' });
+    const res = await request(app).get('/api/stats');
+    const history = res.body.winRateHistory;
+    expect(Array.isArray(history)).toBe(true);
+    const day = history.find(d => d.day === '2026-08-20');
+    expect(day).toBeDefined();
+    expect(day.played).toBe(2);
+    expect(day.won).toBe(1);
+  });
+
+  it('returns empty winRateHistory when no finished games exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.winRateHistory).toEqual([]);
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────
