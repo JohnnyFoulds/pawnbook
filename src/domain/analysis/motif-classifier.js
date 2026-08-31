@@ -13,16 +13,17 @@ export const MOTIF_DIMENSION = {
   fork: 'tactics',
   missed_capture: 'tactics',
   back_rank: 'defense',
+  overloaded_defender: 'defense',
 };
 
 /**
  * Classify a mistake into a motif tag.
- * Priority order: hanging_piece → fork → back_rank → missed_capture.
+ * Priority order: hanging_piece → fork → back_rank → missed_capture → overloaded_defender.
  *
  * @param {string} fen - FEN before the move
  * @param {string} playedMoveUci - UCI string of the move played (e.g. 'e2e4', 'e7e8q')
  * @param {'white'|'black'} sideToMove
- * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|null}
+ * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|'overloaded_defender'|null}
  */
 export function classifyMotif(fen, playedMoveUci, sideToMove) {
   if (!fen || !playedMoveUci || !sideToMove) return null;
@@ -75,6 +76,9 @@ export function classifyMotif(fen, playedMoveUci, sideToMove) {
 
     // PRE-MOVE result: missed_capture — a winning capture was available but not taken
     if (missedCapture) return 'missed_capture';
+
+    // POST-MOVE: overloaded_defender — a single player piece is sole guardian of 2+ attacked pieces
+    if (_hasOverloadedDefender(chess, playerColor, oppColor)) return 'overloaded_defender';
 
     return null;
   } catch {
@@ -142,4 +146,21 @@ function _hasBackRank(chess, playerColor, oppColor) {
     }
   }
   return false;
+}
+
+function _hasOverloadedDefender(chess, playerColor, oppColor) {
+  // Count how many attacked player pieces each player piece solely defends.
+  const soloGuardCount = {};
+  for (const row of chess.board()) {
+    for (const cell of row) {
+      if (!cell || cell.color !== playerColor) continue;
+      if (!chess.isAttacked(cell.square, oppColor)) continue;
+      const defenders = chess.attackers(cell.square, playerColor);
+      if (defenders.length === 1) {
+        const def = defenders[0];
+        soloGuardCount[def] = (soloGuardCount[def] || 0) + 1;
+      }
+    }
+  }
+  return Object.values(soloGuardCount).some(n => n >= 2);
 }

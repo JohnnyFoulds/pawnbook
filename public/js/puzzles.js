@@ -18,6 +18,7 @@ const MOTIF_EXPLANATION = {
   back_rank: 'Your king was left on the back rank without an escape square — the opponent\'s rook or queen can deliver a back-rank mate.',
   missed_capture: 'There was a piece you could capture for free or at a material gain — scanning for loose opponent pieces before moving is worth the habit.',
   fork: 'After this move, the opponent\'s piece attacked two of your pieces at once. Look for knights and diagonals that can create double threats.',
+  overloaded_defender: 'One of your pieces was carrying two defensive jobs at once. When a single piece guards two targets, the opponent can pick one off and the overloaded guardian can only save the other.',
 };
 
 /**
