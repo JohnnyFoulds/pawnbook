@@ -41,7 +41,7 @@ function buildApp({
   app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }));
   app.use('/api/stats',     statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }));
   app.use('/api/games',     gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }));
-  app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }));
+  app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo, gameRepo }));
   app.use('/api/debug',     debugRouter({ gameRepo }));
   app.use(errorMiddleware);
   return { app, gameRepo, puzzleRepo, settingsRepo, clock, scheduler };
@@ -908,6 +908,20 @@ describe('GET /api/puzzles/practice - error path', () => {
   });
 });
 
+// ─── POST /api/puzzles/:id/attempt — activity recording ─────────────────────
+
+describe('POST /api/puzzles/:id/attempt — recordActivity', () => {
+  it('records review activity on the gameRepo after a drill attempt', async () => {
+    const { app, puzzleRepo, gameRepo } = buildApp();
+    const puzzleId = addPuzzle(puzzleRepo, { acceptedMovesJson: '["e7e5"]', followupUci: null });
+    puzzleRepo.saveCard({ puzzleId, due: NOW - 1000, graduated: false, reps: 1, lapses: 0 });
+    await request(app)
+      .post(`/api/puzzles/${puzzleId}/attempt`)
+      .send({ move: 'e7e5', msTaken: 5000, hintUsed: false, attemptNo: 1, phase: 'drill' });
+    expect(gameRepo.getStreak(NOW)).toBe(1);
+  });
+});
+
 // ─── POST /api/puzzles/:id/attempt — saveReview error path ───────────────────
 
 describe('POST /api/puzzles/:id/attempt - saveReview error path', () => {
@@ -1174,17 +1188,18 @@ describe('POST /api/debug/reset', () => {
 // ─── GET /api/state — inner and outer catch branches ─────────────────────────
 
 describe('GET /api/state — catch branch coverage', () => {
-  it('inner catch: streak falls back to 0 when streak_cache.get throws (state.js line 34-35)', async () => {
-    const settingsRepo = new InMemorySettingsRepository();
-    const origGet = settingsRepo.get.bind(settingsRepo);
-    settingsRepo.get = (key) => {
-      if (key === 'streak_cache') throw new Error('db error on streak_cache');
-      return origGet(key);
-    };
-    const { app } = buildApp({ settingsRepo });
+  it('streak is 0 when no activity has been recorded', async () => {
+    const { app } = buildApp();
     const res = await request(app).get('/api/state');
     expect(res.status).toBe(200);
     expect(res.body.streak).toBe(0);
+  });
+
+  it('streak is 1 when activity was recorded today', async () => {
+    const { app, gameRepo } = buildApp();
+    gameRepo.recordActivity(NOW, 'review');
+    const res = await request(app).get('/api/state');
+    expect(res.body.streak).toBe(1);
   });
 
   it('outer catch: returns 500 when settingsRepo.get("elo") throws (state.js line 85-86)', async () => {

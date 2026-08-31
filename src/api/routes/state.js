@@ -28,12 +28,7 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
       const dueCards = puzzleRepo.getDueCards(now);
       const dueCount = dueCards.length;
 
-      let streak = 0;
-      try {
-        streak = parseInt(settingsRepo.get('streak_cache') ?? '0', 10);
-      } catch {
-        streak = 0;
-      }
+      const streak = gameRepo.getStreak?.(now) ?? 0;
 
       const eloHistory = gameRepo.getEloHistory();
       const eloDelta = eloHistory.length >= 2

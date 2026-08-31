@@ -80,7 +80,7 @@ async function start() {
   // REST routes
   app.use('/api/opponents', opponentsRouter());
   app.use('/api/games',     gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }));
-  app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }));
+  app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo, gameRepo }));
   app.use('/api/stats',     statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }));
   app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }));
   app.use('/api/repertoire', makeRepertoireRouter({ repertoireRepo }));
