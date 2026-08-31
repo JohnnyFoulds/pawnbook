@@ -85,6 +85,7 @@ function renderStyleTile(stats) {
 
 function renderAll(stats, state) {
   renderEloTile(stats, state);
+  renderStreakTile(state);
   renderStyleTile(stats);
   renderRetiredTile(stats);
   renderResultsTile(stats);
@@ -94,6 +95,17 @@ function renderAll(stats, state) {
   renderFocusCard(stats);
   renderWeaknessTile(stats);
   renderQualityMix(stats);
+}
+
+function renderStreakTile(state) {
+  const tile = document.getElementById('streak-tile');
+  const valEl = document.getElementById('streak-val');
+  const pluralEl = document.getElementById('streak-plural');
+  const streak = state.streak ?? 0;
+  if (!state.showStreak || streak < 1) { tile.style.display = 'none'; return; }
+  tile.style.display = '';
+  valEl.textContent = String(streak);
+  if (pluralEl) pluralEl.textContent = streak === 1 ? '' : 's';
 }
 
 function renderFocusCard(stats) {

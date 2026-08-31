@@ -31,9 +31,10 @@ const AttemptSchema = z.object({
  * @param {import('../../ports/scheduler.js').Scheduler} deps.scheduler
  * @param {import('../../ports/clock.js').Clock} deps.clock
  * @param {import('../../ports/repositories.js').SettingsRepository} deps.settingsRepo
+ * @param {import('../../ports/repositories.js').GameRepository} [deps.gameRepo]
  * @returns {Router}
  */
-export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _settingsRepo }) {
+export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _settingsRepo, gameRepo }) {
   const router = Router();
 
   router.get('/due', (req, res, next) => {
@@ -127,6 +128,8 @@ export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _set
       } catch (err) {
         log.warn({ err, puzzleId: req.params.id }, 'failed to save review row — verdict still returned');
       }
+
+      gameRepo?.recordActivity?.(clock.now().getTime(), 'review');
 
       // Current card state after scheduling (for nextDue)
       const updatedCard = puzzleRepo.getCard(req.params.id);
