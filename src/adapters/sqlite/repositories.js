@@ -552,6 +552,21 @@ export class SqlitePuzzleRepository {
     `).all(now);
   }
 
+  /** @returns {Array<{motifTag: string, total: number, correct: number}>} */
+  getMotifDrillAccuracy() {
+    return this._db.prepare(`
+      SELECT p.motif_tag as motifTag,
+        COUNT(*) as total,
+        SUM(r.correct) as correct
+      FROM reviews r
+      JOIN puzzles p ON p.id = r.puzzle_id
+      WHERE p.motif_tag IS NOT NULL
+        AND r.attempt_no = 1
+        AND r.practice = 0
+      GROUP BY p.motif_tag
+    `).all();
+  }
+
   /**
    * @param {string} gameId
    * @returns {object[]}

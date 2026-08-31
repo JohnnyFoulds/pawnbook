@@ -126,6 +126,12 @@
  * @returns {void}
  */
 
+/**
+ * @function
+ * @name PuzzleRepository#getMotifDrillAccuracy
+ * @returns {Array<{motifTag: string, total: number, correct: number}>}
+ */
+
 // ────────────────────────────────────────────────────────────────
 
 /**

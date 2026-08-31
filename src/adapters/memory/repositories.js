@@ -335,6 +335,21 @@ export class InMemoryPuzzleRepository {
     }
     return results.sort((a, b) => (b.instructiveness ?? 0) - (a.instructiveness ?? 0));
   }
+
+  getMotifDrillAccuracy() {
+    const reviews = this._reviews ?? [];
+    const agg = {};
+    for (const r of reviews) {
+      if (r.practice || r.attemptNo !== 1) continue;
+      const puzzle = this._puzzles.get(r.puzzleId);
+      const tag = puzzle?.motifTag ?? null;
+      if (!tag) continue;
+      if (!agg[tag]) agg[tag] = { motifTag: tag, total: 0, correct: 0 };
+      agg[tag].total++;
+      if (r.correct) agg[tag].correct++;
+    }
+    return Object.values(agg);
+  }
 }
 
 export class InMemorySettingsRepository {
