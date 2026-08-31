@@ -35,7 +35,7 @@ Each `recentGames` item:
 |---|---|---|
 | `id` | string | Game UUID |
 | `opponentId` | string | Opponent identifier |
-| `result` | `'white'` \| `'black'` \| `'draw'` | Game result |
+| `result` | `'win'` \| `'loss'` \| `'draw'` | Game result from the player's perspective |
 | `accuracy` | number | Player accuracy (1–100) |
 | `puzzleCount` | integer | Drillable puzzles extracted |
 | `playedAt` | string | ISO 8601 timestamp |
@@ -56,7 +56,7 @@ Each `recentGames` item:
     {
       "id": "a1b2c3d4-...",
       "opponentId": "maia-1400",
-      "result": "white",
+      "result": "win",
       "accuracy": 74.3,
       "puzzleCount": 3,
       "playedAt": "2026-08-31T09:12:00.000Z"
@@ -104,7 +104,7 @@ Returns the 50 most recent games, newest first.
 |---|---|---|
 | `id` | string | Game UUID |
 | `opponentId` | string | Opponent identifier |
-| `result` | string | `'white'`, `'black'`, or `'draw'` |
+| `result` | string | `'win'`, `'loss'`, or `'draw'` (player's perspective) |
 | `accuracy` | number \| null | Player accuracy 1–100; null if analysis pending |
 | `strengthElo` | integer \| null | Player strength estimate for this game |
 | `opponentStrengthElo` | integer \| null | Engine strength estimate for this game |
@@ -120,7 +120,7 @@ Returns the 50 most recent games, newest first.
     {
       "id": "a1b2c3d4-e5f6-...",
       "opponentId": "maia-1400",
-      "result": "white",
+      "result": "win",
       "accuracy": 74.3,
       "strengthElo": 1521,
       "opponentStrengthElo": 1388,
@@ -332,7 +332,7 @@ Aggregate lifetime statistics.
 
 Returns the full repertoire book as a directed acyclic graph.
 
-**Response**: `{ nodes[] }` — each node represents a position (keyed by EPD) and includes its associated moves with roles, observation counts, and scores.
+**Response**: `{ nodes[], lineBudget }` — `nodes` is the list of position objects (keyed by EPD), each including its associated moves with roles, observation counts, and scores. `lineBudget` is the maximum number of lines the book will track (configured balance parameter).
 
 ### GET /api/repertoire/challenges
 
@@ -346,7 +346,7 @@ Returns the deviation log filtered to alerted entries (`alerted_kept`, `alerted_
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `limit` | integer | `200` | Maximum entries to return (max 200) |
+| `limit` | integer | `200` | Maximum entries to return (max 500) |
 
 **Response**
 
@@ -367,7 +367,7 @@ The book change feed — all role transitions and promotions.
 |---|---|---|---|
 | `limit` | integer | `50` | Maximum entries (max 200) |
 
-Entries are enriched with `fromSan` and `toSan` (UCI → SAN conversion). Each entry has a `reversible` flag indicating whether the `/reverse` endpoint can undo it.
+Entries are enriched with `fromSan` and `toSan` (UCI → SAN conversion).
 
 **Changelog event kinds**: `promote`, `retire`, `confirm`, `refuse`, `settle`, `reverse`, `elect`, `quarantine_exit`
 
@@ -409,7 +409,7 @@ Timeline, cumulative growth series, and milestones derived from up to 500 most r
 
 Opponent replies with significant Maia reach probability but no book coverage — positions where you are likely to encounter a move you have not studied.
 
-**Response**: array sorted by `reachProbability` descending. Each entry includes the EPD, the opponent move, and the estimated reach probability.
+**Response**: `{ gaps }` — `gaps` is an array sorted by `reachProbability` descending. Each entry includes the EPD, the opponent move, and the estimated reach probability.
 
 ---
 
