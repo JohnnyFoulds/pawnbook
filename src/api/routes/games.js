@@ -123,6 +123,7 @@ export function gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }) 
         opponentStrengthSe,
         rollingStrength,
         rollingSe,
+        maia3LogProb: game.maia3LogProb ?? null,
         eloBefore: game.eloBefore,
         eloAfter: game.eloAfter,
         moves,

@@ -201,6 +201,33 @@ describe('GET /api/stats', () => {
     expect(res.body.dimensionBreakdown).toEqual({});
   });
 
+  it('returns rollingStyleScore as geometric-mean-probability % over recent games', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    // Two finished games with maia3LogProb; one without
+    gameRepo.save({ id: randomUUID(), opponentId: 'sf-1400', opponentElo: 1400, playerColor: 'white', ranked: true,
+      status: 'finished', result: 'win', termination: 'checkmate', maia3LogProb: -2.0 });
+    gameRepo.save({ id: randomUUID(), opponentId: 'sf-1400', opponentElo: 1400, playerColor: 'white', ranked: true,
+      status: 'finished', result: 'loss', termination: 'checkmate', maia3LogProb: -1.0 });
+    gameRepo.save({ id: randomUUID(), opponentId: 'sf-1400', opponentElo: 1400, playerColor: 'white', ranked: true,
+      status: 'finished', result: 'win', termination: 'checkmate' }); // no maia3LogProb
+    const res = await request(makeStatsApp(gameRepo, new InMemoryPuzzleRepository(), new InMemorySettingsRepository()))
+      .get('/api/stats');
+    expect(res.status).toBe(200);
+    // mean of exp(-2.0) and exp(-1.0) scaled to %, rounded
+    const expected = Math.round(100 * (Math.exp(-2.0) + Math.exp(-1.0)) / 2);
+    expect(res.body.rollingStyleScore).toBe(expected);
+  });
+
+  it('returns rollingStyleScore as null when no games have maia3LogProb', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    gameRepo.save({ id: randomUUID(), opponentId: 'sf-1400', opponentElo: 1400, playerColor: 'white', ranked: true,
+      status: 'finished', result: 'win', termination: 'checkmate' });
+    const res = await request(makeStatsApp(gameRepo, new InMemoryPuzzleRepository(), new InMemorySettingsRepository()))
+      .get('/api/stats');
+    expect(res.status).toBe(200);
+    expect(res.body.rollingStyleScore).toBeNull();
+  });
+
   it('includes gameHistory for finished games', async () => {
     const gameRepo = new InMemoryGameRepository();
     gameRepo.save({ id: randomUUID(), opponentId: 'maia-1100', opponentElo: 1100, playerColor: 'white', ranked: true, status: 'finished', result: 'win', termination: 'checkmate', playedAt: Date.now() });

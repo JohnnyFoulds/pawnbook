@@ -80,6 +80,14 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         if (dim) dimensionBreakdown[dim] = (dimensionBreakdown[dim] || 0) + n;
       }
 
+      // Rolling style score — geometric mean probability (%) over last 10 games with maia3LogProb
+      const styleGames = games
+        .filter(g => g.status === 'finished' && g.maia3LogProb != null)
+        .slice(0, 10);
+      const rollingStyleScore = styleGames.length > 0
+        ? Math.round(100 * styleGames.reduce((s, g) => s + Math.exp(g.maia3LogProb), 0) / styleGames.length)
+        : null;
+
       // Quality mix from move_evals (all 7 tiers across all player moves)
       const moveClassifications = gameRepo.getPlayerMoveClassifications?.() ?? [];
       const qualityMix = {};
@@ -109,6 +117,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         motifBreakdown,
         mistakesByMotif,
         dimensionBreakdown,
+        rollingStyleScore,
       });
     } catch (err) {
       next(err);
