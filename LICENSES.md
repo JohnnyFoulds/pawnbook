@@ -42,6 +42,7 @@ The engines are spoken to over UCI on stdin/stdout — an arm's-length arrangeme
 to every other chess GUI. GPL-3 does not reach across a process boundary of this kind,
 so `pawnbook`'s own source stays MIT.
 
-**The built Docker image is a GPL-3 combined work.** It is not published to any registry.
-If it were published, the offer-of-source obligation under GPL-3 section 6 would attach.
-This note is here to keep that decision visible rather than accidental.
+**The built Docker image is a GPL-3 combined work.** It is published to Docker Hub as
+`johannesfoulds/pawnbook`. The GPL-3 section 6 offer-of-source obligation is satisfied by
+pointing to the upstream repositories listed in the table above — each engine is compiled
+from source at Docker build time and none are modified.
