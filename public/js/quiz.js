@@ -137,7 +137,7 @@ function loadPosition(idx) {
   initBoard(pos.fen, pos.sideToMove, pos.playedMoveUci);
 }
 
-async function initBoard(fen, sideToMove, playedMoveUci) {
+async function initBoard(fen, sideToMove, playedMoveUci, lastMove = null) {
   const el = document.getElementById('board-wrap');
   if (!el) return;
   el.innerHTML = '';
@@ -154,14 +154,17 @@ async function initBoard(fen, sideToMove, playedMoveUci) {
     onMove: ({ from, to }) => submitMove(from + to),
     getLegalMoves: () => currentLegalMoves,
   });
-  // Defer arrow to next animation frame so the board SVG has been laid out
-  // and squareWidth/squareHeight are non-zero before addArrow tries to render.
-  if (playedMoveUci && playedMoveUci.length >= 4) {
-    const b = currentBoard;
-    const from = playedMoveUci.slice(0, 2);
-    const to = playedMoveUci.slice(2, 4);
-    requestAnimationFrame(() => b.showArrow(from, to, 'danger'));
-  }
+  // Defer annotations to next RAF so the board SVG is laid out and
+  // squareWidth/squareHeight are non-zero before arrows/markers render.
+  const b = currentBoard;
+  requestAnimationFrame(() => {
+    if (lastMove) {
+      b.showLastMove(lastMove.from, lastMove.to);
+    }
+    if (playedMoveUci && playedMoveUci.length >= 4) {
+      b.showArrow(playedMoveUci.slice(0, 2), playedMoveUci.slice(2, 4), 'danger');
+    }
+  });
 }
 
 async function submitMove(uci) {
@@ -227,7 +230,7 @@ async function showFeedback(result) {
       const promo = pos.bestMoveUci[4];
       chess.move({ from, to, ...(promo ? { promotion: promo } : {}) });
       const newSide = pos.sideToMove === 'white' ? 'black' : 'white';
-      await initBoard(chess.fen(), newSide);
+      await initBoard(chess.fen(), newSide, null, { from, to });
       return;
     }
 

@@ -147,6 +147,14 @@ export async function createBoard(el, Chessboard, opts = {}) {
     clearMarkers() {
       board.removeMarkers();
     },
+    /**
+     * Highlight the two squares of the last move played (frame markers).
+     * Does not reset the board position.
+     */
+    showLastMove(from, to) {
+      board.addMarker(MARKER_TYPE.framePrimary, from);
+      board.addMarker(MARKER_TYPE.framePrimary, to);
+    },
     /** Show check marker on a square. */
     showCheck(square) {
       board.addMarker(MARKER_TYPE.frameDanger, square);
