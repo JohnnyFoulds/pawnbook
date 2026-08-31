@@ -133,6 +133,25 @@ function renderAccuracyTrendTile(stats) {
   }
 }
 
+function renderOpponentStats(stats) {
+  const card = document.getElementById('opponent-stats-card');
+  const rows = stats.opponentStats ?? [];
+  if (!rows.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('opponent-stats-body').innerHTML = rows.map(o => {
+    const winPct = o.played > 0 ? Math.round(100 * o.won / o.played) : 0;
+    const accCell = o.avgAccuracy != null ? `${o.avgAccuracy}%` : '—';
+    return `<tr>
+      <td>${o.opponentId}</td>
+      <td class="num">${o.played}</td>
+      <td class="num" style="color:var(--good)">${o.won}</td>
+      <td class="num" style="color:var(--bad)">${o.lost}</td>
+      <td class="num">${o.drawn}</td>
+      <td class="num" title="${winPct}% win rate">${accCell}</td>
+    </tr>`;
+  }).join('');
+}
+
 function renderAll(stats, state) {
   renderEloTile(stats, state);
   renderStreakTile(state);
@@ -142,6 +161,7 @@ function renderAll(stats, state) {
   renderStyleTile(stats);
   renderStrengthTile(stats);
   renderRetiredTile(stats);
+  renderOpponentStats(stats);
   renderResultsTile(stats);
   renderQueueHealth(stats, state);
   renderEloChart(stats);

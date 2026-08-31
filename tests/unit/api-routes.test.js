@@ -431,6 +431,28 @@ describe('GET /api/stats', () => {
     const res = await request(app).get('/api/stats');
     expect(res.body.accuracyHistory).toEqual([]);
   });
+
+  it('includes opponentStats with win/loss/draw counts and avgAccuracy per opponent', async () => {
+    const { app, gameRepo } = buildApp();
+    addFinishedGame(gameRepo, { opponentId: 'maia-1500', result: 'win',  accuracy: 80 });
+    addFinishedGame(gameRepo, { opponentId: 'maia-1500', result: 'loss', accuracy: 60 });
+    addFinishedGame(gameRepo, { opponentId: 'sf-1600',   result: 'win',  accuracy: 75 });
+    const res = await request(app).get('/api/stats');
+    const opp = res.body.opponentStats;
+    expect(Array.isArray(opp)).toBe(true);
+    const m1500 = opp.find(o => o.opponentId === 'maia-1500');
+    expect(m1500).toBeDefined();
+    expect(m1500.played).toBe(2);
+    expect(m1500.won).toBe(1);
+    expect(m1500.lost).toBe(1);
+    expect(m1500.avgAccuracy).toBe(70);
+  });
+
+  it('returns empty opponentStats when no finished games exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.opponentStats).toEqual([]);
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────
