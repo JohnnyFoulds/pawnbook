@@ -294,6 +294,14 @@ function showDone() {
   document.getElementById('drill-prompt').textContent = 'Quiz complete.';
   document.getElementById('hint-btn').style.display = 'none';
   document.getElementById('skip-btn').style.display = 'none';
+  const nextWrap = document.getElementById('next-wrap');
+  const gameId = getGameId();
+  nextWrap.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="review.html?game=${gameId}" class="btn btn--ghost">Back to review</a>
+      <a href="puzzles.html" class="btn btn--primary">Go to drill queue →</a>
+    </div>`;
+  nextWrap.style.display = '';
 }
 
 document.getElementById('hint-btn').addEventListener('click', async () => {
