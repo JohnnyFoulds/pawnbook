@@ -89,15 +89,29 @@ describe('roster', () => {
     expect(maia3Ids).toContain('maia-2200');
   });
 
-  it('getAvailableOpponents includes lc0 maia1 entries when weights exist', async () => {
+  it('getAvailableOpponents excludes lc0 maia1 entries when maia3 covers the same Elo', async () => {
     const { existsSync } = await import('fs');
-    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(existsSync).mockReturnValue(true); // both maia3 binary and lc0 weights present
 
     const { getAvailableOpponents } = await import('../../src/domain/game/roster.js');
     const opponents = getAvailableOpponents();
-    const lc0Ids = opponents.filter(o => o.type === 'maia').map(o => o.id);
-    expect(lc0Ids).toContain('maia1-1300');
-    expect(lc0Ids).toContain('maia1-1900');
+    // maia3 available → lc0 duplicates at same Elo must be suppressed
+    expect(opponents.some(o => o.type === 'maia')).toBe(false);
+    expect(opponents.some(o => o.type === 'maia3')).toBe(true);
+  });
+
+  it('getAvailableOpponents includes lc0 maia1 entries when maia3 binary is absent', async () => {
+    const { existsSync } = await import('fs');
+    vi.mocked(existsSync).mockImplementation((p) => {
+      // maia3 binary missing (path contains 'maia3'), lc0 weights present
+      if (typeof p === 'string' && p.includes('maia3')) return false;
+      return true;
+    });
+
+    const { getAvailableOpponents } = await import('../../src/domain/game/roster.js');
+    const opponents = getAvailableOpponents();
+    expect(opponents.some(o => o.type === 'maia')).toBe(true);
+    expect(opponents.some(o => o.type === 'maia3')).toBe(false);
   });
 
   it('getAvailableOpponents silently excludes optional lc0 entries when weights are missing', async () => {
