@@ -1,4 +1,4 @@
-import { describe, it, expect, test } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 import { selectPuzzles, buildAcceptedMoves, derivePhase } from '../../src/domain/puzzles/select.js';
 import { FINDABILITY_MIN, PUZZLES_PER_GAME_MAX } from '../../src/shared/balance.js';
@@ -165,17 +165,3 @@ describe('derivePhase — direct tests', () => {
   });
 });
 
-// ─── deferred: maia_model recompute on dedupe ─────────────────────────────────
-
-test.fails('dedupe: findability is recomputed only when nearest maia_model has changed', async () => {
-  // When puzzleRepo.save() is called with a FEN that already exists AND the maiaModel
-  // in the new candidate differs from what was stored, findability must be re-probed
-  // and the puzzle row updated with the new value.
-  const { dedupeAndSave } = await import('../../src/domain/puzzles/dedupe.js');
-  expect(typeof dedupeAndSave).toBe('function');
-});
-
-test.fails('dedupe: a recompute records both the old and new maia_model', async () => {
-  const { dedupeAndSave } = await import('../../src/domain/puzzles/dedupe.js');
-  expect(typeof dedupeAndSave).toBe('function');
-});

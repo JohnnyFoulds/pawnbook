@@ -244,6 +244,16 @@ export class InMemoryPuzzleRepository {
     if (p) p.acceptedMovesJson = acceptedMovesJson;
   }
 
+  updateFindability(id, fields) {
+    const p = this._puzzles.get(id);
+    if (!p) return;
+    p.findability = fields.findability;
+    p.temptation = fields.temptation;
+    p.instructiveness = fields.instructiveness;
+    p.maiaModel = fields.maiaModel;
+    p.policyTemperature = fields.policyTemperature;
+  }
+
   /**
    * Returns true if an opening puzzle for this FEN has been drilled at least once.
    * @param {string} fen

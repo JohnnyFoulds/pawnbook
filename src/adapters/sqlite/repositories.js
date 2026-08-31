@@ -442,6 +442,18 @@ export class SqlitePuzzleRepository {
     this._db.prepare('UPDATE puzzles SET accepted_moves_json = ? WHERE id = ?').run(acceptedMovesJson, id);
   }
 
+  updateFindability(id, fields) {
+    this._db.prepare(`
+      UPDATE puzzles
+      SET findability = ?, temptation = ?, instructiveness = ?,
+          maia_model = ?, policy_temperature = ?
+      WHERE id = ?
+    `).run(
+      fields.findability, fields.temptation, fields.instructiveness,
+      fields.maiaModel, fields.policyTemperature ?? 1.0, id,
+    );
+  }
+
   /**
    * Returns true if an opening puzzle for this FEN has been drilled at least once.
    * @param {string} fen
