@@ -53,7 +53,17 @@ async function init() {
     const streakTile = document.getElementById('tile-streak');
     if (!showStreak && streakTile) streakTile.style.display = 'none';
     if (showStreak) {
-      document.getElementById('streak-value').textContent = String(state.streak ?? 0);
+      const streak = state.streak ?? 0;
+      const bestStreak = state.bestStreak ?? 0;
+      document.getElementById('streak-value').textContent = String(streak);
+      const bestEl = document.getElementById('streak-best');
+      if (bestEl && streak >= 2 && streak >= bestStreak && bestStreak >= 2) {
+        bestEl.textContent = 'Personal best!';
+        bestEl.style.display = '';
+      } else if (bestEl && bestStreak >= 2) {
+        bestEl.textContent = `Best: ${bestStreak}`;
+        bestEl.style.display = '';
+      }
     }
 
     // Suggested opponent

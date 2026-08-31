@@ -29,6 +29,7 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
       const dueCount = dueCards.length;
 
       const streak = gameRepo.getStreak?.(now) ?? 0;
+      const bestStreak = gameRepo.getBestStreak?.() ?? 0;
 
       const eloHistory = gameRepo.getEloHistory();
       const eloDelta = eloHistory.length >= 2
@@ -68,6 +69,7 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
         dueCount,
         showStreak,
         streak,
+        bestStreak,
         activityHistory: gameRepo.getActivityHistory?.(30) ?? [],
         status: 'ok',
         gamesPlayed,

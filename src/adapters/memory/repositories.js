@@ -62,6 +62,20 @@ function _deriveStreak(days, todayKey) {
   return streak;
 }
 
+function _computeBestStreak(sortedDaysAsc) {
+  if (!sortedDaysAsc.length) return 0;
+  let best = 1, current = 1;
+  for (let i = 1; i < sortedDaysAsc.length; i++) {
+    const diff = Math.round(
+      (new Date(sortedDaysAsc[i] + 'T12:00:00') - new Date(sortedDaysAsc[i - 1] + 'T12:00:00'))
+      / 86_400_000,
+    );
+    current = diff === 1 ? current + 1 : 1;
+    if (current > best) best = current;
+  }
+  return best;
+}
+
 export class InMemoryGameRepository {
   constructor() {
     this._games = new Map();
@@ -176,6 +190,11 @@ export class InMemoryGameRepository {
 
   getStreak(todayTimestampMs) {
     return _deriveStreak([...this._activity.keys()], _activityDayKey(todayTimestampMs));
+  }
+
+  getBestStreak() {
+    const days = [...this._activity.keys()].sort();
+    return _computeBestStreak(days);
   }
 
   getActivityHistory(limitDays = 30) {

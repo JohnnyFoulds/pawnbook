@@ -38,6 +38,20 @@ function _deriveStreak(sortedDaysDesc, todayKey) {
   return streak;
 }
 
+function _computeBestStreak(sortedDaysAsc) {
+  if (!sortedDaysAsc.length) return 0;
+  let best = 1, current = 1;
+  for (let i = 1; i < sortedDaysAsc.length; i++) {
+    const diff = Math.round(
+      (new Date(sortedDaysAsc[i] + 'T12:00:00') - new Date(sortedDaysAsc[i - 1] + 'T12:00:00'))
+      / 86_400_000,
+    );
+    current = diff === 1 ? current + 1 : 1;
+    if (current > best) best = current;
+  }
+  return best;
+}
+
 
 /**
  * @param {string} dbPath
@@ -368,6 +382,13 @@ export class SqliteGameRepository {
   getStreak(todayTimestampMs) {
     const rows = this._db.prepare('SELECT day FROM activity ORDER BY day DESC').all();
     return _deriveStreak(rows.map(r => r.day), _activityDayKey(todayTimestampMs));
+  }
+
+  getBestStreak() {
+    const rows = this._db.prepare(
+      'SELECT day FROM activity WHERE games + reviews > 0 ORDER BY day ASC'
+    ).all();
+    return _computeBestStreak(rows.map(r => r.day));
   }
 
   getActivityHistory(limitDays = 30) {
