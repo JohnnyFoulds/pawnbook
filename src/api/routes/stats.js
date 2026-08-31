@@ -5,6 +5,8 @@
 
 import { Router } from 'express';
 
+import { MOTIF_DIMENSION } from '../../domain/analysis/motif-classifier.js';
+
 /**
  * @param {object} deps
  * @param {import('../../ports/repositories.js').GameRepository} deps.gameRepo
@@ -71,6 +73,13 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         mistakesByMotif.push({ motifTag: tag, createdAt: p.created_at ?? p.createdAt ?? null });
       }
 
+      // Dimension breakdown — roll up motifs into skill dimensions
+      const dimensionBreakdown = {};
+      for (const [tag, n] of Object.entries(motifBreakdown)) {
+        const dim = MOTIF_DIMENSION[tag];
+        if (dim) dimensionBreakdown[dim] = (dimensionBreakdown[dim] || 0) + n;
+      }
+
       // Quality mix from move_evals (all 7 tiers across all player moves)
       const moveClassifications = gameRepo.getPlayerMoveClassifications?.() ?? [];
       const qualityMix = {};
@@ -99,6 +108,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         allMoves,
         motifBreakdown,
         mistakesByMotif,
+        dimensionBreakdown,
       });
     } catch (err) {
       next(err);

@@ -64,6 +64,11 @@ const MOTIF_LABEL = {
   missed_capture: 'missed capture',
 };
 
+const DIMENSION_LABEL = {
+  tactics: 'tactics',
+  defense: 'defensive awareness',
+};
+
 function renderAll(stats, state) {
   renderEloTile(stats, state);
   renderRetiredTile(stats);
@@ -197,6 +202,7 @@ function renderPhaseBars(stats) {
 
 function renderWeaknessTile(stats) {
   const card = document.getElementById('weakness-card');
+  const dimEl = document.getElementById('dimension-text');
   const textEl = document.getElementById('weakness-text');
   const barsEl = document.getElementById('weakness-bars');
 
@@ -205,11 +211,28 @@ function renderWeaknessTile(stats) {
   if (!total) { card.style.display = 'none'; return; }
 
   card.style.display = '';
+
+  // Dimension summary line
+  const MOTIF_DIM = { hanging_piece: 'tactics', fork: 'tactics', missed_capture: 'tactics', back_rank: 'defense' };
+  const dimCounts = {};
+  for (const [tag, n] of Object.entries(counts)) {
+    const d = MOTIF_DIM[tag];
+    if (d) dimCounts[d] = (dimCounts[d] || 0) + n;
+  }
+  const dimSorted = Object.entries(dimCounts).sort((a, b) => b[1] - a[1]);
+  if (dimSorted.length) {
+    const [topDim, topDimCount] = dimSorted[0];
+    const dimLabel = DIMENSION_LABEL[topDim] ?? topDim;
+    dimEl.textContent = `${topDimCount} of your ${total} mistake${total === 1 ? '' : 's'} ${topDimCount === 1 ? 'was a' : 'were'} ${dimLabel} problem${topDimCount === 1 ? '' : 's'}.`;
+  } else {
+    dimEl.textContent = '';
+  }
+
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const [topTag, topCount] = sorted[0];
   const label = MOTIF_LABEL[topTag] ?? topTag.replace(/_/g, ' ');
   textEl.textContent =
-    `${topCount} of your last ${total} mistake${total === 1 ? '' : 's'} ${topCount === 1 ? 'was a' : 'were'} ${label} error${topCount === 1 ? '' : 's'}. Keep an eye on these in your drill queue.`;
+    `Top pattern: ${label} (${topCount}). Keep an eye on these in your drill queue.`;
 
   const max = topCount;
   barsEl.innerHTML = sorted.map(([tag, n]) => {

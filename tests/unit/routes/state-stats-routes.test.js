@@ -189,6 +189,7 @@ describe('GET /api/stats', () => {
     expect(res.body.motifBreakdown).toEqual({ hanging_piece: 2, fork: 1 });
     expect(res.body.mistakesByMotif).toHaveLength(3);
     expect(res.body.mistakesByMotif.map(m => m.motifTag).sort()).toEqual(['fork', 'hanging_piece', 'hanging_piece']);
+    expect(res.body.dimensionBreakdown).toEqual({ tactics: 3 });
   });
 
   it('returns empty motifBreakdown when no puzzles are tagged', async () => {
@@ -197,6 +198,7 @@ describe('GET /api/stats', () => {
     expect(res.status).toBe(200);
     expect(res.body.motifBreakdown).toEqual({});
     expect(res.body.mistakesByMotif).toEqual([]);
+    expect(res.body.dimensionBreakdown).toEqual({});
   });
 
   it('includes gameHistory for finished games', async () => {
