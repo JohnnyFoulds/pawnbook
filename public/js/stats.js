@@ -250,15 +250,21 @@ function renderWeaknessTile(stats) {
     `Top pattern: ${label} (${topCount}). &nbsp;<a href="puzzles.html?motif=${encodeURIComponent(topTag)}" style="color:var(--accent);font-size:12px">Drill this →</a>`;
 
   const max = topCount;
+  const accuracy = stats.motifAccuracy ?? {};
   barsEl.innerHTML = sorted.map(([tag, n]) => {
     const lbl = MOTIF_LABEL[tag] ?? tag.replace(/_/g, ' ');
     const pct = (n / max) * 100;
+    const acc = accuracy[tag];
+    const accHtml = acc && acc.total > 0
+      ? `<span style="font-size:11px;color:var(--ink-muted);white-space:nowrap" title="${acc.correct}/${acc.total} first-attempt correct">${Math.round((acc.correct / acc.total) * 100)}%</span>`
+      : '';
     return `<div style="display:flex;align-items:center;gap:12px">
       <div style="width:120px;font-size:13px;color:var(--ink-secondary)">${lbl}</div>
       <div style="flex:1;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">
         <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px"></div>
       </div>
       <div style="width:28px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums">${n}</div>
+      ${accHtml}
       <a href="puzzles.html?motif=${encodeURIComponent(tag)}" style="font-size:11px;color:var(--ink-muted);white-space:nowrap" title="Drill only ${lbl}">drill →</a>
     </div>`;
   }).join('');

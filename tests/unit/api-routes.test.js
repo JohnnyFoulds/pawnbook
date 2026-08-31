@@ -259,6 +259,25 @@ describe('GET /api/stats', () => {
     expect(res.body.graduatedCount).toBe(1);
     expect(res.body.activeCount).toBe(1);
   });
+
+  it('includes motifAccuracy with correct/total per motif from drill reviews', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const pid = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    // Two drill reviews: first correct, second wrong
+    puzzleRepo.saveReview({ puzzleId: pid, correct: true,  attemptNo: 1, practice: 0, reviewedAt: NOW });
+    puzzleRepo.saveReview({ puzzleId: pid, correct: false, attemptNo: 1, practice: 0, reviewedAt: NOW });
+    // Practice review should be excluded
+    puzzleRepo.saveReview({ puzzleId: pid, correct: false, attemptNo: 1, practice: 1, reviewedAt: NOW });
+    const res = await request(app).get('/api/stats');
+    expect(res.body.motifAccuracy).toBeDefined();
+    expect(res.body.motifAccuracy.fork).toEqual({ total: 2, correct: 1 });
+  });
+
+  it('includes motifAccuracy as empty object when no drill reviews exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.motifAccuracy).toEqual({});
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────

@@ -99,6 +99,12 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         createdAt: m.played_at,
       }));
 
+      // Per-motif drill accuracy — first-attempt non-practice reviews
+      const motifAccuracy = {};
+      for (const row of (puzzleRepo.getMotifDrillAccuracy?.() ?? [])) {
+        motifAccuracy[row.motifTag] = { total: row.total, correct: row.correct };
+      }
+
       res.json({
         elo,
         eloDelta,
@@ -118,6 +124,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         mistakesByMotif,
         dimensionBreakdown,
         rollingStyleScore,
+        motifAccuracy,
       });
     } catch (err) {
       next(err);
