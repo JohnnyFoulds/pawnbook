@@ -4,6 +4,7 @@
  */
 
 import { DUE_SOFT_CAP, GRADUATE_REPS, GRADUATE_INTERVAL_D } from '../../shared/balance.js';
+import { MOTIF_DIMENSION } from '../analysis/motif-classifier.js';
 
 /**
  * Check whether a card qualifies for graduation (retirement from active queue).
@@ -32,13 +33,15 @@ export function formatDueCount(dueCount) {
 
 /**
  * Sort due cards: when over the soft cap, sort by instructiveness × overdue-factor,
- * otherwise by due date ascending.
+ * otherwise by due date ascending. An optional weakDimension boosts matching tactical
+ * cards to the front of the tactical group so the player drills their known weak area first.
  *
  * @param {object[]} cards — joined puzzle + fsrs_cards rows
  * @param {Date} now
+ * @param {string|null} [weakDimension] — e.g. 'tactics' or 'defense'
  * @returns {object[]}
  */
-export function sortDueCards(cards, now = new Date()) {
+export function sortDueCards(cards, now = new Date(), weakDimension = null) {
   if (cards.length <= DUE_SOFT_CAP) {
     return cards.slice().sort((a, b) => {
       const da = new Date(a.due).getTime();
@@ -60,6 +63,13 @@ export function sortDueCards(cards, now = new Date()) {
     if (kindA === 'opening' && kindB === 'opening') {
       const reachDiff = (b.reachProb ?? 0) - (a.reachProb ?? 0);
       if (reachDiff !== 0) return reachDiff;
+    }
+
+    // Within the tactical group, boost cards matching the player's weakest dimension
+    if (weakDimension && kindA === 'tactical' && kindB === 'tactical') {
+      const aWeak = MOTIF_DIMENSION[a.motif_tag ?? a.motifTag] === weakDimension;
+      const bWeak = MOTIF_DIMENSION[b.motif_tag ?? b.motifTag] === weakDimension;
+      if (aWeak !== bWeak) return aWeak ? -1 : 1;
     }
 
     const overdueFactor = (card) => {

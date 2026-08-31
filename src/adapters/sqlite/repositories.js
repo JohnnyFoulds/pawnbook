@@ -487,7 +487,7 @@ export class SqlitePuzzleRepository {
   getDueCards(now) {
     return this._db.prepare(`
       SELECT p.id, p.kind, p.fen, p.side_to_move, p.best_move_uci, p.best_move_san,
-        p.accepted_moves_json, p.findability, p.instructiveness, p.tags,
+        p.accepted_moves_json, p.findability, p.instructiveness, p.tags, p.motif_tag,
         f.due, f.stability, f.difficulty, f.reps, f.lapses, f.state, f.graduated
       FROM puzzles p
       JOIN fsrs_cards f ON f.puzzle_id = p.id
