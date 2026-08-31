@@ -122,3 +122,59 @@ describe('engine pool: maia3 routing', () => {
     ).rejects.toThrow(/Unknown opponent type/);
   });
 });
+
+describe('engine pool: maia3 policy client', () => {
+  let pool;
+  let mockClient;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClient = makeMockClient('e2e4');
+    vi.mocked(createUciEngineClient).mockResolvedValue(mockClient);
+    pool = createEnginePool();
+  });
+
+  it('getMaia3PolicyClient returns a client', async () => {
+    const client = await pool.getMaia3PolicyClient();
+    expect(client).toBeDefined();
+  });
+
+  it('getMaia3PolicyClient sets Temperature 1.0 on first init', async () => {
+    await pool.getMaia3PolicyClient();
+    const tempCall = mockClient._calls.setOption.find(c => c.name === 'Temperature');
+    expect(tempCall).toBeDefined();
+    expect(tempCall.value).toBe('1.0');
+  });
+
+  it('getMaia3PolicyClient sets VerboseMoveStats true on first init', async () => {
+    await pool.getMaia3PolicyClient();
+    const vmsCall = mockClient._calls.setOption.find(c => c.name === 'VerboseMoveStats');
+    expect(vmsCall).toBeDefined();
+    expect(vmsCall.value).toBe('true');
+  });
+
+  it('getMaia3PolicyClient uses a separate pool key from game-play maia3', async () => {
+    // Request a game-play move (uses key 'maia3') then getMaia3PolicyClient (uses 'maia3-policy')
+    await pool.requestMove({ opponent: { id: 'maia-1300', elo: 1300, type: 'maia3' }, fen: START_FEN });
+    vi.clearAllMocks();
+    const secondClient = makeMockClient('d2d4');
+    vi.mocked(createUciEngineClient).mockResolvedValue(secondClient);
+    await pool.getMaia3PolicyClient();
+    // A new spawn was required because 'maia3-policy' was not in pool
+    expect(createUciEngineClient).toHaveBeenCalledOnce();
+  });
+
+  it('getMaia3PolicyClient reuses the policy client across calls', async () => {
+    await pool.getMaia3PolicyClient();
+    vi.clearAllMocks();
+    await pool.getMaia3PolicyClient();
+    expect(createUciEngineClient).not.toHaveBeenCalled();
+  });
+
+  it('getMaia3PolicyClient passes --cache-dir and --local-files-only', async () => {
+    await pool.getMaia3PolicyClient();
+    const [, args] = vi.mocked(createUciEngineClient).mock.calls[0];
+    expect(args).toContain('--local-files-only');
+    expect(args.some(a => a.includes('maia3'))).toBe(true);
+  });
+});

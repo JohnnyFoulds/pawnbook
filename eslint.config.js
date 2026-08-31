@@ -6,7 +6,7 @@ import security from 'eslint-plugin-security';
 export default [
   js.configs.recommended,
   {
-    ignores: ['node_modules/', 'coverage/', 'public/js/lib/'],
+    ignores: ['node_modules/', 'coverage/', 'public/js/lib/', 'site/.vitepress/dist/'],
   },
   // Node.js: server, tui, tests, scripts
   {

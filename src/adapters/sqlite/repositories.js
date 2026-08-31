@@ -64,7 +64,7 @@ export class SqliteGameRepository {
         clock_white_ms, clock_black_ms,
         result, termination, pgn, played_at,
         elo_before, elo_after, accuracy, opponent_accuracy,
-        strength_elo, opponent_strength_elo,
+        strength_elo, opponent_strength_elo, maia3_log_prob,
         analysis_state, analysis_error, analysed_at
       ) VALUES (
         @id, @started_at, @opponent_id, @opponent_elo, @player_color,
@@ -72,7 +72,7 @@ export class SqliteGameRepository {
         @clock_white_ms, @clock_black_ms,
         @result, @termination, @pgn, @played_at,
         @elo_before, @elo_after, @accuracy, @opponent_accuracy,
-        @strength_elo, @opponent_strength_elo,
+        @strength_elo, @opponent_strength_elo, @maia3_log_prob,
         @analysis_state, @analysis_error, @analysed_at
       )
       ON CONFLICT(id) DO UPDATE SET
@@ -89,6 +89,7 @@ export class SqliteGameRepository {
         opponent_accuracy     = excluded.opponent_accuracy,
         strength_elo          = excluded.strength_elo,
         opponent_strength_elo = excluded.opponent_strength_elo,
+        maia3_log_prob        = excluded.maia3_log_prob,
         analysis_state        = excluded.analysis_state,
         analysis_error   = excluded.analysis_error,
         analysed_at      = excluded.analysed_at
@@ -116,6 +117,7 @@ export class SqliteGameRepository {
       opponent_accuracy: game.opponentAccuracy ?? null,
       strength_elo: game.strengthElo ?? null,
       opponent_strength_elo: game.opponentStrengthElo ?? null,
+      maia3_log_prob: game.maia3LogProb ?? null,
       analysis_state: game.analysisState ?? 'pending',
       analysis_error: game.analysisError ?? null,
       analysed_at: game.analysedAt ?? null,
@@ -303,6 +305,7 @@ export class SqliteGameRepository {
       opponentAccuracy: row.opponent_accuracy,
       strengthElo: row.strength_elo ?? null,
       opponentStrengthElo: row.opponent_strength_elo ?? null,
+      maia3LogProb: row.maia3_log_prob ?? null,
       analysisState: row.analysis_state,
       analysisError: row.analysis_error ?? null,
       analysedAt: row.analysed_at,

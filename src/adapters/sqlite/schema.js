@@ -16,6 +16,7 @@ export function applySchema(db) {
   try { db.exec('ALTER TABLE games ADD COLUMN strength_elo INTEGER'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE games ADD COLUMN opponent_strength_elo INTEGER'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE games ADD COLUMN coach_enabled INTEGER NOT NULL DEFAULT 1'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE games ADD COLUMN maia3_log_prob REAL'); } catch { /* already exists */ }
 
   // Phase 29: extend rep_changelog.kind CHECK to include 'elect' and 'quarantine_exit'.
   // If the old constraint is in place, rebuild the table (safe: data/chess.db has 0 rows).
@@ -157,6 +158,7 @@ export function applySchema(db) {
       opponent_accuracy      REAL,
       strength_elo           INTEGER,
       opponent_strength_elo  INTEGER,
+      maia3_log_prob         REAL,
       analysis_state         TEXT NOT NULL DEFAULT 'pending'
                                CHECK(analysis_state IN ('pending','running','done','failed')),
       analysis_error         TEXT,
