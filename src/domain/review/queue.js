@@ -55,9 +55,11 @@ export function sortDueCards(cards, now = new Date()) {
     if (kindA === 'opening' && kindB !== 'opening') return -1;
     if (kindA !== 'opening' && kindB === 'opening') return 1;
 
-    // Within the opening group, sort by reach probability descending (FR-REP-DRILL-5)
+    // Within the opening group, sort by reach probability descending (FR-REP-DRILL-5);
+    // fall through to instructiveness × overdue tiebreak when reach is equal or unknown.
     if (kindA === 'opening' && kindB === 'opening') {
-      return (b.reachProb ?? 0) - (a.reachProb ?? 0);
+      const reachDiff = (b.reachProb ?? 0) - (a.reachProb ?? 0);
+      if (reachDiff !== 0) return reachDiff;
     }
 
     const overdueFactor = (card) => {

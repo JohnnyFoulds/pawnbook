@@ -98,7 +98,7 @@ export async function analyseGame({
   let sfClient, maiaClient;
   try {
     sfClient = await _acquireWithRetry(() => enginePool.getAnalysisSfClient());
-    maiaClient = maiaModel ? await enginePool.getMaiaAnalysisClient(maiaModel) : null;
+    maiaClient = maiaModel ? await _acquireWithRetry(() => enginePool.getMaiaAnalysisClient(maiaModel)) : null;
   } catch (err) {
     log.error({ err, gameId }, 'failed to start analysis engines');
     span?.recordException(err);

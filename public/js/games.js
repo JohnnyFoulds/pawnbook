@@ -27,7 +27,7 @@ async function retryAnalysis(id, btn) {
   btn.textContent = '…';
   try {
     await api(`/api/games/${id}/analyse`, { method: 'POST' });
-    btn.textContent = 'Queued';
+    boot();
   } catch {
     btn.textContent = 'Failed';
     btn.disabled = false;
