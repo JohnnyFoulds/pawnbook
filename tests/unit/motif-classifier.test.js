@@ -83,6 +83,24 @@ describe('classifyMotif', () => {
     expect(classifyMotif(fen, 'a1a2', 'white')).toBe(null);
   });
 
+  // ── pinned_piece ──────────────────────────────────────────────────────────
+
+  it('detects pinned_piece — black bishop pins white knight against white queen', () => {
+    // Black Bb2 looks along NE diagonal: c3(empty) → d4(Nd4) → e5(empty) → f6(Qf6).
+    // Nd4 is pinned against Qf6 (value 9 > 3). White plays h1-h2. After move:
+    // hanging_piece: Nd4 attacked by Bb2, defended by Qf6 → not hanging.
+    // pinned_piece: first white on Bb2's NE ray = Nd4, second = Qf6 → fires.
+    const fen = 'k7/8/5Q2/8/3N4/8/1b6/7K w - - 0 1';
+    expect(classifyMotif(fen, 'h1h2', 'white')).toBe('pinned_piece');
+  });
+
+  it('pinned_piece does not fire when pieces are not aligned on a slider ray', () => {
+    // White Re4 defends Nd4 (prevents hanging_piece). Qf5 is NOT on Bb2\'s NE diagonal,
+    // so no pin exists. White plays h1-h2 → null.
+    const fen = 'k7/8/8/5Q2/3NR3/8/1b6/7K w - - 0 1';
+    expect(classifyMotif(fen, 'h1h2', 'white')).toBe(null);
+  });
+
   // ── back_rank ─────────────────────────────────────────────────────────────
 
   it('detects back_rank — king on back rank loses luft pawn, opponent has rook', () => {

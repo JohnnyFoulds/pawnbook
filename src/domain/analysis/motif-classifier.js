@@ -14,6 +14,7 @@ export const MOTIF_DIMENSION = {
   missed_capture: 'tactics',
   back_rank: 'defense',
   overloaded_defender: 'defense',
+  pinned_piece: 'tactics',
 };
 
 /**
@@ -23,7 +24,7 @@ export const MOTIF_DIMENSION = {
  * @param {string} fen - FEN before the move
  * @param {string} playedMoveUci - UCI string of the move played (e.g. 'e2e4', 'e7e8q')
  * @param {'white'|'black'} sideToMove
- * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|'overloaded_defender'|null}
+ * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|'overloaded_defender'|'pinned_piece'|null}
  */
 export function classifyMotif(fen, playedMoveUci, sideToMove) {
   if (!fen || !playedMoveUci || !sideToMove) return null;
@@ -79,6 +80,9 @@ export function classifyMotif(fen, playedMoveUci, sideToMove) {
 
     // POST-MOVE: overloaded_defender — a single player piece is sole guardian of 2+ attacked pieces
     if (_hasOverloadedDefender(chess, playerColor, oppColor)) return 'overloaded_defender';
+
+    // POST-MOVE: pinned_piece — opponent slider pins a player piece against a more valuable one behind
+    if (_hasPinnedPiece(chess, playerColor, oppColor)) return 'pinned_piece';
 
     return null;
   } catch {
@@ -163,4 +167,51 @@ function _hasOverloadedDefender(chess, playerColor, oppColor) {
     }
   }
   return Object.values(soloGuardCount).some(n => n >= 2);
+}
+
+// Ray directions: rooks use rank/file, bishops use diagonals, queens use all.
+const _RAY_DIRS = {
+  r: [[0, 1], [0, -1], [1, 0], [-1, 0]],
+  b: [[1, 1], [1, -1], [-1, 1], [-1, -1]],
+  q: [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]],
+};
+
+function _hasPinnedPiece(chess, playerColor, oppColor) {
+  const board = chess.board();
+  for (const row of board) {
+    for (const cell of row) {
+      if (!cell || cell.color !== oppColor) continue;
+      const dirs = _RAY_DIRS[cell.type];
+      if (!dirs) continue; // skip non-sliders (p, n, k)
+      const fileIdx = cell.square.charCodeAt(0) - 97; // 'a'=0 … 'h'=7
+      const rankIdx = parseInt(cell.square[1], 10) - 1; // '1'=0 … '8'=7
+      for (const [df, dr] of dirs) {
+        let f = fileIdx + df;
+        let r = rankIdx + dr;
+        let first = null;
+        while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+          const sq = String.fromCharCode(97 + f) + (r + 1);
+          const piece = chess.get(sq);
+          if (piece) {
+            if (piece.color === playerColor) {
+              if (first === null) {
+                first = piece; // potential pinned piece
+              } else {
+                // second player piece on this ray
+                if ((PIECE_VALUE[piece.type] ?? 0) > (PIECE_VALUE[first.type] ?? 0)) {
+                  return true; // first is pinned against piece
+                }
+                break; // second player piece found, no deeper ray needed
+              }
+            } else {
+              break; // opponent piece blocks this ray
+            }
+          }
+          f += df;
+          r += dr;
+        }
+      }
+    }
+  }
+  return false;
 }

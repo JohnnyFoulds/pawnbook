@@ -17,6 +17,7 @@ const MOTIF_EXPLANATION = {
   missed_capture: 'There was a piece you could capture for free or at a material gain — scanning for loose opponent pieces before moving is worth the habit.',
   fork: 'After this move, the opponent\'s piece attacked two of your pieces at once. Look for knights and diagonals that can create double threats.',
   overloaded_defender: 'One of your pieces was carrying two defensive jobs at once. When a single piece guards two targets, the opponent can pick one off and the overloaded guardian can only save the other.',
+  pinned_piece: 'After this move one of your pieces was pinned — it was stuck in place because moving it would expose a more valuable piece behind it to capture.',
 };
 
 async function computeThreatExplanation(fen, playedMoveSan, sideToMove) {
