@@ -92,12 +92,12 @@ function renderLineHealth() {
     const ply = n.minPly ?? 0;
     const moveLabel = ply ? `move ${Math.ceil(ply / 2)}` : 'root';
     const side = SIDE_LABEL[n.side] ?? n.side;
-    return `<div style="display:flex;align-items:center;gap:8px">
-      <div style="width:80px;height:6px;background:var(--surface-raised,#eee);border-radius:3px;overflow:hidden;flex-shrink:0">
+    return `<div style="display:flex;align-items:center;gap:8px;min-width:0">
+      <div style="width:80px;height:6px;background:var(--surface-raised,#333);border-radius:3px;overflow:hidden;flex-shrink:0">
         <div style="height:100%;width:${pct}%;background:${color};border-radius:3px"></div>
       </div>
-      <span style="color:${color};font-size:11px;flex-shrink:0;width:32px">−${loss}</span>
-      <span style="color:var(--ink-muted);font-size:11px;flex-shrink:0">${side} ${moveLabel}</span>
+      <span style="color:${color};font-size:11px;flex-shrink:0;width:44px;text-align:right">−${loss.toFixed(1)}</span>
+      <span style="color:var(--ink-muted);font-size:11px;white-space:nowrap">${side} ${moveLabel}</span>
     </div>`;
   });
   const overBudget = sick.filter(n => n.lineLoss >= _lineBudget).length;
