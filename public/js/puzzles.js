@@ -314,7 +314,7 @@ async function showFeedback(result, _card) {
     // Append one-sentence threat explanation if detectable
     if (card?.fen && card?.playedMoveSan && card?.sideToMove) {
       let explain = await computeThreatExplanation(card.fen, card.playedMoveSan, card.sideToMove);
-      if (!explain && card?.motifTag) explain = MOTIF_EXPLANATION[card.motifTag] ?? null;
+      if (!explain) explain = card?.motifExplanation ?? (card?.motifTag ? MOTIF_EXPLANATION[card.motifTag] : null) ?? null;
       if (explain) {
         wrap.insertAdjacentHTML('beforeend',
           `<div class="drill-feedback__explain">${explain}</div>`);

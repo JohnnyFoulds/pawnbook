@@ -256,7 +256,7 @@ async function showFeedback(result) {
     // Append one-sentence threat explanation if detectable
     if (pos?.fen && pos?.playedMoveSan && pos?.sideToMove) {
       let explain = await computeThreatExplanation(pos.fen, pos.playedMoveSan, pos.sideToMove);
-      if (!explain && pos?.motifTag) explain = MOTIF_EXPLANATION[pos.motifTag] ?? null;
+      if (!explain) explain = pos?.motifExplanation ?? (pos?.motifTag ? MOTIF_EXPLANATION[pos.motifTag] : null) ?? null;
       if (explain) {
         wrap.insertAdjacentHTML('beforeend',
           `<div class="drill-feedback__explain">${explain}</div>`);
