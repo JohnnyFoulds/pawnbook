@@ -159,5 +159,46 @@ describe('queue', () => {
       const openingSorted = sorted.filter(c => c.kind === 'opening');
       expect(openingSorted[0].reachProb).toBe(0.5);
     });
+
+    it('weakDimension: matching tactical cards sort before non-matching when over cap', () => {
+      const base = now.getTime();
+      const cards = Array.from({ length: DUE_SOFT_CAP + 3 }, (_, i) => ({
+        due: new Date(base - 86_400_000).toISOString(), // all equally overdue
+        instructiveness: 5, // all equal instructiveness
+        kind: 'tactical',
+        motif_tag: i < 2 ? 'back_rank' : 'hanging_piece', // first 2 are defense, rest are tactics
+      }));
+      const sorted = sortDueCards(cards, now, 'tactics');
+      const tacticalSorted = sorted.filter(c => c.kind === 'tactical');
+      // All 'hanging_piece' (tactics) should come before 'back_rank' (defense)
+      const firstDefenseIdx = tacticalSorted.findIndex(c => c.motif_tag === 'back_rank');
+      const lastTacticsIdx = tacticalSorted.map(c => c.motif_tag).lastIndexOf('hanging_piece');
+      expect(lastTacticsIdx).toBeLessThan(firstDefenseIdx);
+    });
+
+    it('weakDimension: opening cards still precede all tacticals regardless of dimension', () => {
+      const base = now.getTime();
+      const tactical = Array.from({ length: DUE_SOFT_CAP }, (_, i) => ({
+        due: new Date(base - i * 86_400_000).toISOString(),
+        instructiveness: 10,
+        kind: 'tactical',
+        motif_tag: 'hanging_piece',
+      }));
+      const opening = [{ due: new Date(base).toISOString(), instructiveness: 1, kind: 'opening', reachProb: 0.1 }];
+      const sorted = sortDueCards([...tactical, ...opening], now, 'defense');
+      expect(sorted[0].kind).toBe('opening');
+    });
+
+    it('weakDimension: null weakDimension falls back to instructiveness × overdue', () => {
+      const base = now.getTime();
+      const cards = Array.from({ length: DUE_SOFT_CAP + 2 }, (_, i) => ({
+        due: new Date(base - i * 86_400_000).toISOString(),
+        instructiveness: i === 1 ? 100 : 1,
+        kind: 'tactical',
+        motif_tag: 'back_rank',
+      }));
+      const sorted = sortDueCards(cards, now, null);
+      expect(sorted[0].instructiveness).toBe(100);
+    });
   });
 });

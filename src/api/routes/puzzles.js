@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import { gradeAttempt } from '../../domain/puzzles/attempt.js';
 import { sortDueCards, formatDueCount } from '../../domain/review/queue.js';
+import { MOTIF_DIMENSION } from '../../domain/analysis/motif-classifier.js';
 import { DUE_SOFT_CAP, DRILL_BATCH } from '../../shared/balance.js';
 import { logger } from '../../config.js';
 
@@ -39,7 +40,8 @@ export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _set
       const now = clock.now().getTime();
       const allDue = puzzleRepo.getDueCards(now);
       const { overCap } = formatDueCount(allDue.length);
-      const sorted = sortDueCards(allDue, clock.now());
+      const weakDimension = _topWeakDimension(allDue);
+      const sorted = sortDueCards(allDue, clock.now(), weakDimension);
       const cards = sorted.slice(0, DRILL_BATCH);
 
       res.json({
@@ -161,6 +163,16 @@ function formatCard(row) {
     kind: row.kind ?? null,
     motifTag: row.motif_tag ?? row.motifTag ?? null,
   };
+}
+
+function _topWeakDimension(cards) {
+  const dimCounts = {};
+  for (const c of cards) {
+    const dim = MOTIF_DIMENSION[c.motif_tag ?? c.motifTag];
+    if (dim) dimCounts[dim] = (dimCounts[dim] || 0) + 1;
+  }
+  const top = Object.entries(dimCounts).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : null;
 }
 
 function pieceAtSquare(fen, square) {
