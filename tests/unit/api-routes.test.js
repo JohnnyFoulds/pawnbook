@@ -395,6 +395,24 @@ describe('GET /api/stats', () => {
     expect(res.body.rollingStrength).toBeNull();
     expect(res.body.rollingSe).toBeNull();
   });
+
+  it('includes strengthHistory as [{playedAt, strengthElo}] for finished games with estimates', async () => {
+    const { app, gameRepo } = buildApp();
+    const playedAt = new Date('2026-08-20T12:00:00Z').getTime();
+    addFinishedGame(gameRepo, { playedAt, strengthElo: 1450 });
+    addFinishedGame(gameRepo, { playedAt: playedAt + 1000, strengthElo: null });
+    const res = await request(app).get('/api/stats');
+    const h = res.body.strengthHistory;
+    expect(Array.isArray(h)).toBe(true);
+    expect(h.length).toBe(1);
+    expect(h[0].strengthElo).toBe(1450);
+  });
+
+  it('returns empty strengthHistory when no finished games have estimates', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.strengthHistory).toEqual([]);
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────
