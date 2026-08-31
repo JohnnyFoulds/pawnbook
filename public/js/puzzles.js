@@ -28,6 +28,7 @@ let currentLegalMoves = [];  // UCI strings for the current puzzle position
 let followupPending = false;
 let followupUci = null;
 let isDrillAhead = false;
+let currentBoard = null;
 
 async function boot() {
   try {
@@ -147,7 +148,7 @@ async function initBoard(fen, sideToMove) {
   ]);
   const chess = new Chess(fen);
   currentLegalMoves = chess.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion ?? ''));
-  await createBoard(el, Chessboard, {
+  currentBoard = await createBoard(el, Chessboard, {
     position: fen,
     orientation: sideToMove === 'black' ? 'black' : 'white',
     onMove: ({ from, to }) => submitMove(from + to),
@@ -244,6 +245,13 @@ async function showFeedback(result, _card) {
         ${result.winLoss != null ? `Lost ${Math.round(result.winLoss)}% win.` : ''}
       </div>
     </div>`;
+    // Show best-move arrow on the board so the correct move is visible
+    const card = batch[batchIdx];
+    if (card?.bestMoveUci && currentBoard) {
+      const from = card.bestMoveUci.slice(0, 2);
+      const to = card.bestMoveUci.slice(2, 4);
+      currentBoard.showArrow(from, to, 'success');
+    }
     document.getElementById('action-btns').style.display = 'none';
     document.getElementById('next-wrap').style.display = '';
   }
