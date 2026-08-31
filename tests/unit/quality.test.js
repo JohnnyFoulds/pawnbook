@@ -13,18 +13,18 @@ describe('quality', () => {
     }
   });
 
-  it('only the five glyph tiers are in GLYPH_TIERS', () => {
-    expect(GLYPH_TIERS).toHaveLength(5);
+  it('only the three negative glyph tiers are in GLYPH_TIERS', () => {
+    expect(GLYPH_TIERS).toHaveLength(3);
     expect(GLYPH_TIERS).toContain('blunder');
     expect(GLYPH_TIERS).toContain('mistake');
     expect(GLYPH_TIERS).toContain('inaccuracy');
-    expect(GLYPH_TIERS).toContain('great');
-    expect(GLYPH_TIERS).toContain('best');
   });
 
-  it('OK and Good are not in GLYPH_TIERS (no chess glyph)', () => {
+  it('positive tiers and ok/good are not in GLYPH_TIERS', () => {
     expect(GLYPH_TIERS).not.toContain('ok');
     expect(GLYPH_TIERS).not.toContain('good');
+    expect(GLYPH_TIERS).not.toContain('great');
+    expect(GLYPH_TIERS).not.toContain('best');
   });
 
   it('tierFor returns the correct tier for a known classification', () => {
