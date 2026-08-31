@@ -4,7 +4,7 @@
  * quick-play and drill CTAs, rating sparkline, recent games.
  */
 
-import './lib/chart.js';
+import { drawActivityBars } from './lib/chart.js';
 
 const BASE = '';
 
@@ -62,11 +62,20 @@ async function init() {
         ? `Suggested: ${state.suggestedOpponent}`
         : 'Choose your opponent';
 
-    // Hide sparkline canvases — no per-day due/streak history available from the API yet
-    ['spark-due', 'spark-streak'].forEach((id) => {
-      const c = document.getElementById(id);
-      if (c) c.style.display = 'none';
-    });
+    // Activity sparkline (daily review counts for last 30 days)
+    const activityCanvas = document.getElementById('spark-streak');
+    const history = state.activityHistory ?? [];
+    if (activityCanvas && history.length) {
+      const dpr = window.devicePixelRatio || 1;
+      activityCanvas.width = activityCanvas.offsetWidth * dpr || 80 * dpr;
+      activityCanvas.height = activityCanvas.offsetHeight * dpr || 24 * dpr;
+      drawActivityBars(activityCanvas, history.map(h => h.reviews));
+    } else if (activityCanvas) {
+      activityCanvas.style.display = 'none';
+    }
+    // Hide due sparkline — no per-day due history available yet
+    const dueSpark = document.getElementById('spark-due');
+    if (dueSpark) dueSpark.style.display = 'none';
 
     // ELO chart
     if (state.eloHistory?.length) {

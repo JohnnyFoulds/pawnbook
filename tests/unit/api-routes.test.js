@@ -192,6 +192,22 @@ describe('GET /api/state', () => {
     const res = await request(app).get('/api/state');
     expect(res.body.showStreak).toBe(false);
   });
+
+  it('includes activityHistory as an array', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/state');
+    expect(Array.isArray(res.body.activityHistory)).toBe(true);
+  });
+
+  it('activityHistory contains recorded activity with day, games, reviews fields', async () => {
+    const { app, gameRepo } = buildApp();
+    gameRepo.recordActivity(NOW, 'review');
+    gameRepo.recordActivity(NOW, 'game');
+    const res = await request(app).get('/api/state');
+    const today = res.body.activityHistory.at(-1);
+    expect(today).toMatchObject({ reviews: 1, games: 1 });
+    expect(typeof today.day).toBe('string');
+  });
 });
 
 // ─── GET /api/stats ───────────────────────────────────────────────────────────

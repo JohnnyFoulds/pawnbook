@@ -135,6 +135,13 @@
 // ────────────────────────────────────────────────────────────────
 
 /**
+ * @function
+ * @name GameRepository#getActivityHistory
+ * @param {number} [limitDays=30]
+ * @returns {Array<{day: string, games: number, reviews: number}>}
+ */
+
+/**
  * @interface SettingsRepository
  */
 

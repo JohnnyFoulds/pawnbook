@@ -66,6 +66,32 @@ export function drawSparkline(canvas, values, opts = {}) {
 }
 
 /**
+ * Draw a bar-per-day activity chart into a <canvas>.
+ * @param {HTMLCanvasElement} canvas
+ * @param {number[]} values - review count per day (0 = no activity)
+ * @param {object} [opts]
+ * @param {string} [opts.color]
+ */
+export function drawActivityBars(canvas, values, opts = {}) {
+  const { color = CSS.accent } = opts;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (!values.length) return;
+  const max = Math.max(...values, 1);
+  const gap = 1;
+  const barW = Math.max(1, Math.floor((W - gap * (values.length - 1)) / values.length));
+  const tokens = getComputedStyle(document.documentElement);
+  const dimColor = tokens.getPropertyValue('--surface-2').trim() || '#1a1a1a';
+  values.forEach((v, i) => {
+    const x = i * (barW + gap);
+    const barH = v > 0 ? Math.max(2, Math.round((v / max) * (H - 2))) : 2;
+    ctx.fillStyle = v > 0 ? color : dimColor;
+    ctx.fillRect(x, H - barH, barW, barH);
+  });
+}
+
+/**
  * Draw the eval graph into a <canvas>.
  * Single line, +/- area wash, blue above zero, red below.
  * @param {HTMLCanvasElement} canvas
