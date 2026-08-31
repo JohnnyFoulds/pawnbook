@@ -9,6 +9,49 @@
 
 const BASE = '';
 
+const PIECE_NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
+
+async function computeThreatExplanation(fen, playedMoveSan, sideToMove) {
+  try {
+    const { Chess } = await import('https://cdn.jsdelivr.net/npm/chess.js@1/+esm');
+    const chess = new Chess(fen);
+    const playerColor = sideToMove === 'white' ? 'w' : 'b';
+    const oppColor = playerColor === 'w' ? 'b' : 'w';
+
+    const played = chess.move(playedMoveSan);
+    if (!played) return null;
+
+    const hanging = [];
+    for (const row of chess.board()) {
+      for (const cell of row) {
+        if (!cell || cell.color !== playerColor) continue;
+        if (!chess.isAttacked(cell.square, oppColor)) continue;
+        const attackers = chess.attackers(cell.square, oppColor)
+          .map(s => chess.get(s)).filter(Boolean);
+        const defenders = chess.attackers(cell.square, playerColor);
+        const undefended = defenders.length === 0;
+        const cheapest = attackers.reduce((m, p) => Math.min(m, PIECE_VALUE[p.type] ?? 99), 99);
+        if (undefended || cheapest < PIECE_VALUE[cell.type]) {
+          hanging.push({ sq: cell.square, type: cell.type });
+        }
+      }
+    }
+    if (!hanging.length) return null;
+
+    const movedName = PIECE_NAME[played.piece] ?? 'piece';
+    const h = hanging[0];
+    const hangingName = PIECE_NAME[h.type] ?? 'piece';
+
+    if (h.sq === played.to) {
+      return `The ${movedName} moved to ${played.to} has no safe square — the opponent can capture it.`;
+    }
+    return `Moving the ${movedName} away from ${played.from} left the ${hangingName} on ${h.sq} undefended.`;
+  } catch {
+    return null;
+  }
+}
+
 async function api(path, opts) {
   const r = await fetch(BASE + path, opts);
   if (!r.ok) throw new Error(await r.text());
@@ -199,6 +242,14 @@ async function showFeedback(result) {
       const from = pos.bestMoveUci.slice(0, 2);
       const to = pos.bestMoveUci.slice(2, 4);
       currentBoard.showArrow(from, to, 'success');
+    }
+    // Append one-sentence threat explanation if detectable
+    if (pos?.fen && pos?.playedMoveSan && pos?.sideToMove) {
+      const explain = await computeThreatExplanation(pos.fen, pos.playedMoveSan, pos.sideToMove);
+      if (explain) {
+        wrap.insertAdjacentHTML('beforeend',
+          `<div class="drill-feedback__explain">${explain}</div>`);
+      }
     }
     document.getElementById('hint-btn').style.display = 'none';
     document.getElementById('skip-btn').style.display = 'none';
