@@ -61,6 +61,16 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         createdAt: p.created_at ?? p.createdAt ?? null,
       }));
 
+      // Motif breakdown — aggregate motif_tag counts across all puzzles
+      const motifBreakdown = {};
+      const mistakesByMotif = [];
+      for (const p of allPuzzles) {
+        const tag = p.motif_tag ?? p.motifTag ?? null;
+        if (!tag) continue;
+        motifBreakdown[tag] = (motifBreakdown[tag] || 0) + 1;
+        mistakesByMotif.push({ motifTag: tag, createdAt: p.created_at ?? p.createdAt ?? null });
+      }
+
       // Quality mix from move_evals (all 7 tiers across all player moves)
       const moveClassifications = gameRepo.getPlayerMoveClassifications?.() ?? [];
       const qualityMix = {};
@@ -87,6 +97,8 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         mistakesByPhase,
         qualityMix,
         allMoves,
+        motifBreakdown,
+        mistakesByMotif,
       });
     } catch (err) {
       next(err);

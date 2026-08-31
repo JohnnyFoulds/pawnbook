@@ -57,6 +57,11 @@ async function boot() {
   }
 }
 
+const MOTIF_LABEL = {
+  hanging_piece: 'hanging-piece',
+  fork: 'fork',
+};
+
 function renderAll(stats, state) {
   renderEloTile(stats, state);
   renderRetiredTile(stats);
@@ -64,6 +69,7 @@ function renderAll(stats, state) {
   renderQueueHealth(stats, state);
   renderEloChart(stats);
   renderPhaseBars(stats);
+  renderWeaknessTile(stats);
   renderQualityMix(stats);
 }
 
@@ -187,6 +193,36 @@ function renderPhaseBars(stats) {
   }).join('');
 }
 
+function renderWeaknessTile(stats) {
+  const card = document.getElementById('weakness-card');
+  const textEl = document.getElementById('weakness-text');
+  const barsEl = document.getElementById('weakness-bars');
+
+  const counts = filterMotifs(stats, currentRange);
+  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+  if (!total) { card.style.display = 'none'; return; }
+
+  card.style.display = '';
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const [topTag, topCount] = sorted[0];
+  const label = MOTIF_LABEL[topTag] ?? topTag.replace(/_/g, ' ');
+  textEl.textContent =
+    `${topCount} of your last ${total} mistake${total === 1 ? '' : 's'} ${topCount === 1 ? 'was a' : 'were'} ${label} error${topCount === 1 ? '' : 's'}. Keep an eye on these in your drill queue.`;
+
+  const max = topCount;
+  barsEl.innerHTML = sorted.map(([tag, n]) => {
+    const lbl = MOTIF_LABEL[tag] ?? tag.replace(/_/g, ' ');
+    const pct = (n / max) * 100;
+    return `<div style="display:flex;align-items:center;gap:12px">
+      <div style="width:120px;font-size:13px;color:var(--ink-secondary)">${lbl}</div>
+      <div style="flex:1;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px"></div>
+      </div>
+      <div style="width:28px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums">${n}</div>
+    </div>`;
+  }).join('');
+}
+
 function renderQualityMix(stats) {
   const counts = filterQuality(stats, currentRange);
   renderBreakdownBar(document.getElementById('quality-bar'), counts);
@@ -247,6 +283,15 @@ function filterQuality(stats, range) {
   const evals = (stats.allMoves ?? []).filter((m) => new Date(m.createdAt) >= from);
   const out = {};
   evals.forEach((m) => { out[m.classification] = (out[m.classification] || 0) + 1; });
+  return out;
+}
+
+function filterMotifs(stats, range) {
+  if (range === 'all') return stats.motifBreakdown ?? {};
+  const from = cutoff(range);
+  const mistakes = (stats.mistakesByMotif ?? []).filter((m) => new Date(m.createdAt) >= from);
+  const out = {};
+  mistakes.forEach((m) => { out[m.motifTag] = (out[m.motifTag] || 0) + 1; });
   return out;
 }
 

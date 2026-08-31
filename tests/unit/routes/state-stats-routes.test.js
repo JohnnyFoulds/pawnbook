@@ -168,6 +168,37 @@ describe('GET /api/stats', () => {
     expect(res.body.phaseBreakdown.endgame).toBe(0);
   });
 
+  it('returns motifBreakdown and mistakesByMotif from tagged puzzles', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const settingsRepo = new InMemorySettingsRepository();
+
+    const base = { kind: 'tactical', sideToMove: 'black', bestMoveUci: 'e7e5', bestMoveSan: 'e5',
+      playedMoveUci: 'd7d5', playedMoveSan: 'd5', cpLoss: 50, winLossPts: 15,
+      classification: 'inaccuracy', findability: 0.4, temptation: 0.3, instructiveness: 0.5,
+      tags: '', maiaModel: null, policyTemperature: 1.0, eloAtCreation: 1200,
+      sourceGameId: null, sourcePly: 1, phase: 'middlegame', wasTimed: 0 };
+
+    puzzleRepo.save({ ...base, id: randomUUID(), fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', motifTag: 'hanging_piece' });
+    puzzleRepo.save({ ...base, id: randomUUID(), fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 4', motifTag: 'hanging_piece' });
+    puzzleRepo.save({ ...base, id: randomUUID(), fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 5', motifTag: 'fork' });
+    puzzleRepo.save({ ...base, id: randomUUID(), fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 6' });
+
+    const res = await request(makeStatsApp(gameRepo, puzzleRepo, settingsRepo)).get('/api/stats');
+    expect(res.status).toBe(200);
+    expect(res.body.motifBreakdown).toEqual({ hanging_piece: 2, fork: 1 });
+    expect(res.body.mistakesByMotif).toHaveLength(3);
+    expect(res.body.mistakesByMotif.map(m => m.motifTag).sort()).toEqual(['fork', 'hanging_piece', 'hanging_piece']);
+  });
+
+  it('returns empty motifBreakdown when no puzzles are tagged', async () => {
+    const res = await request(makeStatsApp(new InMemoryGameRepository(), new InMemoryPuzzleRepository(), new InMemorySettingsRepository()))
+      .get('/api/stats');
+    expect(res.status).toBe(200);
+    expect(res.body.motifBreakdown).toEqual({});
+    expect(res.body.mistakesByMotif).toEqual([]);
+  });
+
   it('includes gameHistory for finished games', async () => {
     const gameRepo = new InMemoryGameRepository();
     gameRepo.save({ id: randomUUID(), opponentId: 'maia-1100', opponentElo: 1100, playerColor: 'white', ranked: true, status: 'finished', result: 'win', termination: 'checkmate', playedAt: Date.now() });
