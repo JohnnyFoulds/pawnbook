@@ -189,6 +189,8 @@ button, [role="button"] {
   color: var(--ink-secondary);
 }
 .btn--ghost:hover { border-color: var(--ink-muted); }
+.btn--danger { color: var(--critical); border-color: rgba(208,59,59,0.35); }
+.btn--danger:hover { border-color: var(--critical); background: rgba(208,59,59,0.08); }
 
 .btn--large {
   padding: var(--sp-3) var(--sp-6);
@@ -219,7 +221,14 @@ button, [role="button"] {
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   overflow-y: auto;
+  /* Thin custom scrollbar — hides ugly OS default in the move list */
+  scrollbar-width: thin;
+  scrollbar-color: var(--baseline) transparent;
 }
+.move-list::-webkit-scrollbar { width: 4px; }
+.move-list::-webkit-scrollbar-track { background: transparent; }
+.move-list::-webkit-scrollbar-thumb { background: var(--baseline); border-radius: 2px; }
+.move-list::-webkit-scrollbar-thumb:hover { background: var(--ink-muted); }
 
 .move-list__row {
   display: grid;
@@ -469,9 +478,15 @@ button, [role="button"] {
 /* ── Play board layout ── */
 .play-layout {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: 1fr 300px;
   gap: var(--sp-6);
-  align-items: start;
+  align-items: stretch;
+}
+
+/* Board column: stack board + your clock */
+.play-layout > div:first-child {
+  display: flex;
+  flex-direction: column;
 }
 
 .board-wrap {
@@ -483,7 +498,18 @@ button, [role="button"] {
 .play-rail {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--gridline);
+  border-radius: var(--radius-card);
+  padding: var(--sp-4);
+  min-height: 0;
+}
+
+/* Move list fills remaining rail height */
+.play-rail > .move-list {
+  flex: 1 1 0;
+  min-height: 80px;
 }
 
 /* ── Clock ── */
@@ -504,7 +530,7 @@ button, [role="button"] {
   flex-shrink: 0;
 }
 .clock-row__pip--active { background: var(--accent); }
-.clock-row__time { font-weight: 600; }
+.clock-row__time { font-size: 18px; font-weight: 700; margin-left: auto; font-variant-numeric: tabular-nums; }
 
 .thinking-pulse {
   display: flex;
