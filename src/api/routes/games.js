@@ -9,6 +9,7 @@
 import { Router } from 'express';
 
 import { analyseGame } from '../ws/analysis-service.js';
+import { explainMotif } from '../../domain/analysis/motif-explainer.js';
 import { getOpponent } from '../../domain/game/roster.js';
 import {
   STRENGTH_ANCHOR_ELO, STRENGTH_ANCHOR_ASE, STRENGTH_ELO_PER_ASE,
@@ -200,6 +201,12 @@ function formatQuizPosition(row) {
     ply: row.source_ply ?? row.sourcePly,
     classification: row.classification,
     motifTag: row.motif_tag ?? row.motifTag ?? null,
+    motifExplanation: explainMotif(
+      row.fen,
+      row.played_move_uci ?? row.playedMoveUci ?? '',
+      row.side_to_move ?? row.sideToMove,
+      row.motif_tag ?? row.motifTag ?? null,
+    ) ?? null,
   };
 }
 

@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { gradeAttempt } from '../../domain/puzzles/attempt.js';
 import { sortDueCards, formatDueCount } from '../../domain/review/queue.js';
 import { MOTIF_DIMENSION } from '../../domain/analysis/motif-classifier.js';
+import { explainMotif } from '../../domain/analysis/motif-explainer.js';
 import { DUE_SOFT_CAP, DRILL_BATCH } from '../../shared/balance.js';
 import { logger } from '../../config.js';
 
@@ -162,6 +163,12 @@ function formatCard(row) {
     sourceGameId: row.source_game_id ?? row.sourceGameId ?? null,
     kind: row.kind ?? null,
     motifTag: row.motif_tag ?? row.motifTag ?? null,
+    motifExplanation: explainMotif(
+      row.fen,
+      row.played_move_uci ?? row.playedMoveUci ?? '',
+      row.side_to_move ?? row.sideToMove,
+      row.motif_tag ?? row.motifTag ?? null,
+    ) ?? null,
   };
 }
 

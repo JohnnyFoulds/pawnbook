@@ -543,6 +543,29 @@ describe('GET /api/puzzles/due', () => {
     const res = await request(app).get('/api/puzzles/due');
     expect(res.body.cards[0]).toHaveProperty('puzzleId');
   });
+
+  it('includes motifExplanation as a string when motifTag and playedMoveUci are present', async () => {
+    const { app, puzzleRepo } = buildApp();
+    // hanging_piece: Nf3-g5 lands on attacked, undefended square
+    const puzzleId = addPuzzle(puzzleRepo, {
+      fen: '4k3/8/7p/8/8/5N2/8/4K3 w - - 0 1',
+      sideToMove: 'white',
+      playedMoveUci: 'f3g5',
+      motifTag: 'hanging_piece',
+    });
+    puzzleRepo.saveCard({ puzzleId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due');
+    expect(res.body.cards[0].motifExplanation).toBeTypeOf('string');
+    expect(res.body.cards[0].motifExplanation.length).toBeGreaterThan(10);
+  });
+
+  it('includes motifExplanation as null when no motifTag is present', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const puzzleId = addPuzzle(puzzleRepo, { motifTag: null });
+    puzzleRepo.saveCard({ puzzleId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due');
+    expect(res.body.cards[0].motifExplanation).toBeNull();
+  });
 });
 
 // ─── GET /api/puzzles/practice ────────────────────────────────────────────────
