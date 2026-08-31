@@ -391,12 +391,12 @@ export class SqlitePuzzleRepository {
         accepted_moves_json, followup_uci, played_move_uci, played_move_san,
         cp_loss, win_loss_pts, classification, findability, temptation, instructiveness,
         tags, maia_model, policy_temperature, elo_at_creation, source_game_id, source_ply,
-        phase, was_timed, times_seen, created_at)
+        phase, was_timed, motif_tag, times_seen, created_at)
       VALUES (@id, @kind, @fen, @side_to_move, @best_move_uci, @best_move_san, @pv,
         @accepted_moves_json, @followup_uci, @played_move_uci, @played_move_san,
         @cp_loss, @win_loss_pts, @classification, @findability, @temptation, @instructiveness,
         @tags, @maia_model, @policy_temperature, @elo_at_creation, @source_game_id, @source_ply,
-        @phase, @was_timed, 1, @created_at)
+        @phase, @was_timed, @motif_tag, 1, @created_at)
     `).run({
       id,
       kind,
@@ -423,6 +423,7 @@ export class SqlitePuzzleRepository {
       source_ply: puzzle.sourcePly ?? null,
       phase: puzzle.phase ?? null,
       was_timed: puzzle.wasTimed ? 1 : 0,
+      motif_tag: puzzle.motifTag ?? null,
       created_at: puzzle.createdAt ?? Date.now(),
     });
     return id;

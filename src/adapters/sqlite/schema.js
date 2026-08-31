@@ -49,6 +49,9 @@ export function applySchema(db) {
   // Phase 31: add gate_verdict column to rep_challenges
   try { db.exec("ALTER TABLE rep_challenges ADD COLUMN gate_verdict TEXT"); } catch { /* already exists */ }
 
+  // Phase 19c: add motif_tag column to puzzles
+  try { db.exec("ALTER TABLE puzzles ADD COLUMN motif_tag TEXT"); } catch { /* already exists */ }
+
   // Phase 23: add kind column to puzzles and fix UNIQUE(fen) → UNIQUE(fen, kind)
   try { db.exec("ALTER TABLE puzzles ADD COLUMN kind TEXT NOT NULL DEFAULT 'tactical'"); } catch { /* already exists */ }
   const _puzzlesInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='puzzles'").get();
@@ -233,6 +236,7 @@ export function applySchema(db) {
       source_ply           INTEGER,
       phase                TEXT,
       was_timed            INTEGER NOT NULL DEFAULT 0,
+      motif_tag            TEXT,
       times_seen           INTEGER NOT NULL DEFAULT 1,
       created_at           INTEGER NOT NULL,
       UNIQUE(fen, kind)

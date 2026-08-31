@@ -159,6 +159,7 @@ function formatCard(row) {
     ply: row.source_ply ?? row.sourcePly,
     sourceGameId: row.source_game_id ?? row.sourceGameId ?? null,
     kind: row.kind ?? null,
+    motifTag: row.motif_tag ?? row.motifTag ?? null,
   };
 }
 
