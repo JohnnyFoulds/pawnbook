@@ -119,6 +119,12 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         .map(g => ({ playedAt: g.playedAt, strengthElo: g.strengthElo }))
         .reverse();
 
+      // Per-game accuracy history (oldest-first, finished games with accuracy)
+      const accuracyHistory = games
+        .filter(g => g.status === 'finished' && g.accuracy != null)
+        .map(g => ({ playedAt: g.playedAt, accuracy: g.accuracy }))
+        .reverse();
+
       // Rolling inverse-variance strength aggregate over last STRENGTH_ROLLING_N samples
       const rawSamples = gameRepo.listStrengthSamples?.({ side: 'player', limit: STRENGTH_ROLLING_N }) ?? [];
       const eligible = rawSamples.filter(r => r.n >= STRENGTH_MIN_PLIES);
@@ -161,6 +167,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         rollingStrength,
         rollingSe,
         strengthHistory,
+        accuracyHistory,
         focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {
