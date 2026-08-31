@@ -134,10 +134,10 @@ function loadPosition(idx) {
   document.getElementById('skip-btn').style.display = '';
   document.getElementById('next-wrap').style.display = 'none';
 
-  initBoard(pos.fen, pos.sideToMove);
+  initBoard(pos.fen, pos.sideToMove, pos.playedMoveUci);
 }
 
-async function initBoard(fen, sideToMove) {
+async function initBoard(fen, sideToMove, playedMoveUci) {
   const el = document.getElementById('board-wrap');
   if (!el) return;
   el.innerHTML = '';
@@ -154,6 +154,10 @@ async function initBoard(fen, sideToMove) {
     onMove: ({ from, to }) => submitMove(from + to),
     getLegalMoves: () => currentLegalMoves,
   });
+  // Show the move the player originally played (the bad one) as a red arrow
+  if (playedMoveUci && playedMoveUci.length >= 4) {
+    currentBoard.showArrow(playedMoveUci.slice(0, 2), playedMoveUci.slice(2, 4), 'danger');
+  }
 }
 
 async function submitMove(uci) {

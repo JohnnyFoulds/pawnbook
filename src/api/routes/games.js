@@ -209,6 +209,7 @@ function formatQuizPosition(row) {
     fen: row.fen,
     sideToMove: row.side_to_move ?? row.sideToMove,
     playedMoveSan: row.played_move_san ?? row.playedMoveSan,
+    playedMoveUci: row.played_move_uci ?? row.playedMoveUci ?? null,
     bestMoveUci: uci,
     bestMoveSan: row.best_move_san ?? row.bestMoveSan,
     pv: row.pv ?? null,
