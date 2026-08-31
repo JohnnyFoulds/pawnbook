@@ -91,6 +91,24 @@ export function getMaiaAnalysisWeights() {
 }
 
 /**
+ * Validate that an opponent's binary/weights are present on disk.
+ * Throws WeightsMissingError so callers can abort before creating a game row.
+ * @param {object} opponent — entry from ROSTER_TABLE
+ */
+export function checkOpponentAvailability(opponent) {
+  if (opponent.type === 'maia3') {
+    if (!ENGINE_PATHS.maia3 || !existsSync(ENGINE_PATHS.maia3)) {
+      throw new WeightsMissingError(`Maia 3 binary missing: ${ENGINE_PATHS.maia3}`);
+    }
+  } else if (opponent.type === 'maia') {
+    const weightsPath = `${WEIGHTS_DIR}/${opponent.weightsFile ?? opponent.id}.pb.gz`;
+    if (!existsSync(weightsPath)) {
+      throw new WeightsMissingError(`Maia weights not found: ${weightsPath}`);
+    }
+  }
+}
+
+/**
  * @param {string} id
  * @returns {object}
  * @throws if the opponent is not in the roster
