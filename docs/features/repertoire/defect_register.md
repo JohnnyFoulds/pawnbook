@@ -14,11 +14,11 @@ the written reason goes in the "Closing note" column.
 |---|---|---|---|
 | **Blocking** | 6 (4B + 2U) | 0 | 6 |
 | **High** | 12 (7B + 5U) | 0 | 12 |
-| **Medium** | 10 (4B + 5U + 1B-docs) | 0 | 10 (U12 accepted) |
+| **Medium** | 10 (4B + 5U + 1B-docs) | 0 | 10 |
 | **Low** | 2U + 3D | 0 | 5 |
 | **Total** | **35** | **0** | **35** |
 
-B15 closed Phase 27 (`756834d`). B3/B4/B5/B10/B12 closed Phase 29 (`803a0b0`). U3/U5/U8 closed Phase 30. B6/B7 closed Phase 31 (audit evidence wired). B2/B1/B11/B13/B14/B9 + U9/U6 closed Phase 32. U4/B8/U7/U2/U1 closed Phases 33–34. U10 closed Phase 35. U13 closed Phase 36. D1/D2/D3/U12 closed Phase 37. B7 journey end-to-end confirmed Phase 38 (`e0af250`) — the Phase 31 fix was incomplete: `hasAlert` detection missed multi-move divergence, Rule 9 alternation fired before Rule 3, and a FOREIGN KEY constraint silently rolled back the promotion transaction.
+B15 closed Phase 27 (`756834d`). B3/B4/B5/B10/B12 closed Phase 29 (`803a0b0`). U3/U5/U8 closed Phase 30. B6 closed Phase 31 (audit evidence wired). B2/B1/B11/B13/B14/B9 + U9/U6 closed Phase 32. U4/B8/U7/U2/U1 closed Phases 33–34. U10 closed Phase 35. U13 closed Phase 36. D1/D2/D3 closed Phase 37. B7 + U12 closed Phase 38 — B7: `hasAlert` detection, Rule 9/Rule 3 ordering, FOREIGN KEY constraint in promotion transaction (`e0af250`); U12: line-health panel added to `public/repertoire.html`.
 
 ---
 
@@ -395,12 +395,12 @@ B15 closed Phase 27 (`756834d`). B3/B4/B5/B10/B12 closed Phase 29 (`803a0b0`). U
 | Field | Value |
 |---|---|
 | **Severity** | low |
-| **Status** | **ACCEPTED** (Phase 37) |
-| **Evidence** | `public/repertoire.html` |
+| **Status** | **CLOSED** (Phase 38) |
+| **Evidence** | `public/repertoire.html`, `public/js/repertoire.js` |
 | **Description** | `rep_nodes.line_loss` is computed correctly but not surfaced in the UI as a dedicated panel. |
-| **Closing phase** | Phase 37 (accepted) |
-| **Test** | n/a — accepted |
-| **Closing note** | Accepted: `line_loss` is computed at the DB level and available via `GET /api/repertoire/tree`. A dedicated line-health panel is low-severity and deprioritized relative to the research timeline. The data is accessible; the UI convenience is a future improvement. |
+| **Closing phase** | Phase 38 |
+| **Test** | n/a — UI-only |
+| **Closing note** | Fixed: "Line health" panel added to `repertoire.html`; `renderLineHealth()` in `repertoire.js` reads `lineLoss` from the already-fetched `/api/repertoire/tree` nodes (no extra request), sorts by loss descending, shows a progress bar per node coloured grey/amber/red relative to the 20-pt gate budget, and calls out how many lines are over budget. Tree rows also show an inline `−N` badge for any node with `lineLoss > 0`. `renderLineHealth()` is called from `loadTree()` so it updates automatically on `repertoire_update` events. |
 
 ---
 
