@@ -1003,3 +1003,77 @@ After: *"Your knight on d4 is pinned by the opponent's bishop on b2 — moving i
 - `docs/features/pawnbook/feature_steps.md` — phases 27–35 appended
 
 **DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
+
+## Phase 37 — Post-game debrief card on review page (Complete — 2026-08-31)
+
+**Goal:** Surface the motif breakdown for a single game directly on the review page, closing the feedback loop from game → review → drill without requiring a visit to the stats page.
+
+**Design:** `GET /api/games/:id/review` derives `motifSummary: [{tag, count, explanation}]` from the already-computed `mistakes` array — a Map reduction counting `motifTag` occurrences, sorted by count descending. The review page renders a **Patterns in this game** card above the mistake list when `motifSummary` is non-empty, with a label, occurrence count, and a `puzzles.html?motif=<tag>` drill link per pattern.
+
+**Files changed:**
+- `src/api/routes/games.js` — `motifSummary` computation and inclusion in review response
+- `public/review.html` — `#debrief-card` added before the mistake list
+- `public/js/review.js` — `renderDebriefCard(review)` renders the card; `MOTIF_LABEL` extracted to module scope (was defined inline in `renderMistakeList`)
+- `tests/unit/api-routes.test.js` — 2 new tests: sorted `motifSummary` with counts; empty array when no motif tags
+
+**DoD:** 2 new tests; 1342 total; 90.71% branch coverage; `make verify` clean.
+
+## Phase 38 — Daily drill accuracy history and trend tile (Complete — 2026-08-31)
+
+**Goal:** Show whether drilling is improving over time by adding a per-day accuracy history to the stats page, parallel to the activity sparkline.
+
+**Design:** `PuzzleRepository#getDrillAccuracyHistory(limitDays=30)` aggregates first-attempt non-practice reviews by day using the same 04:00 local-time boundary as `recordActivity`, returning `[{day, attempted, correct}]` sorted ascending. `GET /api/stats` exposes this as `drillHistory`. The stats page **Drill accuracy** tile shows all-time accuracy %, a 7-day trend arrow (↑ trending up / → steady / ↓ trending down), and a `drawActivityBars` sparkline of per-day accuracy.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `PuzzleRepository#getDrillAccuracyHistory`
+- `src/adapters/sqlite/repositories.js` — SQL aggregation with 04:00 offset, `LIMIT ?`, reversed
+- `src/adapters/memory/repositories.js` — in-memory aggregation using `_activityDayKey`
+- `src/api/routes/stats.js` — `drillHistory` added to response
+- `public/stats.html` — Drill accuracy stat tile with `spark-drill-accuracy` canvas
+- `public/js/stats.js` — `renderDrillAccuracyTile(stats)` added; `drawActivityBars` imported
+- `tests/unit/api-routes.test.js` — 2 new tests: history populated; empty on fresh repo
+
+**DoD:** 2 new tests; 1344 total; 90.73% branch coverage; `make verify` clean.
+
+## Phase 39 — Best-ever streak record and personal best display (Complete — 2026-08-31)
+
+**Goal:** Give players a long-term motivational target by tracking and displaying their best-ever daily activity streak.
+
+**Design:** `_computeBestStreak(sortedDaysAsc)` helper (added to both adapters) finds the longest consecutive run using gap detection: iterate pairs, compute day difference, reset current counter on gaps > 1, track max. `GameRepository#getBestStreak()` queries `activity` rows and calls this helper. `GET /api/state` adds `bestStreak`. Dashboard streak tile shows **"Personal best!"** when current streak ≥ best (and ≥ 2), or **"Best: N"** subtitle when a prior record exists.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `GameRepository#getBestStreak`
+- `src/adapters/sqlite/repositories.js` — `_computeBestStreak` helper; `getBestStreak` method
+- `src/adapters/memory/repositories.js` — same helper and method for in-memory adapter
+- `src/api/routes/state.js` — `bestStreak` added to response
+- `public/index.html` — `#streak-best` subtitle element on streak tile
+- `public/js/dashboard.js` — personal best / best record subtitle logic
+- `tests/unit/api-routes.test.js` — 2 new tests: correct best from non-contiguous history; 0 on fresh repo
+
+**DoD:** 2 new tests; 1346 total; 90.56% branch coverage; `make verify` clean.
+
+## Phase 40 — Daily win rate history and trend tile (Complete — 2026-08-31)
+
+**Goal:** Complete the "improvement over time" picture alongside Phase 38 by adding a per-day game win rate history, giving the same sparkline+trend-arrow treatment to game performance as to drill accuracy.
+
+**Design:** `GameRepository#getWinRateHistory(limitDays=90)` aggregates ranked finished games by day (same 04:00 boundary), returning `[{day, played, won, lost, drawn}]` sorted ascending. `GET /api/stats` exposes this as `winRateHistory`. The stats page **Win rate** tile shows all-time win %, a 14-day trend arrow, and a `drawActivityBars` sparkline of per-day win percentage.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `GameRepository#getWinRateHistory`
+- `src/adapters/sqlite/repositories.js` — SQL aggregation with CASE WHEN result, 04:00 offset, reversed
+- `src/adapters/memory/repositories.js` — in-memory aggregation from `_games` map
+- `src/api/routes/stats.js` — `winRateHistory` added to response
+- `public/stats.html` — Win rate stat tile with `spark-win-rate` canvas
+- `public/js/stats.js` — `renderWinRateTile(stats)` added
+- `tests/unit/api-routes.test.js` — 2 new tests: history populated from games; empty on fresh repo
+
+**DoD:** 2 new tests; 1348 total; 90.52% branch coverage; `make verify` clean.
+
+## Phase 41 — Document phases 37–40 in feature_steps.md (Complete — 2026-08-31)
+
+**Goal:** Catch up the `feature_steps.md` process log, which was 4 phases behind (phases 37–40 undocumented).
+
+**Files changed:**
+- `docs/features/pawnbook/feature_steps.md` — phases 37–40 appended
+
+**DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
