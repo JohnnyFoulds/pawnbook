@@ -1129,3 +1129,59 @@ After: *"Your knight on d4 is pinned by the opponent's bishop on b2 — moving i
 - `docs/features/pawnbook/feature_steps.md` — phases 42–44 appended
 
 **DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
+
+## Phase 46 — Strength Elo tile on stats page (Complete — 2026-08-31)
+
+**Goal:** Surface the move-quality Elo estimate (Regan-Haworth rolling aggregate) on the Stats page, distinct from the win/loss rating, so players can see their actual tactical playing level.
+
+**Design:** The rolling inverse-variance computation already existed in `games.js` (review route). Stats route imports the same balance constants (`STRENGTH_ANCHOR_ELO`, `STRENGTH_ELO_PER_ASE`, etc.) and runs the identical computation over `listStrengthSamples`. `GET /api/stats` adds `rollingStrength` and `rollingSe`. Stats page adds a hidden "Strength Elo" tile (`#strength-tile`) that shows estimated Elo ± SE; hidden until samples exist.
+
+**Files changed:**
+- `src/api/routes/stats.js` — import balance constants; add rolling strength computation; expose `rollingStrength`, `rollingSe`
+- `public/stats.html` — Strength Elo stat tile
+- `public/js/stats.js` — `renderStrengthTile(stats)`
+- `tests/unit/api-routes.test.js` — 2 new tests
+
+**DoD:** 2 new tests; 1355 total; 90.34% branch coverage; `make verify` clean.
+
+## Phase 47 — Strength Elo history sparkline (Complete — 2026-08-31)
+
+**Goal:** Show how the player's move-quality Elo has trended across recent games, making it easy to see whether analytical strength is improving.
+
+**Design:** `GET /api/stats` derives `strengthHistory: [{playedAt, strengthElo}]` from `listRecent()` filtered to finished games with non-null `strengthElo`, sorted oldest-first. `renderStrengthTile` draws a `drawSparkline` on the new `#spark-strength` canvas when ≥ 2 data points exist.
+
+**Files changed:**
+- `src/api/routes/stats.js` — `strengthHistory` derived and added to response
+- `public/stats.html` — `#spark-strength` canvas on Strength Elo tile
+- `public/js/stats.js` — sparkline rendering in `renderStrengthTile`
+- `tests/unit/api-routes.test.js` — 2 new tests
+
+**DoD:** 2 new tests; 1357 total; 90.34% branch coverage; `make verify` clean.
+
+## Phase 48 — Accuracy trend tile with sparkline (Complete — 2026-08-31)
+
+**Goal:** Show whether game accuracy is improving over time — the most direct measure of playing improvement.
+
+**Design:** `GET /api/stats` derives `accuracyHistory: [{playedAt, accuracy}]` from finished games with non-null accuracy, oldest-first. New "Accuracy trend" tile shows avg% of last 10 games, a 7-vs-14-game trend arrow (↑/→/↓), and a full-history `drawSparkline`. `renderAccuracyTrendTile(stats)` added to `renderAll`.
+
+**Files changed:**
+- `src/api/routes/stats.js` — `accuracyHistory` derived and added to response
+- `public/stats.html` — Accuracy trend tile with `#spark-accuracy-trend` canvas
+- `public/js/stats.js` — `renderAccuracyTrendTile(stats)`
+- `tests/unit/api-routes.test.js` — 2 new tests
+
+**DoD:** 2 new tests; 1359 total; 90.35% branch coverage; `make verify` clean.
+
+## Phase 49 — Update VitePress docs site for phases 20–48 (Complete — 2026-08-31)
+
+**Goal:** Bring the public documentation site current after 29 phases of undocumented feature work. The site last reflected ~Phase 19.
+
+**Files changed:**
+- `site/reference/rest-api.md` — add `bestStreak`, `todayDrills`, `activityHistory` to `/api/state`; rewrite `/api/stats` table (25 fields); add `motifSummary`, `motifTag`, `motifExplanation` to review; add `?motif=` to `/api/puzzles/due`
+- `site/guide/analysis.md` — Motif debrief card section; Mistake tags section
+- `site/guide/drilling.md` — Empty-state session summary; Motif-filtered drill sessions
+- `site/guide/stats.md` — New page covering all stat tiles, trend arrows, Rating vs Strength Elo, motif weakness tile, quality mix
+- `site/.vitepress/config.mjs` — add Stats to sidebar
+- `docs/features/pawnbook/feature_steps.md` — phases 46–48 appended
+
+**DoD:** `make verify` clean; docs CI deploys to GitHub Pages.
