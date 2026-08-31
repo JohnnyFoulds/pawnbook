@@ -416,6 +416,29 @@ describe('GET /api/games/:id/review', () => {
     const mistake = res.body.mistakes[0];
     expect(mistake.motifExplanation).toBeNull();
   });
+
+  it('includes motifSummary sorted by count descending', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    addPuzzle(puzzleRepo, { sourceGameId: gameId, motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-a', sourceGameId: gameId, motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-b', sourceGameId: gameId, motifTag: 'pin' });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    const summary = res.body.motifSummary;
+    expect(Array.isArray(summary)).toBe(true);
+    expect(summary[0].tag).toBe('fork');
+    expect(summary[0].count).toBe(2);
+    expect(summary[1].tag).toBe('pin');
+    expect(summary[1].count).toBe(1);
+  });
+
+  it('returns empty motifSummary when no mistakes have motif tags', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    addPuzzle(puzzleRepo, { sourceGameId: gameId, motifTag: null });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    expect(res.body.motifSummary).toEqual([]);
+  });
 });
 
 // ─── strength fields on review and games-list routes ─────────────────────────
