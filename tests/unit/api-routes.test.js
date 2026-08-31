@@ -1262,6 +1262,27 @@ describe('GET /api/state — catch branch coverage', () => {
     expect(res.body.streak).toBe(1);
   });
 
+  it('bestStreak reflects the longest consecutive run in history', async () => {
+    const { app, gameRepo } = buildApp();
+    const DAY = 86_400_000;
+    // 3 consecutive days (the all-time best), then a gap, then 2 more days (current streak)
+    gameRepo.recordActivity(NOW - 5 * DAY, 'review');
+    gameRepo.recordActivity(NOW - 4 * DAY, 'review');
+    gameRepo.recordActivity(NOW - 3 * DAY, 'review');
+    // gap of 1 day
+    gameRepo.recordActivity(NOW - 1 * DAY, 'review');
+    gameRepo.recordActivity(NOW, 'review');
+    const res = await request(app).get('/api/state');
+    expect(res.body.bestStreak).toBe(3);
+    expect(res.body.streak).toBe(2);
+  });
+
+  it('bestStreak is 0 when no activity exists', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/state');
+    expect(res.body.bestStreak).toBe(0);
+  });
+
   it('outer catch: returns 500 when settingsRepo.get("elo") throws (state.js line 85-86)', async () => {
     const settingsRepo = new InMemorySettingsRepository();
     settingsRepo.get = () => { throw new Error('catastrophic db failure'); };

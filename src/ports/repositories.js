@@ -149,6 +149,12 @@
  */
 
 /**
+ * @function
+ * @name GameRepository#getBestStreak
+ * @returns {number} length of the longest consecutive daily activity run ever recorded
+ */
+
+/**
  * @interface SettingsRepository
  */
 
