@@ -114,6 +114,14 @@
         <canvas class="sparkline" id="spark-win-rate" width="120" height="28" style="display:block;margin-top:8px"></canvas>
       </div>
 
+      <!-- Accuracy trend tile -->
+      <div class="stat-tile" id="accuracy-trend-tile" style="display:none">
+        <div class="stat-tile__label">Accuracy trend</div>
+        <div class="stat-tile__value" id="accuracy-trend-val">—</div>
+        <div class="stat-tile__delta" id="accuracy-trend-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+        <canvas class="sparkline" id="spark-accuracy-trend" width="120" height="28" style="display:block;margin-top:8px"></canvas>
+      </div>
+
       <!-- Queue health meter (R11: due / DUE_SOFT_CAP) -->
       <div class="stat-tile">
         <div class="stat-tile__label">Queue health</div>

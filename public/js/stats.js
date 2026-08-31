@@ -104,11 +104,41 @@ function renderStrengthTile(stats) {
   }
 }
 
+function renderAccuracyTrendTile(stats) {
+  const tile = document.getElementById('accuracy-trend-tile');
+  const history = stats.accuracyHistory ?? [];
+  if (!history.length) { tile.style.display = 'none'; return; }
+  tile.style.display = '';
+  const recent = history.slice(-10);
+  const avg = Math.round(recent.reduce((s, h) => s + h.accuracy, 0) / recent.length);
+  document.getElementById('accuracy-trend-val').textContent = `${avg}%`;
+  const window7 = history.slice(-7);
+  const window14 = history.slice(-14, -7);
+  let arrow = '';
+  if (window7.length >= 3 && window14.length >= 3) {
+    const avg7 = window7.reduce((s, h) => s + h.accuracy, 0) / window7.length;
+    const avg14 = window14.reduce((s, h) => s + h.accuracy, 0) / window14.length;
+    arrow = avg7 > avg14 + 1 ? ' ↑' : avg7 < avg14 - 1 ? ' ↓' : ' →';
+  }
+  document.getElementById('accuracy-trend-delta').textContent =
+    `avg last ${recent.length} games${arrow}`;
+  const canvas = document.getElementById('spark-accuracy-trend');
+  if (canvas && history.length >= 2) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = (canvas.offsetWidth || 120) * dpr;
+    canvas.height = (canvas.offsetHeight || 28) * dpr;
+    drawSparkline(canvas, history.map(h => h.accuracy));
+  } else if (canvas) {
+    canvas.style.display = 'none';
+  }
+}
+
 function renderAll(stats, state) {
   renderEloTile(stats, state);
   renderStreakTile(state);
   renderDrillAccuracyTile(stats);
   renderWinRateTile(stats);
+  renderAccuracyTrendTile(stats);
   renderStyleTile(stats);
   renderStrengthTile(stats);
   renderRetiredTile(stats);

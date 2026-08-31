@@ -413,6 +413,24 @@ describe('GET /api/stats', () => {
     const res = await request(app).get('/api/stats');
     expect(res.body.strengthHistory).toEqual([]);
   });
+
+  it('includes accuracyHistory as [{playedAt, accuracy}] for finished games with accuracy', async () => {
+    const { app, gameRepo } = buildApp();
+    const playedAt = new Date('2026-08-20T12:00:00Z').getTime();
+    addFinishedGame(gameRepo, { playedAt, accuracy: 82 });
+    addFinishedGame(gameRepo, { playedAt: playedAt + 1000, accuracy: null });
+    const res = await request(app).get('/api/stats');
+    const h = res.body.accuracyHistory;
+    expect(Array.isArray(h)).toBe(true);
+    expect(h.length).toBe(1);
+    expect(h[0].accuracy).toBe(82);
+  });
+
+  it('returns empty accuracyHistory when no finished games have accuracy', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.accuracyHistory).toEqual([]);
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────
