@@ -101,7 +101,12 @@ Quiz is intended for immediate review while the game is fresh. The FSRS scheduli
 The drill screen shows one position at a time. Click (or tap) a piece and destination to submit a move. The board is interactive.
 
 After submitting:
-- **Correct**: the next position loads after a short confirmation flash
-- **Wrong**: the board shows the best move; the position stays on screen for review; the card is scheduled as **Again**
+
+- **Correct**: the next position loads after a short confirmation flash.
+- **Wrong on first attempt**: one retry is given. The position stays on screen and the feedback banner says "Not the best — one more try."
+- **Wrong on second attempt**: three pieces of feedback are shown simultaneously:
+  1. **Best-move arrow** — a green arrow drawn directly on the board shows exactly which move was correct and where it lands.
+  2. **Threat explanation** — if a tactical threat is detectable (a piece left hanging, a fork created), a one-sentence description appears: *"Moving the knight away from f3 left the queen on d1 undefended."* Computed locally from the position — no engine call.
+  3. **Motif tag** — each mistake is classified as a named error type (`hanging_piece`, `fork`, etc.) and stored with the card. The tag drives the **Top weakness** tile on the Stats page.
 
 The due count in the header decrements as you complete cards. When the queue empties, the screen shows the empty state.

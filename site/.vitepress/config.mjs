@@ -92,6 +92,7 @@ export default defineConfig({
             { text: 'Strength Estimation', link: '/research/strength-estimation' },
             { text: 'Methodology & Design', link: '/research/methodology' },
             { text: 'Preregistration', link: '/research/preregistration' },
+            { text: 'Chess Feedback Without an LLM', link: '/research/chess-feedback' },
           ],
         },
       ],

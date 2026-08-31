@@ -59,3 +59,4 @@ See also:
 - [Strength Estimation](/research/strength-estimation) — method behind the per-game Elo estimate
 - [Methodology & Design](/research/methodology) — detailed DSR and experimental design rationale
 - [Preregistration](/research/preregistration) — full RQ specifications, registered before first coach-enabled game
+- [Chess Feedback Without an LLM](/research/chess-feedback) — research note on deterministic mistake explanation for sub-1600 players
