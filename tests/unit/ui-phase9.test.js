@@ -240,6 +240,23 @@ describe('JS modules', () => {
     expect(js).toMatch(/show_streak/);
   });
 
+  it('dashboard.js reads todayDrills from state and shows session progress', () => {
+    const js = readFile('public/js/dashboard.js');
+    expect(js).toMatch(/todayDrills/);
+    expect(js).toMatch(/drill-today-sub/);
+  });
+
+  it('dashboard.js surfaces inProgressGameId as a resume prompt on the Play card', () => {
+    const js = readFile('public/js/dashboard.js');
+    expect(js).toMatch(/inProgressGameId/);
+    expect(js).toMatch(/[Rr]esume/);
+  });
+
+  it('index.html has drill-today-sub element in the drill action card', () => {
+    const html = readFile('public/index.html');
+    expect(html).toMatch(/drill-today-sub/);
+  });
+
   it('chart.js imports QUALITY from /shared/quality.js (not a relative path)', () => {
     const js = readFile('public/js/lib/chart.js');
     expect(js).toMatch(/from\s+['"]\/shared\/quality\.js['"]/);

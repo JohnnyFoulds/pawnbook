@@ -56,6 +56,15 @@ export class ScriptedEngineClient {
     return result.bestmove;
   }
 
+  /**
+   * Record a setoption call (no-op in scripted mode; used to verify call sequences).
+   * @param {string} name
+   * @param {string|number|boolean} value
+   */
+  setOption(name, value) {
+    this._calls.push({ type: 'setOption', name, value: String(value) });
+  }
+
   dispose() {}
 
   /** @returns {object[]} recorded calls (for assertions) */

@@ -41,7 +41,7 @@ function buildApp({
   app.use('/api/state',     stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }));
   app.use('/api/stats',     statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }));
   app.use('/api/games',     gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }));
-  app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo }));
+  app.use('/api/puzzles',   puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo, gameRepo }));
   app.use('/api/debug',     debugRouter({ gameRepo }));
   app.use(errorMiddleware);
   return { app, gameRepo, puzzleRepo, settingsRepo, clock, scheduler };
@@ -192,6 +192,37 @@ describe('GET /api/state', () => {
     const res = await request(app).get('/api/state');
     expect(res.body.showStreak).toBe(false);
   });
+
+  it('includes activityHistory as an array', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/state');
+    expect(Array.isArray(res.body.activityHistory)).toBe(true);
+  });
+
+  it('activityHistory contains recorded activity with day, games, reviews fields', async () => {
+    const { app, gameRepo } = buildApp();
+    gameRepo.recordActivity(NOW, 'review');
+    gameRepo.recordActivity(NOW, 'game');
+    const res = await request(app).get('/api/state');
+    const today = res.body.activityHistory.at(-1);
+    expect(today).toMatchObject({ reviews: 1, games: 1 });
+    expect(typeof today.day).toBe('string');
+  });
+
+  it('includes todayDrills with attempted and correct counts for today', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const pid = addPuzzle(puzzleRepo);
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt: NOW, correct: true,  attemptNo: 1, practice: false, suspectRecall: false });
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt: NOW, correct: false, attemptNo: 1, practice: false, suspectRecall: false });
+    const res = await request(app).get('/api/state');
+    expect(res.body.todayDrills).toMatchObject({ attempted: 2, correct: 1 });
+  });
+
+  it('returns todayDrills with zeros when no drills today', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/state');
+    expect(res.body.todayDrills).toMatchObject({ attempted: 0, correct: 0 });
+  });
 });
 
 // ─── GET /api/stats ───────────────────────────────────────────────────────────
@@ -259,6 +290,169 @@ describe('GET /api/stats', () => {
     expect(res.body.graduatedCount).toBe(1);
     expect(res.body.activeCount).toBe(1);
   });
+
+  it('includes motifAccuracy with correct/total per motif from drill reviews', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const pid = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    // Two drill reviews: first correct, second wrong
+    puzzleRepo.saveReview({ puzzleId: pid, correct: true,  attemptNo: 1, practice: 0, reviewedAt: NOW });
+    puzzleRepo.saveReview({ puzzleId: pid, correct: false, attemptNo: 1, practice: 0, reviewedAt: NOW });
+    // Practice review should be excluded
+    puzzleRepo.saveReview({ puzzleId: pid, correct: false, attemptNo: 1, practice: 1, reviewedAt: NOW });
+    const res = await request(app).get('/api/stats');
+    expect(res.body.motifAccuracy).toBeDefined();
+    expect(res.body.motifAccuracy.fork).toEqual({ total: 2, correct: 1 });
+  });
+
+  it('includes motifAccuracy as empty object when no drill reviews exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.motifAccuracy).toEqual({});
+  });
+
+  it('includes focusMotif pointing to highest-priority motif', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    addFinishedGame(gameRepo);
+    // fork: 5 mistakes, 80% accuracy → score 5*0.2=1.0
+    // back_rank: 3 mistakes, no drill history → score 3*1.0=3.0 — wins
+    const forkId = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-a', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-b', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-c', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-d', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-e', motifTag: 'back_rank' });
+    addPuzzle(puzzleRepo, { fen: 'fen-f', motifTag: 'back_rank' });
+    addPuzzle(puzzleRepo, { fen: 'fen-g', motifTag: 'back_rank' });
+    // Drill reviews for fork only (80% accuracy)
+    for (let i = 0; i < 5; i++) {
+      puzzleRepo.saveReview({ puzzleId: forkId, correct: i < 4, attemptNo: 1, practice: 0, reviewedAt: NOW });
+    }
+    const res = await request(app).get('/api/stats');
+    expect(res.body.focusMotif).toBeDefined();
+    expect(res.body.focusMotif.tag).toBe('back_rank');
+    expect(res.body.focusMotif.accuracy).toBeNull();
+  });
+
+  it('includes focusMotif as null when no motif breakdown exists', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.focusMotif).toBeNull();
+  });
+
+  it('includes drillHistory with day/attempted/correct per day', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const pid = addPuzzle(puzzleRepo);
+    const reviewedAt = new Date('2026-08-20T10:00:00Z').getTime();
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt, correct: true, attemptNo: 1, practice: false, suspectRecall: false });
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt, correct: false, attemptNo: 1, practice: false, suspectRecall: false });
+    const res = await request(app).get('/api/stats');
+    const history = res.body.drillHistory;
+    expect(Array.isArray(history)).toBe(true);
+    const day = history.find(d => d.day === '2026-08-20');
+    expect(day).toBeDefined();
+    expect(day.attempted).toBe(2);
+    expect(day.correct).toBe(1);
+  });
+
+  it('returns empty drillHistory when no drill reviews exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.drillHistory).toEqual([]);
+  });
+
+  it('includes winRateHistory with day/played/won per day', async () => {
+    const { app, gameRepo } = buildApp();
+    const playedAt = new Date('2026-08-20T12:00:00Z').getTime();
+    addFinishedGame(gameRepo, { playedAt, result: 'win' });
+    addFinishedGame(gameRepo, { playedAt, result: 'loss' });
+    const res = await request(app).get('/api/stats');
+    const history = res.body.winRateHistory;
+    expect(Array.isArray(history)).toBe(true);
+    const day = history.find(d => d.day === '2026-08-20');
+    expect(day).toBeDefined();
+    expect(day.played).toBe(2);
+    expect(day.won).toBe(1);
+  });
+
+  it('returns empty winRateHistory when no finished games exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.winRateHistory).toEqual([]);
+  });
+
+  it('includes rollingStrength and rollingSe when sufficient samples exist', async () => {
+    const { app, gameRepo } = buildApp();
+    const gid = addFinishedGame(gameRepo);
+    gameRepo.saveStrengthSample({ gameId: gid, side: 'player', n: 20, ase: 0.2638, sd: 0.09, p75Loss: null, wasTimed: false, coeffVersion: 1 });
+    const res = await request(app).get('/api/stats');
+    expect(typeof res.body.rollingStrength).toBe('number');
+    expect(typeof res.body.rollingSe).toBe('number');
+  });
+
+  it('returns rollingStrength null when no eligible samples exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.rollingStrength).toBeNull();
+    expect(res.body.rollingSe).toBeNull();
+  });
+
+  it('includes strengthHistory as [{playedAt, strengthElo}] for finished games with estimates', async () => {
+    const { app, gameRepo } = buildApp();
+    const playedAt = new Date('2026-08-20T12:00:00Z').getTime();
+    addFinishedGame(gameRepo, { playedAt, strengthElo: 1450 });
+    addFinishedGame(gameRepo, { playedAt: playedAt + 1000, strengthElo: null });
+    const res = await request(app).get('/api/stats');
+    const h = res.body.strengthHistory;
+    expect(Array.isArray(h)).toBe(true);
+    expect(h.length).toBe(1);
+    expect(h[0].strengthElo).toBe(1450);
+  });
+
+  it('returns empty strengthHistory when no finished games have estimates', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.strengthHistory).toEqual([]);
+  });
+
+  it('includes accuracyHistory as [{playedAt, accuracy}] for finished games with accuracy', async () => {
+    const { app, gameRepo } = buildApp();
+    const playedAt = new Date('2026-08-20T12:00:00Z').getTime();
+    addFinishedGame(gameRepo, { playedAt, accuracy: 82 });
+    addFinishedGame(gameRepo, { playedAt: playedAt + 1000, accuracy: null });
+    const res = await request(app).get('/api/stats');
+    const h = res.body.accuracyHistory;
+    expect(Array.isArray(h)).toBe(true);
+    expect(h.length).toBe(1);
+    expect(h[0].accuracy).toBe(82);
+  });
+
+  it('returns empty accuracyHistory when no finished games have accuracy', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.accuracyHistory).toEqual([]);
+  });
+
+  it('includes opponentStats with win/loss/draw counts and avgAccuracy per opponent', async () => {
+    const { app, gameRepo } = buildApp();
+    addFinishedGame(gameRepo, { opponentId: 'maia-1500', result: 'win',  accuracy: 80 });
+    addFinishedGame(gameRepo, { opponentId: 'maia-1500', result: 'loss', accuracy: 60 });
+    addFinishedGame(gameRepo, { opponentId: 'sf-1600',   result: 'win',  accuracy: 75 });
+    const res = await request(app).get('/api/stats');
+    const opp = res.body.opponentStats;
+    expect(Array.isArray(opp)).toBe(true);
+    const m1500 = opp.find(o => o.opponentId === 'maia-1500');
+    expect(m1500).toBeDefined();
+    expect(m1500.played).toBe(2);
+    expect(m1500.won).toBe(1);
+    expect(m1500.lost).toBe(1);
+    expect(m1500.avgAccuracy).toBe(70);
+  });
+
+  it('returns empty opponentStats when no finished games exist', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.opponentStats).toEqual([]);
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────
@@ -325,6 +519,55 @@ describe('GET /api/games/:id/review', () => {
     const res = await request(app).get(`/api/games/${gameId}/review`);
     const mistake = res.body.mistakes[0];
     expect(mistake.engineOnly).toBe(true);
+  });
+
+  it('includes motifExplanation as a string when motifTag and playedMoveUci are present', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    // Nf3-g5: knight moves to g5, attacked by h6-pawn — hanging_piece fires
+    addPuzzle(puzzleRepo, {
+      sourceGameId: gameId,
+      fen: '4k3/8/7p/8/8/5N2/8/4K3 w - - 0 1',
+      sideToMove: 'white',
+      playedMoveUci: 'f3g5',
+      motifTag: 'hanging_piece',
+    });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    const mistake = res.body.mistakes[0];
+    expect(mistake.motifExplanation).toBeTypeOf('string');
+    expect(mistake.motifExplanation.length).toBeGreaterThan(10);
+  });
+
+  it('includes motifExplanation as null when motifTag is null', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    addPuzzle(puzzleRepo, { sourceGameId: gameId, motifTag: null });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    const mistake = res.body.mistakes[0];
+    expect(mistake.motifExplanation).toBeNull();
+  });
+
+  it('includes motifSummary sorted by count descending', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    addPuzzle(puzzleRepo, { sourceGameId: gameId, motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-a', sourceGameId: gameId, motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-b', sourceGameId: gameId, motifTag: 'pin' });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    const summary = res.body.motifSummary;
+    expect(Array.isArray(summary)).toBe(true);
+    expect(summary[0].tag).toBe('fork');
+    expect(summary[0].count).toBe(2);
+    expect(summary[1].tag).toBe('pin');
+    expect(summary[1].count).toBe(1);
+  });
+
+  it('returns empty motifSummary when no mistakes have motif tags', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    const gameId = addFinishedGame(gameRepo);
+    addPuzzle(puzzleRepo, { sourceGameId: gameId, motifTag: null });
+    const res = await request(app).get(`/api/games/${gameId}/review`);
+    expect(res.body.motifSummary).toEqual([]);
   });
 });
 
@@ -542,6 +785,50 @@ describe('GET /api/puzzles/due', () => {
     puzzleRepo.saveCard({ puzzleId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
     const res = await request(app).get('/api/puzzles/due');
     expect(res.body.cards[0]).toHaveProperty('puzzleId');
+  });
+
+  it('includes motifExplanation as a string when motifTag and playedMoveUci are present', async () => {
+    const { app, puzzleRepo } = buildApp();
+    // hanging_piece: Nf3-g5 lands on attacked, undefended square
+    const puzzleId = addPuzzle(puzzleRepo, {
+      fen: '4k3/8/7p/8/8/5N2/8/4K3 w - - 0 1',
+      sideToMove: 'white',
+      playedMoveUci: 'f3g5',
+      motifTag: 'hanging_piece',
+    });
+    puzzleRepo.saveCard({ puzzleId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due');
+    expect(res.body.cards[0].motifExplanation).toBeTypeOf('string');
+    expect(res.body.cards[0].motifExplanation.length).toBeGreaterThan(10);
+  });
+
+  it('includes motifExplanation as null when no motifTag is present', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const puzzleId = addPuzzle(puzzleRepo, { motifTag: null });
+    puzzleRepo.saveCard({ puzzleId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due');
+    expect(res.body.cards[0].motifExplanation).toBeNull();
+  });
+
+  it('?motif= filter returns only cards with the specified motif tag', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const forkId = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    const hangId = addPuzzle(puzzleRepo, { motifTag: 'hanging_piece', fen: '4k3/8/8/8/8/8/8/4K3 w - - 0 1' });
+    puzzleRepo.saveCard({ puzzleId: forkId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    puzzleRepo.saveCard({ puzzleId: hangId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due?motif=fork');
+    expect(res.body.cards.every(c => c.motifTag === 'fork')).toBe(true);
+    expect(res.body.cards.length).toBe(1);
+  });
+
+  it('?motif= filter returns all cards when motif param is absent', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const forkId = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    const hangId = addPuzzle(puzzleRepo, { motifTag: 'hanging_piece', fen: '4k3/8/8/8/8/8/8/4K3 w - - 0 1' });
+    puzzleRepo.saveCard({ puzzleId: forkId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    puzzleRepo.saveCard({ puzzleId: hangId, due: NOW - 1000, graduated: false, reps: 0, lapses: 0 });
+    const res = await request(app).get('/api/puzzles/due');
+    expect(res.body.cards.length).toBe(2);
   });
 });
 
@@ -787,6 +1074,20 @@ describe('GET /api/puzzles/practice - error path', () => {
     const { app } = buildApp({ puzzleRepo });
     const res = await request(app).get('/api/puzzles/practice');
     expect(res.status).toBe(500);
+  });
+});
+
+// ─── POST /api/puzzles/:id/attempt — activity recording ─────────────────────
+
+describe('POST /api/puzzles/:id/attempt — recordActivity', () => {
+  it('records review activity on the gameRepo after a drill attempt', async () => {
+    const { app, puzzleRepo, gameRepo } = buildApp();
+    const puzzleId = addPuzzle(puzzleRepo, { acceptedMovesJson: '["e7e5"]', followupUci: null });
+    puzzleRepo.saveCard({ puzzleId, due: NOW - 1000, graduated: false, reps: 1, lapses: 0 });
+    await request(app)
+      .post(`/api/puzzles/${puzzleId}/attempt`)
+      .send({ move: 'e7e5', msTaken: 5000, hintUsed: false, attemptNo: 1, phase: 'drill' });
+    expect(gameRepo.getStreak(NOW)).toBe(1);
   });
 });
 
@@ -1056,17 +1357,39 @@ describe('POST /api/debug/reset', () => {
 // ─── GET /api/state — inner and outer catch branches ─────────────────────────
 
 describe('GET /api/state — catch branch coverage', () => {
-  it('inner catch: streak falls back to 0 when streak_cache.get throws (state.js line 34-35)', async () => {
-    const settingsRepo = new InMemorySettingsRepository();
-    const origGet = settingsRepo.get.bind(settingsRepo);
-    settingsRepo.get = (key) => {
-      if (key === 'streak_cache') throw new Error('db error on streak_cache');
-      return origGet(key);
-    };
-    const { app } = buildApp({ settingsRepo });
+  it('streak is 0 when no activity has been recorded', async () => {
+    const { app } = buildApp();
     const res = await request(app).get('/api/state');
     expect(res.status).toBe(200);
     expect(res.body.streak).toBe(0);
+  });
+
+  it('streak is 1 when activity was recorded today', async () => {
+    const { app, gameRepo } = buildApp();
+    gameRepo.recordActivity(NOW, 'review');
+    const res = await request(app).get('/api/state');
+    expect(res.body.streak).toBe(1);
+  });
+
+  it('bestStreak reflects the longest consecutive run in history', async () => {
+    const { app, gameRepo } = buildApp();
+    const DAY = 86_400_000;
+    // 3 consecutive days (the all-time best), then a gap, then 2 more days (current streak)
+    gameRepo.recordActivity(NOW - 5 * DAY, 'review');
+    gameRepo.recordActivity(NOW - 4 * DAY, 'review');
+    gameRepo.recordActivity(NOW - 3 * DAY, 'review');
+    // gap of 1 day
+    gameRepo.recordActivity(NOW - 1 * DAY, 'review');
+    gameRepo.recordActivity(NOW, 'review');
+    const res = await request(app).get('/api/state');
+    expect(res.body.bestStreak).toBe(3);
+    expect(res.body.streak).toBe(2);
+  });
+
+  it('bestStreak is 0 when no activity exists', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/state');
+    expect(res.body.bestStreak).toBe(0);
   });
 
   it('outer catch: returns 500 when settingsRepo.get("elo") throws (state.js line 85-86)', async () => {

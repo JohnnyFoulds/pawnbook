@@ -681,3 +681,113 @@ describe('pipeline', () => {
     expect(playerStrength.n + opponentStrength.n).toBe(FOUR_MOVE_PLIES.length);
   });
 });
+
+// ── Pass 4: Maia-3 policy strength probe ─────────────────────────────────────
+
+function makeMaia3Client(policyMap = null) {
+  const defaultMap = new Map([['e2e4', 0.5], ['d2d4', 0.25]]);
+  const calls = [];
+  const setOptionCalls = [];
+  return {
+    _calls: calls,
+    _setOptionCalls: setOptionCalls,
+    setOption: (name, value) => { setOptionCalls.push({ name, value: String(value) }); },
+    policy: async (fen) => {
+      calls.push({ type: 'policy', fen });
+      return policyMap ?? defaultMap;
+    },
+    dispose: () => {},
+  };
+}
+
+describe('pipeline pass 4', () => {
+  it('pass 4: result includes playerMaiaLogProb when maia3Client is provided', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const maia3Client = makeMaia3Client();
+    const result = await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maia3Client,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    expect(result).toHaveProperty('playerMaiaLogProb');
+    // FOUR_MOVE_PLIES gives 2 eligible player plies — pass 4 runs using stored playerElo
+    expect(result.playerMaiaLogProb).not.toBeNull();
+    expect(result.playerMaiaLogProb).toHaveProperty('maiaLogProb');
+    expect(result.playerMaiaLogProb).toHaveProperty('n');
+  });
+
+  it('pass 4: probes maia3 for each eligible player ply', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const maia3Client = makeMaia3Client();
+    await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maia3Client,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    // FOUR_MOVE_PLIES: white plays plies 1 and 3 (player when playerColor='white')
+    // Both are eligible (cp=30, mateIn=null, legalMoves > 1) → 2 policy calls
+    const policyCalls = maia3Client._calls.filter(c => c.type === 'policy');
+    expect(policyCalls.length).toBe(2);
+  });
+
+  it('pass 4: sets SelfElo on maia3Client for each eligible ply', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const maia3Client = makeMaia3Client();
+    await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maia3Client,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    const selfEloCalls = maia3Client._setOptionCalls.filter(c => c.name === 'SelfElo');
+    expect(selfEloCalls.length).toBeGreaterThan(0);
+    // SelfElo should be rounded to nearest 100 and within [1100, 2400]
+    const elo = Number(selfEloCalls[0].value);
+    expect(elo % 100).toBe(0);
+    expect(elo).toBeGreaterThanOrEqual(1100);
+    expect(elo).toBeLessThanOrEqual(2400);
+  });
+
+  it('pass 4: skipped when maia3Client is not provided', async () => {
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const result = await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+      // no maia3Client
+    });
+    expect(result.playerMaiaLogProb).toBeNull();
+  });
+
+  it('pass 4: skipped when all player plies are ineligible (decided position)', async () => {
+    // Every position has |cpWhite| > STRENGTH_DECIDED_CP → no eligible positions
+    const decidedSf = new ScriptedEngineClient({
+      'default': 'info depth 18 score cp 700 nodes 1000 pv e2e4\nbestmove e2e4',
+    });
+    const maiaClient = makeMaiaClient();
+    const maia3Client = makeMaia3Client();
+    const result = await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient: decidedSf, maiaClient,
+      maia3Client,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    expect(result.playerMaiaLogProb).toBeNull();
+  });
+
+  it('pass 4: uses stored playerElo as SelfElo when playerStrength is null', async () => {
+    // Short game → playerStrength.strength is null; SelfElo falls back to playerElo=1300 → rounds to 1300
+    const sfClient = makeSfClient();
+    const maiaClient = makeMaiaClient();
+    const maia3Client = makeMaia3Client();
+    await runAnalysis({
+      plies: FOUR_MOVE_PLIES, playerColor: 'white', sfClient, maiaClient,
+      maia3Client,
+      maiaModel: 'maia-1300', playerElo: 1300, wasTimed: false,
+    });
+    const selfEloCalls = maia3Client._setOptionCalls.filter(c => c.name === 'SelfElo');
+    expect(selfEloCalls.length).toBeGreaterThan(0);
+    expect(selfEloCalls[0].value).toBe('1300'); // 1300 rounds to 1300
+  });
+});

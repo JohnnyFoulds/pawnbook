@@ -10,6 +10,12 @@ import { QUALITY, GLYPH_TIERS } from '/shared/quality.js';
 
 const BASE = '';
 
+const MOTIF_LABEL = {
+  hanging_piece: 'hanging piece', fork: 'fork', back_rank: 'back rank',
+  missed_capture: 'missed capture', overloaded_defender: 'overloaded defender',
+  pinned_piece: 'pin', skewer: 'skewer', discovered_attack: 'discovered attack',
+};
+
 async function api(path) {
   const r = await fetch(BASE + path);
   if (!r.ok) throw new Error(await r.text());
@@ -54,6 +60,7 @@ async function boot() {
     renderMoveList(review.moves ?? []);
     renderEvalGraphSection(review);
     renderBreakdownSection(review);
+    renderDebriefCard(review);
     renderMistakeList(review);
     setupQuizLink(gameId, review.puzzleCount ?? 0);
     await setupBoard(review);
@@ -95,7 +102,7 @@ function renderAccuracyBars(review) {
 function renderStrengthLine(review) {
   const el = document.getElementById('strength-line');
   if (!el) return;
-  const { strengthElo, opponentStrengthElo, strengthSe, opponentStrengthSe, rollingStrength, rollingSe, opponentId } = review;
+  const { strengthElo, opponentStrengthElo, strengthSe, opponentStrengthSe, rollingStrength, rollingSe, opponentId, maia3LogProb } = review;
   if (strengthElo == null && opponentStrengthElo == null) {
     el.innerHTML = '<span style="color:var(--ink-muted)">Not enough positions to estimate strength.</span>';
     return;
@@ -104,10 +111,14 @@ function renderStrengthLine(review) {
   const rolling = rollingStrength != null
     ? `<span style="color:var(--ink-muted);font-size:12px;margin-left:12px">Last 10 games: ${rollingStrength}${rollingSe != null ? ' ±' + rollingSe : ''}</span>`
     : '';
+  const styleScore = maia3LogProb != null
+    ? ` &nbsp;·&nbsp; <span title="Style match: how often Maia-3 predicted your moves at your Elo level">Style ${Math.round(100 * Math.exp(maia3LogProb))}%</span>`
+    : '';
   el.innerHTML =
     `<strong>You</strong> ${fmt(strengthElo, strengthSe)} &nbsp;·&nbsp; ` +
     `<strong>${opponentId ?? 'Opponent'}</strong> ${fmt(opponentStrengthElo, opponentStrengthSe)}` +
     rolling +
+    styleScore +
     `<span style="color:var(--ink-muted);font-size:11px;margin-left:8px">(± = 1 SE)</span>`;
 }
 
@@ -121,16 +132,18 @@ function renderMoveList(moves) {
     const row = document.createElement('div');
     row.className = 'move-list__row';
 
-    const chipFor = (m) => {
-      if (!m || !m.classification || !GLYPH_TIERS.includes(m.classification)) return '';
+    const glyphFor = (m) => {
+      if (!m || !m.classification || !GLYPH_TIERS.includes(m.classification)) {
+        return '<span class="move-list__glyph"></span>';
+      }
       const tier = QUALITY[m.classification];
-      return `<span class="quality-chip quality-chip--${m.classification}">${tier.glyph}</span>`;
+      return `<span class="move-list__glyph quality-chip--${m.classification}">${tier.glyph}</span>`;
     };
 
     row.innerHTML = `
       <span class="move-list__num">${moveNum}.</span>
-      <span class="move-list__move" data-ply="${white?.ply}">${white?.san ?? ''} ${chipFor(white)}</span>
-      <span class="move-list__move" data-ply="${black?.ply}">${black?.san ?? ''} ${chipFor(black)}</span>
+      <span class="move-list__move" data-ply="${white?.ply}"><span class="move-list__san">${white?.san ?? ''}</span>${glyphFor(white)}</span>
+      <span class="move-list__move" data-ply="${black?.ply}"><span class="move-list__san">${black?.san ?? ''}</span>${glyphFor(black)}</span>
     `;
     list.appendChild(row);
   }
@@ -206,6 +219,22 @@ function renderBreakdownSection(review) {
   });
 }
 
+function renderDebriefCard(review) {
+  const summary = review.motifSummary ?? [];
+  const card = document.getElementById('debrief-card');
+  if (!summary.length) { card.hidden = true; return; }
+  card.hidden = false;
+  document.getElementById('debrief-body').innerHTML = summary.map((s) => {
+    const label = MOTIF_LABEL[s.tag] ?? s.tag.replace(/_/g, ' ');
+    const times = s.count === 1 ? '1 time' : `${s.count} times`;
+    return `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+      <span class="mistake-row__tag mistake-row__tag--motif">${label}</span>
+      <span style="font-size:13px;color:var(--ink-muted)">${times}</span>
+      <a href="puzzles.html?motif=${encodeURIComponent(s.tag)}" style="margin-left:auto;font-size:12px">Drill →</a>
+    </div>`;
+  }).join('');
+}
+
 function renderMistakeList(review) {
   const drillable = (review.mistakes ?? []).filter((m) => !m.engineOnly);
   const engineOnly = (review.mistakes ?? []).filter((m) => m.engineOnly);
@@ -219,18 +248,24 @@ function renderMistakeList(review) {
     const chip = glyph
       ? `<span class="quality-chip quality-chip--${m.classification}">${glyph}</span>`
       : '';
+    const motifBadge = m.motifTag ? `<span class="mistake-row__tag mistake-row__tag--motif">${MOTIF_LABEL[m.motifTag] ?? m.motifTag.replace(/_/g, ' ')}</span>` : '';
+    const explainHtml = m.motifExplanation
+      ? `<div class="mistake-row__explain">${m.motifExplanation}</div>`
+      : '';
     return `<div class="mistake-row">
       <div class="mistake-row__head">
         ${chip}
         <span class="mistake-row__move">${m.moveSan}</span>
         <span class="mistake-row__loss">lost ${m.winLoss != null ? Math.round(m.winLoss) : '?'}% win</span>
         ${m.tags?.includes('common_trap') ? '<span class="mistake-row__tag">common trap</span>' : ''}
+        ${motifBadge}
       </div>
       <div class="mistake-row__detail">
         Best was ${m.bestMoveSan}${m.findability != null
           ? ` — ${m.maiaNearestModel ?? 'Maia'} finds it ${Math.round(m.findability * 100)}% of the time`
           : ''}
       </div>
+      ${explainHtml}
     </div>`;
   };
 

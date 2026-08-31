@@ -166,6 +166,48 @@ describe('GET /api/games/:id/review', () => {
     expect(res.body.mistakes[0].maiaNearestModel).toBeNull();
   });
 
+  it('includes maia3LogProb in review response when game has it set', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const game = makeGame();
+    game.maia3LogProb = -1.8;
+    gameRepo.save(game);
+    const res = await request(makeApp(gameRepo, puzzleRepo)).get(`/api/games/${game.id}/review`);
+    expect(res.status).toBe(200);
+    expect(res.body.maia3LogProb).toBeCloseTo(-1.8);
+  });
+
+  it('includes maia3LogProb as null when game does not have it set', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const game = makeGame();
+    gameRepo.save(game);
+    const res = await request(makeApp(gameRepo, puzzleRepo)).get(`/api/games/${game.id}/review`);
+    expect(res.status).toBe(200);
+    expect(res.body.maia3LogProb).toBeNull();
+  });
+
+  it('includes motifTag in mistake when puzzle has motifTag set', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const game = makeGame();
+    gameRepo.save(game);
+    puzzleRepo.save({
+      id: randomUUID(), kind: 'tactical',
+      fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+      sideToMove: 'black', bestMoveUci: 'e7e5', bestMoveSan: 'e5',
+      playedMoveUci: 'd7d5', playedMoveSan: 'd5', classification: 'inaccuracy',
+      findability: 0.4, temptation: 0.3, instructiveness: 0.5, tags: '',
+      winLossPts: 15, cpLoss: 50, maiaModel: null, policyTemperature: 1.0,
+      eloAtCreation: 1200, sourceGameId: game.id, sourcePly: 1,
+      phase: 'opening', wasTimed: 0, motifTag: 'hanging_piece',
+    });
+    const res = await request(makeApp(gameRepo, puzzleRepo))
+      .get(`/api/games/${game.id}/review`);
+    expect(res.status).toBe(200);
+    expect(res.body.mistakes[0].motifTag).toBe('hanging_piece');
+  });
+
   it('throws when game not found', async () => {
     const gameRepo = new InMemoryGameRepository();
     const puzzleRepo = new InMemoryPuzzleRepository();

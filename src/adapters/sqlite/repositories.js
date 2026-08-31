@@ -38,6 +38,20 @@ function _deriveStreak(sortedDaysDesc, todayKey) {
   return streak;
 }
 
+function _computeBestStreak(sortedDaysAsc) {
+  if (!sortedDaysAsc.length) return 0;
+  let best = 1, current = 1;
+  for (let i = 1; i < sortedDaysAsc.length; i++) {
+    const diff = Math.round(
+      (new Date(sortedDaysAsc[i] + 'T12:00:00') - new Date(sortedDaysAsc[i - 1] + 'T12:00:00'))
+      / 86_400_000,
+    );
+    current = diff === 1 ? current + 1 : 1;
+    if (current > best) best = current;
+  }
+  return best;
+}
+
 
 /**
  * @param {string} dbPath
@@ -64,7 +78,7 @@ export class SqliteGameRepository {
         clock_white_ms, clock_black_ms,
         result, termination, pgn, played_at,
         elo_before, elo_after, accuracy, opponent_accuracy,
-        strength_elo, opponent_strength_elo,
+        strength_elo, opponent_strength_elo, maia3_log_prob,
         analysis_state, analysis_error, analysed_at
       ) VALUES (
         @id, @started_at, @opponent_id, @opponent_elo, @player_color,
@@ -72,7 +86,7 @@ export class SqliteGameRepository {
         @clock_white_ms, @clock_black_ms,
         @result, @termination, @pgn, @played_at,
         @elo_before, @elo_after, @accuracy, @opponent_accuracy,
-        @strength_elo, @opponent_strength_elo,
+        @strength_elo, @opponent_strength_elo, @maia3_log_prob,
         @analysis_state, @analysis_error, @analysed_at
       )
       ON CONFLICT(id) DO UPDATE SET
@@ -89,6 +103,7 @@ export class SqliteGameRepository {
         opponent_accuracy     = excluded.opponent_accuracy,
         strength_elo          = excluded.strength_elo,
         opponent_strength_elo = excluded.opponent_strength_elo,
+        maia3_log_prob        = excluded.maia3_log_prob,
         analysis_state        = excluded.analysis_state,
         analysis_error   = excluded.analysis_error,
         analysed_at      = excluded.analysed_at
@@ -116,6 +131,7 @@ export class SqliteGameRepository {
       opponent_accuracy: game.opponentAccuracy ?? null,
       strength_elo: game.strengthElo ?? null,
       opponent_strength_elo: game.opponentStrengthElo ?? null,
+      maia3_log_prob: game.maia3LogProb ?? null,
       analysis_state: game.analysisState ?? 'pending',
       analysis_error: game.analysisError ?? null,
       analysed_at: game.analysedAt ?? null,
@@ -303,6 +319,7 @@ export class SqliteGameRepository {
       opponentAccuracy: row.opponent_accuracy,
       strengthElo: row.strength_elo ?? null,
       opponentStrengthElo: row.opponent_strength_elo ?? null,
+      maia3LogProb: row.maia3_log_prob ?? null,
       analysisState: row.analysis_state,
       analysisError: row.analysis_error ?? null,
       analysedAt: row.analysed_at,
@@ -366,6 +383,35 @@ export class SqliteGameRepository {
     const rows = this._db.prepare('SELECT day FROM activity ORDER BY day DESC').all();
     return _deriveStreak(rows.map(r => r.day), _activityDayKey(todayTimestampMs));
   }
+
+  getBestStreak() {
+    const rows = this._db.prepare(
+      'SELECT day FROM activity WHERE games + reviews > 0 ORDER BY day ASC'
+    ).all();
+    return _computeBestStreak(rows.map(r => r.day));
+  }
+
+  getWinRateHistory(limitDays = 90) {
+    return this._db.prepare(`
+      SELECT
+        strftime('%Y-%m-%d', datetime((played_at / 1000) - 14400, 'unixepoch')) AS day,
+        COUNT(*) AS played,
+        CAST(SUM(CASE WHEN result = 'win'  THEN 1 ELSE 0 END) AS INTEGER) AS won,
+        CAST(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS INTEGER) AS lost,
+        CAST(SUM(CASE WHEN result = 'draw' THEN 1 ELSE 0 END) AS INTEGER) AS drawn
+      FROM games
+      WHERE status = 'finished' AND played_at IS NOT NULL AND ranked = 1
+      GROUP BY day
+      ORDER BY day DESC
+      LIMIT ?
+    `).all(limitDays).reverse();
+  }
+
+  getActivityHistory(limitDays = 30) {
+    return this._db.prepare(
+      'SELECT day, games, reviews FROM activity ORDER BY day DESC LIMIT ?'
+    ).all(limitDays).reverse();
+  }
 }
 
 export class SqlitePuzzleRepository {
@@ -388,12 +434,12 @@ export class SqlitePuzzleRepository {
         accepted_moves_json, followup_uci, played_move_uci, played_move_san,
         cp_loss, win_loss_pts, classification, findability, temptation, instructiveness,
         tags, maia_model, policy_temperature, elo_at_creation, source_game_id, source_ply,
-        phase, was_timed, times_seen, created_at)
+        phase, was_timed, motif_tag, times_seen, created_at)
       VALUES (@id, @kind, @fen, @side_to_move, @best_move_uci, @best_move_san, @pv,
         @accepted_moves_json, @followup_uci, @played_move_uci, @played_move_san,
         @cp_loss, @win_loss_pts, @classification, @findability, @temptation, @instructiveness,
         @tags, @maia_model, @policy_temperature, @elo_at_creation, @source_game_id, @source_ply,
-        @phase, @was_timed, 1, @created_at)
+        @phase, @was_timed, @motif_tag, 1, @created_at)
     `).run({
       id,
       kind,
@@ -420,6 +466,7 @@ export class SqlitePuzzleRepository {
       source_ply: puzzle.sourcePly ?? null,
       phase: puzzle.phase ?? null,
       was_timed: puzzle.wasTimed ? 1 : 0,
+      motif_tag: puzzle.motifTag ?? null,
       created_at: puzzle.createdAt ?? Date.now(),
     });
     return id;
@@ -483,7 +530,7 @@ export class SqlitePuzzleRepository {
   getDueCards(now) {
     return this._db.prepare(`
       SELECT p.id, p.kind, p.fen, p.side_to_move, p.best_move_uci, p.best_move_san,
-        p.accepted_moves_json, p.findability, p.instructiveness, p.tags,
+        p.accepted_moves_json, p.findability, p.instructiveness, p.tags, p.motif_tag,
         f.due, f.stability, f.difficulty, f.reps, f.lapses, f.state, f.graduated
       FROM puzzles p
       JOIN fsrs_cards f ON f.puzzle_id = p.id
@@ -546,6 +593,46 @@ export class SqlitePuzzleRepository {
       WHERE f.due > ? AND f.graduated = 0
       ORDER BY p.instructiveness DESC
     `).all(now);
+  }
+
+  /** @returns {Array<{motifTag: string, total: number, correct: number}>} */
+  getMotifDrillAccuracy() {
+    return this._db.prepare(`
+      SELECT p.motif_tag as motifTag,
+        COUNT(*) as total,
+        SUM(r.correct) as correct
+      FROM reviews r
+      JOIN puzzles p ON p.id = r.puzzle_id
+      WHERE p.motif_tag IS NOT NULL
+        AND r.attempt_no = 1
+        AND r.practice = 0
+      GROUP BY p.motif_tag
+    `).all();
+  }
+
+  getDrillAccuracyHistory(limitDays = 30) {
+    return this._db.prepare(`
+      SELECT
+        strftime('%Y-%m-%d', datetime((reviewed_at / 1000) - 14400, 'unixepoch')) AS day,
+        COUNT(*) AS attempted,
+        CAST(SUM(correct) AS INTEGER) AS correct
+      FROM reviews
+      WHERE attempt_no = 1 AND practice = 0
+      GROUP BY day
+      ORDER BY day DESC
+      LIMIT ?
+    `).all(limitDays).reverse();
+  }
+
+  getTodayDrillStats(nowMs) {
+    const row = this._db.prepare(`
+      SELECT COUNT(*) AS attempted, CAST(SUM(correct) AS INTEGER) AS correct
+      FROM reviews
+      WHERE attempt_no = 1 AND practice = 0
+        AND strftime('%Y-%m-%d', datetime((reviewed_at / 1000) - 14400, 'unixepoch'))
+          = strftime('%Y-%m-%d', datetime((? / 1000) - 14400, 'unixepoch'))
+    `).get(nowMs);
+    return { attempted: row.attempted ?? 0, correct: row.correct ?? 0 };
   }
 
   /**

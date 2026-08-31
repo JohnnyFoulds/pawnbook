@@ -4,7 +4,7 @@
  * quick-play and drill CTAs, rating sparkline, recent games.
  */
 
-import './lib/chart.js';
+import { drawActivityBars } from './lib/chart.js';
 
 const BASE = '';
 
@@ -53,20 +53,54 @@ async function init() {
     const streakTile = document.getElementById('tile-streak');
     if (!showStreak && streakTile) streakTile.style.display = 'none';
     if (showStreak) {
-      document.getElementById('streak-value').textContent = String(state.streak ?? 0);
+      const streak = state.streak ?? 0;
+      const bestStreak = state.bestStreak ?? 0;
+      document.getElementById('streak-value').textContent = String(streak);
+      const bestEl = document.getElementById('streak-best');
+      if (bestEl && streak >= 2 && streak >= bestStreak && bestStreak >= 2) {
+        bestEl.textContent = 'Personal best!';
+        bestEl.style.display = '';
+      } else if (bestEl && bestStreak >= 2) {
+        bestEl.textContent = `Best: ${bestStreak}`;
+        bestEl.style.display = '';
+      }
     }
 
-    // Suggested opponent
-    document.getElementById('suggested-opponent').textContent =
-      state.suggestedOpponent
-        ? `Suggested: ${state.suggestedOpponent}`
-        : 'Choose your opponent';
+    // Today's drill progress
+    const td = state.todayDrills ?? { attempted: 0, correct: 0 };
+    const drillSubEl = document.getElementById('drill-today-sub');
+    if (drillSubEl && td.attempted > 0) {
+      const pct = Math.round((td.correct / td.attempted) * 100);
+      drillSubEl.textContent = `${td.correct} correct · ${td.attempted} done today (${pct}%)`;
+    }
 
-    // Hide sparkline canvases — no per-day due/streak history available from the API yet
-    ['spark-due', 'spark-streak'].forEach((id) => {
-      const c = document.getElementById(id);
-      if (c) c.style.display = 'none';
-    });
+    // Play card: resume prompt or suggested opponent
+    if (state.inProgressGameId) {
+      const headingEl = document.getElementById('play-card-heading');
+      if (headingEl) headingEl.textContent = 'Resume';
+      document.getElementById('suggested-opponent').textContent =
+        `vs ${state.inProgressOpponentId ?? 'opponent'} →`;
+    } else {
+      document.getElementById('suggested-opponent').textContent =
+        state.suggestedOpponent
+          ? `Suggested: ${state.suggestedOpponent}`
+          : 'Choose your opponent';
+    }
+
+    // Activity sparkline (daily review counts for last 30 days)
+    const activityCanvas = document.getElementById('spark-streak');
+    const history = state.activityHistory ?? [];
+    if (activityCanvas && history.length) {
+      const dpr = window.devicePixelRatio || 1;
+      activityCanvas.width = activityCanvas.offsetWidth * dpr || 80 * dpr;
+      activityCanvas.height = activityCanvas.offsetHeight * dpr || 24 * dpr;
+      drawActivityBars(activityCanvas, history.map(h => h.reviews));
+    } else if (activityCanvas) {
+      activityCanvas.style.display = 'none';
+    }
+    // Hide due sparkline — no per-day due history available yet
+    const dueSpark = document.getElementById('spark-due');
+    if (dueSpark) dueSpark.style.display = 'none';
 
     // ELO chart
     if (state.eloHistory?.length) {

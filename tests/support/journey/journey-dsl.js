@@ -12,7 +12,7 @@ import { getProvenanceId } from '../../../src/api/ws/repertoire-service.js';
 
 import { advanceDays } from './harness.js';
 
-const DEFAULT_OPPONENT = 'maia-1100';
+const DEFAULT_OPPONENT = 'sf-1400';
 
 // ─── Game scripting ──────────────────────────────────────────────────────────
 

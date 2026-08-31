@@ -12,7 +12,7 @@ import { normaliseToWhitePov } from '../../shared/pov.js';
 
 const log = logger.child({ mod: 'uci-engine-client' });
 
-const HANDSHAKE_TIMEOUT_MS = 10_000;
+const HANDSHAKE_TIMEOUT_MS = 60_000;
 
 /**
  * @param {string} binaryPath

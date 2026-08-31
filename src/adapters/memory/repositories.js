@@ -62,6 +62,20 @@ function _deriveStreak(days, todayKey) {
   return streak;
 }
 
+function _computeBestStreak(sortedDaysAsc) {
+  if (!sortedDaysAsc.length) return 0;
+  let best = 1, current = 1;
+  for (let i = 1; i < sortedDaysAsc.length; i++) {
+    const diff = Math.round(
+      (new Date(sortedDaysAsc[i] + 'T12:00:00') - new Date(sortedDaysAsc[i - 1] + 'T12:00:00'))
+      / 86_400_000,
+    );
+    current = diff === 1 ? current + 1 : 1;
+    if (current > best) best = current;
+  }
+  return best;
+}
+
 export class InMemoryGameRepository {
   constructor() {
     this._games = new Map();
@@ -178,6 +192,35 @@ export class InMemoryGameRepository {
     return _deriveStreak([...this._activity.keys()], _activityDayKey(todayTimestampMs));
   }
 
+  getBestStreak() {
+    const days = [...this._activity.keys()].sort();
+    return _computeBestStreak(days);
+  }
+
+  getWinRateHistory(limitDays = 90) {
+    const byDay = new Map();
+    for (const g of this._games.values()) {
+      if (g.status !== 'finished' || !g.playedAt || !g.ranked) continue;
+      const day = _activityDayKey(g.playedAt);
+      const entry = byDay.get(day) ?? { day, played: 0, won: 0, lost: 0, drawn: 0 };
+      entry.played++;
+      if (g.result === 'win') entry.won++;
+      else if (g.result === 'loss') entry.lost++;
+      else if (g.result === 'draw') entry.drawn++;
+      byDay.set(day, entry);
+    }
+    return [...byDay.values()]
+      .sort((a, b) => (a.day < b.day ? -1 : 1))
+      .slice(-limitDays);
+  }
+
+  getActivityHistory(limitDays = 30) {
+    return [...this._activity.entries()]
+      .map(([day, v]) => ({ day, games: v.games, reviews: v.reviews }))
+      .sort((a, b) => (a.day < b.day ? -1 : 1))
+      .slice(-limitDays);
+  }
+
   saveStrengthSample({ gameId, side, n, ase, sd, p75Loss, wasTimed, coeffVersion }) {
     this._strengthSamples.set(`${gameId}:${side}`, { gameId, side, n, ase, sd, p75Loss: p75Loss ?? null, wasTimed: !!wasTimed, coeffVersion });
   }
@@ -227,7 +270,7 @@ export class InMemoryPuzzleRepository {
       return existing;
     }
     const id = puzzle.id ?? randomUUID();
-    const stored = { ...puzzle, id, kind, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
+    const stored = { ...puzzle, id, kind, motifTag: puzzle.motifTag ?? null, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
     this._puzzles.set(id, stored);
     this._fenKindIndex.set(key, id);
     return id;
@@ -334,6 +377,48 @@ export class InMemoryPuzzleRepository {
       }
     }
     return results.sort((a, b) => (b.instructiveness ?? 0) - (a.instructiveness ?? 0));
+  }
+
+  getMotifDrillAccuracy() {
+    const reviews = this._reviews ?? [];
+    const agg = {};
+    for (const r of reviews) {
+      if (r.practice || r.attemptNo !== 1) continue;
+      const puzzle = this._puzzles.get(r.puzzleId);
+      const tag = puzzle?.motifTag ?? null;
+      if (!tag) continue;
+      if (!agg[tag]) agg[tag] = { motifTag: tag, total: 0, correct: 0 };
+      agg[tag].total++;
+      if (r.correct) agg[tag].correct++;
+    }
+    return Object.values(agg);
+  }
+
+  getDrillAccuracyHistory(limitDays = 30) {
+    const byDay = new Map();
+    for (const r of (this._reviews ?? [])) {
+      if (r.practice || r.attemptNo !== 1) continue;
+      const day = _activityDayKey(r.reviewedAt);
+      const entry = byDay.get(day) ?? { day, attempted: 0, correct: 0 };
+      entry.attempted++;
+      if (r.correct) entry.correct++;
+      byDay.set(day, entry);
+    }
+    return [...byDay.values()]
+      .sort((a, b) => (a.day < b.day ? -1 : 1))
+      .slice(-limitDays);
+  }
+
+  getTodayDrillStats(nowMs) {
+    const today = _activityDayKey(nowMs);
+    let attempted = 0, correct = 0;
+    for (const r of (this._reviews ?? [])) {
+      if (r.practice || r.attemptNo !== 1) continue;
+      if (_activityDayKey(r.reviewedAt) !== today) continue;
+      attempted++;
+      if (r.correct) correct++;
+    }
+    return { attempted, correct };
   }
 }
 

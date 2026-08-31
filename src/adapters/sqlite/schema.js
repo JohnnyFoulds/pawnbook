@@ -16,6 +16,7 @@ export function applySchema(db) {
   try { db.exec('ALTER TABLE games ADD COLUMN strength_elo INTEGER'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE games ADD COLUMN opponent_strength_elo INTEGER'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE games ADD COLUMN coach_enabled INTEGER NOT NULL DEFAULT 1'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE games ADD COLUMN maia3_log_prob REAL'); } catch { /* already exists */ }
 
   // Phase 29: extend rep_changelog.kind CHECK to include 'elect' and 'quarantine_exit'.
   // If the old constraint is in place, rebuild the table (safe: data/chess.db has 0 rows).
@@ -47,6 +48,9 @@ export function applySchema(db) {
 
   // Phase 31: add gate_verdict column to rep_challenges
   try { db.exec("ALTER TABLE rep_challenges ADD COLUMN gate_verdict TEXT"); } catch { /* already exists */ }
+
+  // Phase 19c: add motif_tag column to puzzles
+  try { db.exec("ALTER TABLE puzzles ADD COLUMN motif_tag TEXT"); } catch { /* already exists */ }
 
   // Phase 23: add kind column to puzzles and fix UNIQUE(fen) → UNIQUE(fen, kind)
   try { db.exec("ALTER TABLE puzzles ADD COLUMN kind TEXT NOT NULL DEFAULT 'tactical'"); } catch { /* already exists */ }
@@ -157,6 +161,7 @@ export function applySchema(db) {
       opponent_accuracy      REAL,
       strength_elo           INTEGER,
       opponent_strength_elo  INTEGER,
+      maia3_log_prob         REAL,
       analysis_state         TEXT NOT NULL DEFAULT 'pending'
                                CHECK(analysis_state IN ('pending','running','done','failed')),
       analysis_error         TEXT,
@@ -231,6 +236,7 @@ export function applySchema(db) {
       source_ply           INTEGER,
       phase                TEXT,
       was_timed            INTEGER NOT NULL DEFAULT 0,
+      motif_tag            TEXT,
       times_seen           INTEGER NOT NULL DEFAULT 1,
       created_at           INTEGER NOT NULL,
       UNIQUE(fen, kind)
@@ -467,4 +473,42 @@ export function applySchema(db) {
   `);
 
   db.prepare('INSERT OR IGNORE INTO rep_book_version (singleton, version) VALUES (0, 0)').run();
+
+  // One-time activity backfill: populate activity table from existing reviews and games.
+  // Only runs when there are reviews/games to backfill and the sentinel is not yet set.
+  const alreadyBackfilled = db.prepare(
+    "SELECT value FROM settings WHERE key = 'activity_backfill_v1'"
+  ).get();
+  if (!alreadyBackfilled) {
+    try {
+      const hasData = db.prepare(
+        'SELECT 1 FROM (SELECT 1 FROM reviews UNION ALL SELECT 1 FROM games WHERE status = ? AND played_at IS NOT NULL) LIMIT 1'
+      ).get('finished');
+      if (hasData) {
+        // Backfill review activity — day key uses 04:00 local boundary.
+        // SQLite strftime operates in UTC; we subtract 4 hours (14400 seconds) first.
+        db.exec(`
+          INSERT INTO activity (day, games, reviews)
+          SELECT
+            strftime('%Y-%m-%d', datetime((reviewed_at / 1000) - 14400, 'unixepoch')) AS day,
+            0 AS games,
+            COUNT(*) AS reviews
+          FROM reviews
+          GROUP BY day
+          ON CONFLICT(day) DO UPDATE SET reviews = reviews + excluded.reviews;
+
+          INSERT INTO activity (day, games, reviews)
+          SELECT
+            strftime('%Y-%m-%d', datetime((played_at / 1000) - 14400, 'unixepoch')) AS day,
+            COUNT(*) AS games,
+            0 AS reviews
+          FROM games
+          WHERE status = 'finished' AND played_at IS NOT NULL
+          GROUP BY day
+          ON CONFLICT(day) DO UPDATE SET games = games + excluded.games;
+        `);
+        db.prepare("INSERT INTO settings (key, value) VALUES ('activity_backfill_v1', '1')").run();
+      }
+    } catch { /* partial schema during migration tests — skip backfill */ }
+  }
 }

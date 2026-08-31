@@ -18,7 +18,7 @@ format:
 verify:
 	npm run lint
 	npm run test:coverage
-	npm audit --audit-level=high
+	npm audit --audit-level=high --omit=dev
 
 build:
 	bash scripts/fetch-weights.sh

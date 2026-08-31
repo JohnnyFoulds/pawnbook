@@ -51,7 +51,7 @@ export function getAvailableOpponents() {
   let maia3Checked = false;
   let maia3Available = false;
 
-  return ROSTER_TABLE.filter(opp => {
+  const available = ROSTER_TABLE.filter(opp => {
     if (opp.type === 'maia3') {
       if (!maia3Checked) {
         maia3Available = ENGINE_PATHS.maia3 != null && existsSync(ENGINE_PATHS.maia3);
@@ -74,6 +74,10 @@ export function getAvailableOpponents() {
     }
     return true;
   });
+
+  // Suppress lc0 (maia) entries at any Elo already covered by maia3.
+  const maia3Elos = new Set(available.filter(o => o.type === 'maia3').map(o => o.elo));
+  return available.filter(o => !(o.type === 'maia' && maia3Elos.has(o.elo)));
 }
 
 /**

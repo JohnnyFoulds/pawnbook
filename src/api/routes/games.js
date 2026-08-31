@@ -9,6 +9,7 @@
 import { Router } from 'express';
 
 import { analyseGame } from '../ws/analysis-service.js';
+import { explainMotif } from '../../domain/analysis/motif-explainer.js';
 import { getOpponent } from '../../domain/game/roster.js';
 import {
   STRENGTH_ANCHOR_ELO, STRENGTH_ANCHOR_ASE, STRENGTH_ELO_PER_ASE,
@@ -103,8 +104,26 @@ export function gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }) 
           maiaNearestModel: p.maia_model ?? null,
           engineOnly: tags.includes('engine_only'),
           sourcePly: p.source_ply,
+          motifTag: p.motif_tag ?? p.motifTag ?? null,
+          motifExplanation: explainMotif(
+            p.fen,
+            p.played_move_uci ?? p.playedMoveUci ?? '',
+            p.side_to_move ?? p.sideToMove,
+            p.motif_tag ?? p.motifTag ?? null,
+          ) ?? null,
         };
       });
+
+      const tagCounts = new Map();
+      for (const m of mistakes) {
+        if (m.motifTag) {
+          const entry = tagCounts.get(m.motifTag)
+            ?? { tag: m.motifTag, count: 0, explanation: m.motifExplanation };
+          entry.count++;
+          tagCounts.set(m.motifTag, entry);
+        }
+      }
+      const motifSummary = [...tagCounts.values()].sort((a, b) => b.count - a.count);
 
       res.json({
         id: game.id,
@@ -122,10 +141,12 @@ export function gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }) 
         opponentStrengthSe,
         rollingStrength,
         rollingSe,
+        maia3LogProb: game.maia3LogProb ?? null,
         eloBefore: game.eloBefore,
         eloAfter: game.eloAfter,
         moves,
         mistakes,
+        motifSummary,
         puzzleCount: puzzles.length,
       });
     } catch (err) {
@@ -188,6 +209,7 @@ function formatQuizPosition(row) {
     fen: row.fen,
     sideToMove: row.side_to_move ?? row.sideToMove,
     playedMoveSan: row.played_move_san ?? row.playedMoveSan,
+    playedMoveUci: row.played_move_uci ?? row.playedMoveUci ?? null,
     bestMoveUci: uci,
     bestMoveSan: row.best_move_san ?? row.bestMoveSan,
     pv: row.pv ?? null,
@@ -197,6 +219,13 @@ function formatQuizPosition(row) {
     piece: pieceAtSquare(row.fen ?? '', uci.slice(0, 2)),
     ply: row.source_ply ?? row.sourcePly,
     classification: row.classification,
+    motifTag: row.motif_tag ?? row.motifTag ?? null,
+    motifExplanation: explainMotif(
+      row.fen,
+      row.played_move_uci ?? row.playedMoveUci ?? '',
+      row.side_to_move ?? row.sideToMove,
+      row.motif_tag ?? row.motifTag ?? null,
+    ) ?? null,
   };
 }
 

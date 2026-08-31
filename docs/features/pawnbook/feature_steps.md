@@ -541,6 +541,50 @@ engine pool: maia3 routing: requestMove for unknown type throws
 
 **DoD:** All 20 new tests passing; full suite 644 passing + 2 expected fails; branch coverage 91.05%; no changes to `src/domain/` analysis or scoring logic; `getMaiaAnalysisWeights()` decouples findability from the game roster type; lc0 Maia-1 weights on disk continue to serve pass-3 findability analysis; the 1900→2200 gap is closed with `maia-2000` and a now-required `maia-2200`; `make verify` clean.
 
+## Phase 18 — Maia-3 log-probability strength probe (Complete — 2026-08-31)
+
+**Goal:** Augment the Regan-Haworth strength estimate with a second signal derived from Maia-3's conditioned policy: the mean log-probability of the player's actual moves under Maia-3 at the player's estimated Elo. This measures "how human-at-your-level are your move choices?" — orthogonal to centipawn loss.
+
+**Design:** Pass 4 runs after pass 3, for every eligible player ply (same filter as `playingStrength`: legalMovesBefore > 1, mateIn null, |cpWhite| ≤ STRENGTH_DECIDED_CP). Maia-3 is called with SelfElo = pass-1 strength estimate (rounded to nearest 100, clamped to [1100, 2400]); when pass-1 strength is null (short game), the stored playerElo is used as SelfElo. The probability of the played move under Maia-3's policy is extracted; `maiaLogProb = mean(log(P_maia3(played_move)))` over eligible positions. Zero probability is clamped to 0.001 to avoid -Infinity. The result is stored in `games.maia3_log_prob`.
+
+**Files changed:**
+- `src/domain/analysis/grade.js` — added `maiaLogProb(probabilities)` pure function
+- `src/adapters/engine/scripted-engine-client.js` — added `setOption()` (records calls for test assertions)
+- `src/adapters/engine/engine-pool.js` — added `getMaia3PolicyClient()`: separate pool key `maia3-policy`, Temperature=1.0, VerboseMoveStats=true on first init
+- `src/domain/analysis/pipeline.js` — added `maia3Client` optional param; tracked `playerMaia3Positions` in move-eval loop; added Pass 4; returns `playerMaiaLogProb` in result
+- `src/adapters/sqlite/schema.js` — added `maia3_log_prob REAL` to CREATE TABLE and ALTER TABLE migration
+- `src/adapters/sqlite/repositories.js` — added `maia3_log_prob` to save/findById
+- `src/api/ws/analysis-service.js` — acquires `maia3PolicyClient` (optional, non-fatal failure); passes to `runAnalysis`; saves `maia3LogProb` to game row; carries forward on failure/retry
+- `eslint.config.js` — added `site/.vitepress/dist/` to ignores (pre-existing lint false-positives)
+- `Makefile` — aligned `make verify` to use `--omit=dev` to match CI audit job
+- `tests/unit/strength.test.js` — 6 new `maiaLogProb` tests
+- `tests/unit/engine-pool.test.js` — 6 new `getMaia3PolicyClient` tests
+- `tests/unit/pipeline.test.js` — 6 new pass-4 tests
+
+**Tests:**
+```
+strength: maiaLogProb: maiaLogProb([]) returns null with n=0
+strength: maiaLogProb: maiaLogProb with a single probability returns mean(log(p))
+strength: maiaLogProb: maiaLogProb over multiple probabilities returns their mean log
+strength: maiaLogProb: maiaLogProb clamps zero probability to a floor, not -Infinity
+strength: maiaLogProb: maiaLogProb is more negative for lower probability moves
+strength: maiaLogProb: maiaLogProb never returns NaN
+engine pool: maia3 policy client: getMaia3PolicyClient returns a client
+engine pool: maia3 policy client: getMaia3PolicyClient sets Temperature 1.0 on first init
+engine pool: maia3 policy client: getMaia3PolicyClient sets VerboseMoveStats true on first init
+engine pool: maia3 policy client: getMaia3PolicyClient uses a separate pool key from game-play maia3
+engine pool: maia3 policy client: getMaia3PolicyClient reuses the policy client across calls
+engine pool: maia3 policy client: getMaia3PolicyClient passes --cache-dir and --local-files-only
+pipeline pass 4: pass 4: result includes playerMaiaLogProb when maia3Client is provided
+pipeline pass 4: pass 4: probes maia3 for each eligible player ply
+pipeline pass 4: pass 4: sets SelfElo on maia3Client for each eligible ply
+pipeline pass 4: pass 4: skipped when maia3Client is not provided
+pipeline pass 4: pass 4: skipped when all player plies are ineligible (decided position)
+pipeline pass 4: pass 4: uses stored playerElo as SelfElo when playerStrength is null
+```
+
+**DoD:** All 18 new tests passing; full suite 1266 passing + 2 expected fails; branch coverage 91.42%; `make verify` clean; `maia3_log_prob` stored in `games` table; pass 4 skipped gracefully when maia3 binary unavailable.
+
 ## Phase 17 — Production-readiness hardening (Complete — 2026-08-31)
 
 **Goal:** Close three production-readiness gaps: (1) weights-missing check fires before a game row is created, (2) analysis engine acquisition retries on transient failures, (3) full error-path test coverage.
@@ -562,3 +606,582 @@ analysis engine unavailable: saves analysis_state=failed when runAnalysis throws
 ```
 
 **DoD:** All 6 new tests passing; full suite 1244 passing + 2 expected fails; branch coverage 91.85%; `make verify` clean.
+
+## Phase 19a — Best-move arrow on puzzle failure (Complete — 2026-08-31)
+
+**Goal:** When a player fails a puzzle (second wrong attempt), draw a green arrow from the correct move's source to its destination on the board, making the correct solution immediately visible without text decoding.
+
+**Files changed:**
+- `public/js/lib/board.js` — loaded Arrows extension + arrows.css; exposed `showArrow(from, to, color)` and `clearArrows()` on the board wrapper
+- `public/js/puzzles.js` — store board instance in `currentBoard`; on attempt-2 failure draw success arrow from `bestMoveUci`
+- `public/js/quiz.js` — same pattern
+
+**DoD:** Arrow renders on the board at the correct move after two wrong attempts; no test changes (UI-only); `make verify` clean.
+
+## Phase 19b — Threat explanation on puzzle failure (Complete — 2026-08-31)
+
+**Goal:** Show a one-sentence human-readable explanation of why the played move was bad, computed deterministically from board state using chess.js — no LLM, no network call.
+
+**Design:** `computeThreatExplanation(fen, playedMoveSan, sideToMove)` loads the FEN, applies the played move, then scans all player pieces for hanging squares (attacked and undefended, or attacked by a cheaper piece). Two template variants: (1) moved piece is itself hanging — "The knight moved to d5 has no safe square — the opponent can capture it."; (2) defender-removal — "Moving the rook away from e1 left the queen on e8 undefended." Returns null silently if no obvious threat is detected, so feedback degrades gracefully to the existing arrow.
+
+**Files changed:**
+- `public/js/puzzles.js` — added `computeThreatExplanation`; appended explanation block in teach branch
+- `public/js/quiz.js` — same
+
+**DoD:** One-sentence threat explanation renders on the second wrong attempt when a hanging piece is detected; degrades gracefully to null; no test changes (UI-only); `make verify` clean.
+
+## Phase 19c — Motif classifier (Complete — 2026-08-31)
+
+**Goal:** Implement a `classifyMotif(fen, playedMoveUci, sideToMove)` function that returns a named motif tag for the mistake. Persist the tag on puzzle rows. Start with `hanging_piece` and `fork`.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — NEW: pure `classifyMotif()` using chess.js; detects `hanging_piece` (post-move player piece attacked with no defenders) and `fork` (single opponent non-king attacks 2+ valuable player pieces); returns null otherwise
+- `src/adapters/sqlite/schema.js` — added `motif_tag TEXT` column to `puzzles` DDL + ALTER TABLE migration
+- `src/adapters/sqlite/repositories.js` — `motif_tag` in INSERT
+- `src/adapters/memory/repositories.js` — `motifTag` propagated through in-memory save
+- `src/api/routes/puzzles.js` — `motifTag` exposed in `formatCard()`
+- `tests/unit/motif-classifier.test.js` — NEW: 7 tests (null inputs, illegal move, opening move, hanging knight, defender-removal, fork, quiet)
+
+**Tests:**
+```
+classifyMotif: returns null for null inputs
+classifyMotif: returns null for an illegal move
+classifyMotif: returns null for a normal opening move
+classifyMotif: detects hanging_piece — knight moves to attacked, undefended square
+classifyMotif: detects hanging_piece — removing the only defender exposes a piece
+classifyMotif: detects fork — opponent knight forks two valuable white pieces
+classifyMotif: returns null when no motif is detectable
+```
+
+**DoD:** 7 new tests passing; `motif_tag` column migrated in DB; `make verify` clean.
+
+## Phase 19d — Motif breakdown and top-weakness tile (Complete — 2026-08-31)
+
+**Goal:** Aggregate motif tags across all puzzle rows and surface a "top weakness" tile on the stats page showing which motif pattern the player blunders on most often.
+
+**Files changed:**
+- `src/api/routes/stats.js` — computed `motifBreakdown` (count per tag) and `topWeakness` (tag + count) from puzzle rows; added to `GET /api/stats` response
+- `public/stats.html` — added `#weakness-card` tile with `#weakness-text` and `#weakness-bars`
+- `public/js/stats.js` — `renderWeaknessTile(stats)` renders sorted breakdown bars and top-pattern sentence; `MOTIF_LABEL` map for display names
+
+**DoD:** Weakness tile renders when motif data exists; hidden when no motifs tagged; existing stats tests pass; `make verify` clean.
+
+## Phase 19e — Motif classifier: back_rank and missed_capture (Complete — 2026-08-31)
+
+**Goal:** Expand the classifier to detect two more common club-level patterns. Priority order becomes: `hanging_piece → fork → back_rank → missed_capture`.
+
+**Design:**
+- `back_rank`: post-move, player's king is on their back rank with no pawn on the 3 squares directly in front of it, AND opponent has at least one rook or queen.
+- `missed_capture`: pre-move, a winning capture existed (target undefended, or cheapest attacker < target value) but the played move didn't take it.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_hasBackRank` and `_hasMissedCapture` helpers; updated priority chain
+- `public/js/stats.js` — `MOTIF_LABEL` extended with `back_rank` and `missed_capture`
+- `site/research/chess-feedback.md` — motif table updated
+- `tests/unit/motif-classifier.test.js` — 4 new tests (2 per motif, positive + negative)
+
+**Tests:**
+```
+classifyMotif: detects missed_capture — undefended opponent piece left on the board
+classifyMotif: missed_capture does not fire when player captures the free piece
+classifyMotif: detects back_rank — king on back rank loses luft pawn, opponent has rook
+classifyMotif: back_rank does not fire when king has pawn cover
+```
+
+**DoD:** All 11 classifier tests passing; `make verify` clean.
+
+## Phase 19f — Motif-driven fallback explanation on puzzle failure (Complete — 2026-08-31)
+
+**Goal:** When `computeThreatExplanation` returns null (non-hanging motif), fall back to a static one-sentence template keyed on `card.motifTag` for `back_rank`, `missed_capture`, and `fork`.
+
+**Files changed:**
+- `public/js/puzzles.js` — added `MOTIF_EXPLANATION` map; fallback used when dynamic explanation is null and `pos.motifTag` is set
+- `public/js/quiz.js` — same
+
+**DoD:** `back_rank` and `missed_capture` cards always surface an explanation on failure; `make verify` clean.
+
+## Phase 19g — Motif tag badge on review page mistake list (Complete — 2026-08-31)
+
+**Goal:** Show the motif tag as a small badge on each drillable mistake in the review page mistake list, and expose `motifTag` in the quiz position payload so the quiz failure path can read it.
+
+**Files changed:**
+- `src/api/routes/games.js` — `GET /api/games/:id/review` now includes `motifTag` on each mistake object; `formatQuizPosition` also exposes `motifTag`
+- `public/js/review.js` — `renderMistake()` renders accent-coloured badge (e.g. "hanging piece") when `motifTag` is present
+- `public/css/app.css` — added `.mistake-row__tag--motif` style
+- `tests/unit/routes/games-routes.test.js` — 1 new test: `motifTag` round-trips from puzzle save to review response
+
+**DoD:** 1 new test passing; badge visible on review page; `make verify` clean.
+
+## Phase 19h — Backfill motif tags for existing puzzles (Complete — 2026-08-31)
+
+**Goal:** Idempotent CLI script to classify motif tags for existing puzzle rows that pre-date the classifier. Fixes `SqliteError: no such column: motif_tag` on databases created before Phase 19c.
+
+**Design:** `scripts/backfill-motif-tags.js` calls `applySchema(db)` on startup (runs the ALTER TABLE migration if needed), then SELECTs all tactical puzzles with `motif_tag IS NULL`, calls `classifyMotif` on each, and writes results in a single transaction. Supports `--dry-run` and `--db` flags; prints per-tag counts on completion.
+
+**Files changed:**
+- `scripts/backfill-motif-tags.js` — NEW: 87-line idempotent backfill script
+
+**DoD:** Script runs against a live DB without errors; prints counts; `--dry-run` makes no writes; `make verify` clean.
+
+## Phase 20 — Skill-dimension aggregation from motif tags (Complete — 2026-08-31)
+
+**Goal:** Map each motif tag to a skill dimension (tactics / defense), aggregate across the player's puzzles, and surface the top weak dimension alongside the motif breakdown on the stats page.
+
+**Design:** `MOTIF_DIMENSION` map exported from `motif-classifier.js` maps all 4 (later 8) motifs to a dimension. `GET /api/stats` computes `dimensionBreakdown` by rolling up `motifBreakdown` through the map and adds it to the response. The stats page weakness tile gains a dimension summary line ("7 of your 12 mistakes were tactics problems.").
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `MOTIF_DIMENSION` export: `{ hanging_piece: 'tactics', fork: 'tactics', missed_capture: 'tactics', back_rank: 'defense' }`
+- `src/api/routes/stats.js` — compute and return `dimensionBreakdown`
+- `public/stats.html` — added `#dimension-text` inside `#weakness-card`
+- `public/js/stats.js` — `DIMENSION_LABEL` map; `renderWeaknessTile` now renders dimension summary line
+- `tests/unit/motif-dimension.test.js` — NEW: 8 tests for `MOTIF_DIMENSION` entries + aggregation logic
+- `tests/unit/routes/state-stats-routes.test.js` — `dimensionBreakdown` assertions added to 2 existing tests
+
+**Tests:**
+```
+MOTIF_DIMENSION: maps hanging_piece to tactics
+MOTIF_DIMENSION: maps fork to tactics
+MOTIF_DIMENSION: maps missed_capture to tactics
+MOTIF_DIMENSION: maps back_rank to defense
+MOTIF_DIMENSION: covers every known motif tag (no unmapped motif)
+dimensionBreakdown in stats: is derived from motifBreakdown via MOTIF_DIMENSION
+dimensionBreakdown in stats: ignores unknown tags gracefully
+dimensionBreakdown in stats: produces empty object when no motifs are tagged
+```
+
+**DoD:** 8 new + 2 updated tests passing; `dimensionBreakdown` in stats response; `make verify` clean.
+
+## Phase 21 — Prioritise weak-dimension puzzles in drill queue (Complete — 2026-08-31)
+
+**Goal:** Close the deliberate-practice loop: when the stats page identifies the player's top weak dimension, the drill queue should surface over-cap tactical cards that match that dimension before other tactical cards.
+
+**Design:** `/api/puzzles/due` computes `weakDimension` (top dimension from due-card motif tags via `MOTIF_DIMENSION`) and passes it to `sortDueCards`. Within the tactical over-cap group, cards whose motif maps to `weakDimension` sort before others. Opening cards and non-tactical cards are unaffected. The `motif_tag` column is now included in the `getDueCards` SELECT.
+
+**Files changed:**
+- `src/domain/review/queue.js` — `sortDueCards(cards, now, weakDimension = null)` extended: within the tactical over-cap group, `MOTIF_DIMENSION[motif_tag] === weakDimension` cards sort first
+- `src/adapters/sqlite/repositories.js` — `p.motif_tag` added to `getDueCards` SELECT
+- `src/api/routes/puzzles.js` — computes `weakDimension` via `_topWeakDimension(cards)`; passes to `sortDueCards`
+- `tests/unit/queue.test.js` — 3 new tests (weak-dimension boost; opening-card precedence; null weakDimension fallback)
+
+**Tests:**
+```
+sortDueCards: weak-dimension boost sorts matching tactical cards first within over-cap group
+sortDueCards: opening cards still sort before tactical cards regardless of weakDimension
+sortDueCards: weakDimension=null behaves identically to original sort
+```
+
+**DoD:** 3 new tests passing; drill queue now prioritises player's top weak dimension; `make verify` clean.
+
+## Phase 22 — Maia-3 style score on review and stats pages (Complete — 2026-08-31)
+
+**Goal:** Surface the Maia-3 log-probability strength probe (stored as `maia3_log_prob` in Phase 18) as a human-readable "Style match %" on the review page and as a rolling 10-game average on the stats page.
+
+**Design:** Style score = `Math.round(100 * Math.exp(maia3LogProb))` — the geometric mean move probability expressed as a percentage. Rolling average = mean of `Math.exp(g.maia3LogProb) × 100` over the last 10 games with non-null `maia3LogProb`. Style tile is hidden when no data exists.
+
+**Files changed:**
+- `src/api/routes/games.js` — added `maia3LogProb: game.maia3LogProb ?? null` to `GET /api/games/:id/review` response
+- `src/api/routes/stats.js` — computed `rollingStyleScore` from last 10 games; added to response
+- `public/stats.html` — added `#style-tile` (hidden by default), `#style-val`, `#style-delta`
+- `public/js/stats.js` — `renderStyleTile(stats)` populates or hides the tile; called from `renderAll`
+- `public/js/review.js` — strength line appends "Style X%" when `maia3LogProb` is present
+- `tests/unit/routes/games-routes.test.js` — 2 new tests: `maia3LogProb` present / null in review response
+- `tests/unit/routes/state-stats-routes.test.js` — 2 new tests: `rollingStyleScore` computed / null
+
+**Tests:**
+```
+GET /api/games/:id/review: includes maia3LogProb when game has one
+GET /api/games/:id/review: maia3LogProb is null when game has none
+GET /api/stats: rollingStyleScore is computed from last 10 games with non-null logProb
+GET /api/stats: rollingStyleScore is null when no games have maia3LogProb
+```
+
+**DoD:** 4 new tests passing; style score visible on review when data available; `make verify` clean.
+
+## Phase 23 — Motif classifier: overloaded_defender (Complete — 2026-08-31)
+
+**Goal:** Detect the overloaded-defender pattern: a single player piece is the sole guardian of two or more attacked player pieces, making it impossible to defend both if the opponent strikes.
+
+**Design:** `_hasOverloadedDefender(chess, playerColor, oppColor)` scans all attacked player pieces, records the sole defender (if only one exists) per piece, and returns true if any defender is sole guardian of ≥ 2 pieces.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_hasOverloadedDefender`; added `overloaded_defender: 'defense'` to `MOTIF_DIMENSION`; updated priority chain and JSDoc
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label and explanation text added
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Re5 sole guardian of Nd5 + Nf5 → positive; flanking rooks give two defenders each → negative)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 6
+
+**DoD:** 3 new tests passing; 1298 total; 91.15% branch coverage; `make verify` clean.
+
+## Phase 24 — Motif classifier: pinned_piece (Complete — 2026-08-31)
+
+**Goal:** Detect the pin pattern: an opponent sliding piece (rook, bishop, queen) is aimed along a ray at a player piece, and behind that piece on the same ray is a more valuable player piece. The first piece is "pinned" — moving it would expose the second to capture.
+
+**Design:** `_hasPinnedPiece(chess, playerColor, oppColor)` walks rays from every opponent sliding piece using a `_RAY_DIRS` table; fires when the first player piece on a ray has lower value than the second player piece on the same ray (`PIECE_VALUE[second] > PIECE_VALUE[first]`).
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_RAY_DIRS`, `_hasPinnedPiece`; `pinned_piece: 'tactics'` in `MOTIF_DIMENSION`
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label `'pin'` and explanation text
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Bb2 pins Nd4 against Qf6; no-alignment negative)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 7 (wait, 6 at this point)
+
+**DoD:** 2 new classifier tests; 1301 total; 91.15% branch coverage; `make verify` clean.
+
+## Phase 25 — Motif classifier: skewer (Complete — 2026-08-31)
+
+**Goal:** Detect the skewer pattern: the mirror of a pin. An opponent slider attacks a more valuable player piece; when it moves to safety, the less valuable player piece behind it is captured.
+
+**Design:** `_hasSkewer(chess, playerColor, oppColor)` is the same ray-walking code as `_hasPinnedPiece` with the value comparison reversed: fires when `PIECE_VALUE[first] > PIECE_VALUE[second]` (first piece on the ray is more valuable than the second).
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_hasSkewer`; `skewer: 'tactics'` in `MOTIF_DIMENSION`; priority chain now has 7 entries
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label and explanation text
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Ba1 skewers Qb5 onto Rb2 via NE diagonal; negative null case)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 7
+
+**DoD:** 2 new classifier tests; 1304 total; 91.16% branch coverage; `make verify` clean.
+
+## Phase 26 — Motif classifier: discovered_attack (Complete — 2026-08-31)
+
+**Goal:** Detect the discovered-attack pattern: the player moves a piece that was blocking an opponent slider from reaching another player piece; after the move that piece becomes newly attacked.
+
+**Design:** Before `chess.move()`, capture a `preAttacked` Set of squares of player pieces currently attacked by the opponent. After the move, `_hasDiscoveredAttack` checks whether any player piece ≥ knight value is now attacked by the opponent, was NOT in `preAttacked`, and is not the destination square (which is already covered by `hanging_piece`/`fork`). No second Chess instance required.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `preAttacked` Set capture pre-move; added `_hasDiscoveredAttack`; `discovered_attack: 'tactics'` in `MOTIF_DIMENSION`; priority chain now has 8 entries
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label and explanation text
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Rg4-g2 uncovers Rh4 attack on defended Nd4; quiet Ke1-e2 negative)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 8
+
+**DoD:** 2 new classifier tests; 1307 total; 91.19% branch coverage; `make verify` clean.
+
+## Phase 27 — Composition root, injected clock/scheduler/ids/engine (Complete — 2026-08-30)
+
+**Goal:** Extract a proper composition root so all stateful dependencies (clock, scheduler, ID generator, engine pool) are injected rather than constructed inline, enabling deterministic tests and a fake-engine mode that needs no Stockfish or lc0 binaries.
+
+**Design:** `src/app.js` exports `createApp({db, clock, scheduler, enginePool})`, which wires every router and handler with injected deps. `src/server.js` becomes a thin shell that constructs real adapters and calls `createApp`. New adapter pairs: `RealTimer`/`ManualTimer` for the scheduler port; `UuidIds`/`SequentialIds` for the IDs port; `FakeEnginePool` for `ENGINE_MODE=fake` (returns first legal move — no engines required). Bug B15 fixed: `InMemoryGameRepository._normaliseMoveEval()` ensures `getEvals()` always returns snake_case, matching the SQLite adapter. Baseline lint debt cleared: `import/order` auto-fixed codebase-wide (42 → 0 errors).
+
+**Files changed:**
+- `src/app.js` — new composition root; `createApp` wires all routers/handlers
+- `src/server.js` — refactored to thin shell; constructs real adapters + calls `createApp`
+- `src/ports/clock.js`, `src/ports/scheduler.js`, `src/ports/ids.js` — JSDoc port contracts
+- `src/adapters/scheduler/real-timer.js`, `src/adapters/scheduler/manual-timer.js` — scheduler adapter pair
+- `src/adapters/ids/uuid-ids.js`, `src/adapters/ids/sequential-ids.js` — IDs adapter pair
+- `src/adapters/engine/fake-engine-pool.js` — `ENGINE_MODE=fake`; first-legal-move deterministic engine
+- `src/adapters/memory/repositories.js` — `_normaliseMoveEval()` helper fixing B15
+- `src/api/ws/handlers.js`, `src/api/routes/*.js` — clock/scheduler/ids threaded through
+- `tests/unit/adapters/phase-27-adapters.test.js` — 19 new tests covering `ManualTimer`, `SequentialIds`, `UuidIds`, `FakeEnginePool`
+
+**DoD:** 19 new adapter tests; lint debt cleared (42 → 0 import/order errors); 90.23% branch coverage; `make verify` clean.
+
+## Phase 28 — Dynamic slot-filled motif explanations (Complete — 2026-08-31)
+
+**Goal:** Replace static one-sentence motif descriptions with position-specific explanations that name the actual pieces and squares involved, completing the template-NLG prescription from the research note.
+
+Before: *"After this move one of your pieces was pinned — it was stuck in place because moving it would expose a more valuable piece behind it to capture."*
+After: *"Your knight on d4 is pinned by the opponent's bishop on b2 — moving it would expose your queen on f6 to capture."*
+
+**Design:** Pure function `explainMotif(fen, playedMoveUci, sideToMove, motifTag)` in `src/domain/analysis/motif-explainer.js`. Each of the 8 motifs has its own piece-finding logic that locates the concrete squares from the position and interpolates them into a template sentence. Returns `null` when the motif tag is absent or piece-finding fails.
+
+**Files changed:**
+- `src/domain/analysis/motif-explainer.js` — new; `explainMotif` with per-motif handlers for all 8 motifs
+- `src/api/routes/games.js` (`formatCard`, `formatQuizPosition`) — `motifExplanation` added to every puzzle/quiz response
+- `src/api/routes/puzzles.js` (`formatCard`) — `motifExplanation` added to due/practice card response
+- `public/js/puzzles.js`, `quiz.js` — render explanation text below motif badge on failure
+- `tests/unit/motif-explainer.test.js` — 16 tests covering all 8 motifs (positive + null cases)
+
+**DoD:** 16 new tests; 1316 total; 90.65% branch coverage; `make verify` clean.
+
+## Phase 29 — Motif-filtered drill sessions (Complete — 2026-08-31)
+
+**Goal:** Close the deliberate-practice loop — a player can drill a specific weakness pattern directly from the stats page weakness tile.
+
+**Design:** `GET /api/puzzles/due?motif=<tag>` filters the due-card list to puzzles whose `motif_tag` matches the query param. The drill page reads `?motif=` from its URL, passes it to the API, and shows a filter banner ("Drilling: fork · show all"). Stats page weakness tile gains "Drill this →" and per-bar "drill →" links that deep-link to the filtered drill session.
+
+**Files changed:**
+- `src/api/routes/puzzles.js` — `motif` query param filtering on `getDueCards`; same filter forwarded to practice endpoint
+- `public/js/puzzles.js` — reads `?motif=` from URL; shows filter banner; "show all" back-link
+- `public/js/stats.js` — "Drill this →" link on top weakness + per-bar "drill →" links
+- `tests/unit/api-routes.test.js` — 2 new tests: filter returns only matching motif cards; absent param returns all cards
+
+**DoD:** 2 new route tests; 1321 total; 90.61% branch coverage; `make verify` clean.
+
+## Phase 30 — motifExplanation on review-page mistake list (Complete — 2026-08-31)
+
+**Goal:** Surface position-specific motif explanations on the post-game review page, so players see exactly why each mistake was flagged.
+
+**Design:** `GET /api/games/:id/review` maps `explainMotif(fen, played_move_uci, side_to_move, motif_tag)` onto each mistake and includes `motifExplanation` in the response. `renderMistake()` in the browser client renders the explanation as a `.mistake-row__explain` div below the motif badge when present.
+
+**Files changed:**
+- `src/api/routes/games.js` — `motifExplanation` field added to the mistakes mapping in the review endpoint
+- `public/js/review.js` — `renderMistake()` renders `.mistake-row__explain` div when `m.motifExplanation` is truthy
+- `tests/unit/api-routes.test.js` — 2 new tests: string explanation when motif + move present; null when motif absent
+
+**DoD:** 2 new tests; 1323 total; 90.83% branch coverage; `make verify` clean.
+
+## Phase 31 — Per-motif drill accuracy on stats page (Complete — 2026-08-31)
+
+**Goal:** Show how accurately a player has drilled each motif pattern so the weakness tile reflects both frequency of mistakes and quality of drilling.
+
+**Design:** `getMotifDrillAccuracy()` JOINs `reviews` and `puzzles`, filtering to first-attempt non-practice reviews (`attempt_no = 1 AND practice = 0`), and returns `[{motifTag, total, correct}]`. `GET /api/stats` exposes this as a `motifAccuracy` map keyed by tag. Stats page weakness bars annotate each row with accuracy % and a tooltip showing raw counts.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `PuzzleRepository#getMotifDrillAccuracy`
+- `src/adapters/sqlite/repositories.js` — SQL JOIN implementation of `getMotifDrillAccuracy`
+- `src/adapters/memory/repositories.js` — in-memory implementation of `getMotifDrillAccuracy`
+- `src/api/routes/stats.js` — `motifAccuracy` map added to response
+- `public/js/stats.js` — accuracy % displayed next to each motif bar; tooltip with raw counts
+- `tests/unit/api-routes.test.js` — 2 new tests: accuracy populated from drill reviews; empty object when no reviews
+
+**DoD:** 2 new tests; 1325 total; 90.81% branch coverage; `make verify` clean.
+
+## Phase 32 — Focus recommendation card (Complete — 2026-08-31)
+
+**Goal:** Give players a single actionable recommendation: "This is the pattern most worth drilling right now."
+
+**Design:** Pure domain function `pickFocusMotif(motifBreakdown, motifAccuracy)` in `src/domain/review/focus.js`. Priority score = `mistakes × (1 − drillAccuracy)`; motifs with no drill history are scored at full penalty (rate = 0). `GET /api/stats` adds `focusMotif: { tag, mistakes, accuracy }`. Stats page renders a **Focus area** card above the weakness tile with motif label, mistake count, drill accuracy note, and a direct "Drill this now →" button.
+
+**Files changed:**
+- `src/domain/review/focus.js` — new; `pickFocusMotif` pure function
+- `src/api/routes/stats.js` — `focusMotif` added to response
+- `public/stats.html` — `#focus-card` element added before weakness tile
+- `public/js/stats.js` — `renderFocusCard(stats)` renders the card; hidden when `focusMotif` is null
+- `tests/unit/focus.test.js` — 5 unit tests covering prioritisation, no-history penalty, null on empty input
+- `tests/unit/api-routes.test.js` — 2 new route tests
+
+**DoD:** 7 new tests; 1332 total; 90.84% branch coverage; `make verify` clean.
+
+## Phase 33 — Wire up drill streak (Complete — 2026-08-31)
+
+**Goal:** Fix the always-zero streak bug and wire up activity recording so the streak counter reflects real daily drilling and game activity.
+
+**Design:** Root cause: `streak_cache` was never written anywhere — streak was always 0. Fix: `GET /api/state` now computes streak live via `gameRepo.getStreak(now)`. Activity recording added at two call sites: `POST /api/puzzles/:id/attempt` calls `gameRepo.recordActivity(…, 'review')` after saving the review row; `finishGame` in `src/api/ws/handlers.js` calls `gameRepo.recordActivity(…, 'game')`. Stats page gains a streak tile (hidden when streak = 0 or `showStreak` is off).
+
+**Files changed:**
+- `src/api/routes/state.js` — `streak` computed from `gameRepo.getStreak(now)` (removed stale `streak_cache` lookup)
+- `src/api/routes/puzzles.js` — accepts optional `gameRepo`; calls `gameRepo.recordActivity` after `saveReview`
+- `src/api/ws/handlers.js` — `finishGame` calls `gameRepo.recordActivity` with `played_at` timestamp
+- `src/server.js` — passes `gameRepo` to `puzzlesRouter`
+- `public/stats.html` — `#streak-tile` stat tile added
+- `public/js/stats.js` — `renderStreakTile(state)` renders streak tile
+- `tests/unit/api-routes.test.js` — 3 new tests; `buildApp` updated to wire `gameRepo` to `puzzlesRouter`
+
+**DoD:** 3 new tests; 1334 total; 90.81% branch coverage; `make verify` clean.
+
+## Phase 34 — Activity history sparkline on streak tile (Complete — 2026-08-31)
+
+**Goal:** Render a 30-day activity bar chart on the dashboard streak tile so players can see their practice rhythm at a glance.
+
+**Design:** `getActivityHistory(limitDays=30)` returns sorted `[{day, games, reviews}]` from the `activity` table. `GET /api/state` includes `activityHistory`. `drawActivityBars(canvas, values, opts)` in `chart.js` draws one vertical bar per day, height proportional to review count, filled with accent colour for active days and dimmed for zero days (minimum 2 px so inactive days are still visible). Dashboard streak tile feeds `activityHistory.map(h => h.reviews)` to the canvas.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `GameRepository#getActivityHistory`
+- `src/adapters/sqlite/repositories.js` — `getActivityHistory` SQL query (DESC LIMIT, then reversed)
+- `src/adapters/memory/repositories.js` — in-memory `getActivityHistory`
+- `src/api/routes/state.js` — `activityHistory` added to response
+- `public/js/lib/chart.js` — `drawActivityBars` exported
+- `public/js/dashboard.js` — streak tile uses `drawActivityBars` on the spark-streak canvas
+- `tests/unit/api-routes.test.js` — 2 new tests: history array populated; empty array on fresh DB
+
+**DoD:** 2 new tests; 1336 total; 90.68% branch coverage; `make verify` clean.
+
+## Phase 35 — Activity backfill for pre-Phase-33 data (Complete — 2026-08-31)
+
+**Goal:** Retroactively populate the `activity` table from existing `reviews` and `games` rows so that users who played and drilled before Phase 33 see a real streak and sparkline rather than starting from zero.
+
+**Design:** One-time backfill in `applySchema` (runs on every startup). Uses the same 04:00 local-time day boundary as `recordActivity`. Two `INSERT … ON CONFLICT DO UPDATE` statements aggregate historical reviews and finished games into `activity`. Guarded by a `settings.activity_backfill_v1` sentinel written only when actual data is found — fresh empty DBs do not set the sentinel, so the backfill will run again once real data exists. The entire block is wrapped in `try/catch` so partial migration schemas in other test suites do not break unrelated tests.
+
+**Files changed:**
+- `src/adapters/sqlite/schema.js` — backfill block appended after `applySchema` migrations; sentinel check + two aggregating `INSERT … ON CONFLICT` statements
+- `tests/unit/migration-activity-backfill.test.js` — 4 new tests: review backfill, game backfill, idempotency, post-backfill streak correctness
+
+**DoD:** 4 new tests; 1340 total; 90.7% branch coverage; `make verify` clean.
+
+## Phase 36 — Document phases 27–35 in feature_steps.md (Complete — 2026-08-31)
+
+**Goal:** Catch up the `feature_steps.md` process log, which was 9 phases behind (phases 27–35 undocumented).
+
+**Files changed:**
+- `docs/features/pawnbook/feature_steps.md` — phases 27–35 appended
+
+**DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
+
+## Phase 37 — Post-game debrief card on review page (Complete — 2026-08-31)
+
+**Goal:** Surface the motif breakdown for a single game directly on the review page, closing the feedback loop from game → review → drill without requiring a visit to the stats page.
+
+**Design:** `GET /api/games/:id/review` derives `motifSummary: [{tag, count, explanation}]` from the already-computed `mistakes` array — a Map reduction counting `motifTag` occurrences, sorted by count descending. The review page renders a **Patterns in this game** card above the mistake list when `motifSummary` is non-empty, with a label, occurrence count, and a `puzzles.html?motif=<tag>` drill link per pattern.
+
+**Files changed:**
+- `src/api/routes/games.js` — `motifSummary` computation and inclusion in review response
+- `public/review.html` — `#debrief-card` added before the mistake list
+- `public/js/review.js` — `renderDebriefCard(review)` renders the card; `MOTIF_LABEL` extracted to module scope (was defined inline in `renderMistakeList`)
+- `tests/unit/api-routes.test.js` — 2 new tests: sorted `motifSummary` with counts; empty array when no motif tags
+
+**DoD:** 2 new tests; 1342 total; 90.71% branch coverage; `make verify` clean.
+
+## Phase 38 — Daily drill accuracy history and trend tile (Complete — 2026-08-31)
+
+**Goal:** Show whether drilling is improving over time by adding a per-day accuracy history to the stats page, parallel to the activity sparkline.
+
+**Design:** `PuzzleRepository#getDrillAccuracyHistory(limitDays=30)` aggregates first-attempt non-practice reviews by day using the same 04:00 local-time boundary as `recordActivity`, returning `[{day, attempted, correct}]` sorted ascending. `GET /api/stats` exposes this as `drillHistory`. The stats page **Drill accuracy** tile shows all-time accuracy %, a 7-day trend arrow (↑ trending up / → steady / ↓ trending down), and a `drawActivityBars` sparkline of per-day accuracy.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `PuzzleRepository#getDrillAccuracyHistory`
+- `src/adapters/sqlite/repositories.js` — SQL aggregation with 04:00 offset, `LIMIT ?`, reversed
+- `src/adapters/memory/repositories.js` — in-memory aggregation using `_activityDayKey`
+- `src/api/routes/stats.js` — `drillHistory` added to response
+- `public/stats.html` — Drill accuracy stat tile with `spark-drill-accuracy` canvas
+- `public/js/stats.js` — `renderDrillAccuracyTile(stats)` added; `drawActivityBars` imported
+- `tests/unit/api-routes.test.js` — 2 new tests: history populated; empty on fresh repo
+
+**DoD:** 2 new tests; 1344 total; 90.73% branch coverage; `make verify` clean.
+
+## Phase 39 — Best-ever streak record and personal best display (Complete — 2026-08-31)
+
+**Goal:** Give players a long-term motivational target by tracking and displaying their best-ever daily activity streak.
+
+**Design:** `_computeBestStreak(sortedDaysAsc)` helper (added to both adapters) finds the longest consecutive run using gap detection: iterate pairs, compute day difference, reset current counter on gaps > 1, track max. `GameRepository#getBestStreak()` queries `activity` rows and calls this helper. `GET /api/state` adds `bestStreak`. Dashboard streak tile shows **"Personal best!"** when current streak ≥ best (and ≥ 2), or **"Best: N"** subtitle when a prior record exists.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `GameRepository#getBestStreak`
+- `src/adapters/sqlite/repositories.js` — `_computeBestStreak` helper; `getBestStreak` method
+- `src/adapters/memory/repositories.js` — same helper and method for in-memory adapter
+- `src/api/routes/state.js` — `bestStreak` added to response
+- `public/index.html` — `#streak-best` subtitle element on streak tile
+- `public/js/dashboard.js` — personal best / best record subtitle logic
+- `tests/unit/api-routes.test.js` — 2 new tests: correct best from non-contiguous history; 0 on fresh repo
+
+**DoD:** 2 new tests; 1346 total; 90.56% branch coverage; `make verify` clean.
+
+## Phase 40 — Daily win rate history and trend tile (Complete — 2026-08-31)
+
+**Goal:** Complete the "improvement over time" picture alongside Phase 38 by adding a per-day game win rate history, giving the same sparkline+trend-arrow treatment to game performance as to drill accuracy.
+
+**Design:** `GameRepository#getWinRateHistory(limitDays=90)` aggregates ranked finished games by day (same 04:00 boundary), returning `[{day, played, won, lost, drawn}]` sorted ascending. `GET /api/stats` exposes this as `winRateHistory`. The stats page **Win rate** tile shows all-time win %, a 14-day trend arrow, and a `drawActivityBars` sparkline of per-day win percentage.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `GameRepository#getWinRateHistory`
+- `src/adapters/sqlite/repositories.js` — SQL aggregation with CASE WHEN result, 04:00 offset, reversed
+- `src/adapters/memory/repositories.js` — in-memory aggregation from `_games` map
+- `src/api/routes/stats.js` — `winRateHistory` added to response
+- `public/stats.html` — Win rate stat tile with `spark-win-rate` canvas
+- `public/js/stats.js` — `renderWinRateTile(stats)` added
+- `tests/unit/api-routes.test.js` — 2 new tests: history populated from games; empty on fresh repo
+
+**DoD:** 2 new tests; 1348 total; 90.52% branch coverage; `make verify` clean.
+
+## Phase 41 — Document phases 37–40 in feature_steps.md (Complete — 2026-08-31)
+
+**Goal:** Catch up the `feature_steps.md` process log, which was 4 phases behind (phases 37–40 undocumented).
+
+**Files changed:**
+- `docs/features/pawnbook/feature_steps.md` — phases 37–40 appended
+
+**DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
+
+## Phase 42 — Today's drill stats in API and drill empty-state session summary (Complete — 2026-08-31)
+
+**Goal:** Give players immediate session feedback when they clear their drill queue by showing today's correct/attempted count and active streak on the empty-state screen, and expose the same data from `GET /api/state` for dashboard use.
+
+**Design:** `PuzzleRepository#getTodayDrillStats(nowMs)` counts `attempt_no=1, practice=0` reviews where the review day (04:00 boundary) matches today. SQLite adapter uses an inline `strftime` expression; memory adapter uses the module-private `_activityDayKey` helper. `GET /api/state` adds `todayDrills:{attempted,correct}`. The drill page `enrichEmptyState()` function fetches `/api/state` on queue-empty, populates `#empty-session-summary` (e.g. "Today: 8 correct / 10 attempted (80%)") and `#empty-streak-line` (e.g. "5-day streak"), and hides the generic "Play a game or drill ahead" subtext once drills have been done.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `PuzzleRepository#getTodayDrillStats`
+- `src/adapters/sqlite/repositories.js` — SQL with inline today-key expression
+- `src/adapters/memory/repositories.js` — in-memory implementation using `_activityDayKey`
+- `src/api/routes/state.js` — `todayDrills` added to response
+- `public/puzzles.html` — `#empty-session-summary`, `#empty-streak-line`, `#empty-sub` elements added
+- `public/js/puzzles.js` — `enrichEmptyState()` function; called from `boot()` on empty queue
+- `tests/unit/api-routes.test.js` — 2 new tests: non-zero today stats; zero on fresh repo
+
+**DoD:** 2 new tests; 1350 total; 90.32% branch coverage; `make verify` clean.
+
+## Phase 43 — Dashboard drill-progress card enrichment (Complete — 2026-08-31)
+
+**Goal:** Surface today's drill session progress on the dashboard so players can see their daily drill performance without navigating to the drill page.
+
+**Design:** `dashboard.js` reads `state.todayDrills` (already in `/api/state`). When `attempted > 0`, the Drill action card subtext changes from "from your own games" to "N correct · M done today (X%)". The `#drill-today-sub` id is added to the subtext element for targeted DOM updates.
+
+**Files changed:**
+- `public/index.html` — `id="drill-today-sub"` added to drill card subtext
+- `public/js/dashboard.js` — today's drill progress logic reading `state.todayDrills`
+- `tests/unit/ui-phase9.test.js` — 2 new static-analysis tests
+
+**DoD:** 2 new static-analysis tests; 1352 total; 90.32% branch coverage; `make verify` clean.
+
+## Phase 44 — Resume-game indicator on dashboard Play card (Complete — 2026-08-31)
+
+**Goal:** Make it immediately obvious on the dashboard when a game is in progress so players don't accidentally start a second game.
+
+**Design:** `dashboard.js` reads `state.inProgressGameId` and `state.inProgressOpponentId` (already in `/api/state`). When an in-progress game exists, the Play card heading changes from "Play" to "Resume" and the subtext shows "vs {opponent} →". `id="play-card-heading"` is added to the heading element for targeted updates. Falls back to suggested-opponent behaviour when no game is in progress.
+
+**Files changed:**
+- `public/index.html` — `id="play-card-heading"` added to Play card heading
+- `public/js/dashboard.js` — resume prompt logic reading `state.inProgressGameId`
+- `tests/unit/ui-phase9.test.js` — 1 new static-analysis test
+
+**DoD:** 1 new static-analysis test; 1353 total; 90.32% branch coverage; `make verify` clean.
+
+## Phase 45 — Document phases 42–44 in feature_steps.md (Complete — 2026-08-31)
+
+**Goal:** Catch up the `feature_steps.md` process log, which was 3 phases behind (phases 42–44 undocumented).
+
+**Files changed:**
+- `docs/features/pawnbook/feature_steps.md` — phases 42–44 appended
+
+**DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
+
+## Phase 46 — Strength Elo tile on stats page (Complete — 2026-08-31)
+
+**Goal:** Surface the move-quality Elo estimate (Regan-Haworth rolling aggregate) on the Stats page, distinct from the win/loss rating, so players can see their actual tactical playing level.
+
+**Design:** The rolling inverse-variance computation already existed in `games.js` (review route). Stats route imports the same balance constants (`STRENGTH_ANCHOR_ELO`, `STRENGTH_ELO_PER_ASE`, etc.) and runs the identical computation over `listStrengthSamples`. `GET /api/stats` adds `rollingStrength` and `rollingSe`. Stats page adds a hidden "Strength Elo" tile (`#strength-tile`) that shows estimated Elo ± SE; hidden until samples exist.
+
+**Files changed:**
+- `src/api/routes/stats.js` — import balance constants; add rolling strength computation; expose `rollingStrength`, `rollingSe`
+- `public/stats.html` — Strength Elo stat tile
+- `public/js/stats.js` — `renderStrengthTile(stats)`
+- `tests/unit/api-routes.test.js` — 2 new tests
+
+**DoD:** 2 new tests; 1355 total; 90.34% branch coverage; `make verify` clean.
+
+## Phase 47 — Strength Elo history sparkline (Complete — 2026-08-31)
+
+**Goal:** Show how the player's move-quality Elo has trended across recent games, making it easy to see whether analytical strength is improving.
+
+**Design:** `GET /api/stats` derives `strengthHistory: [{playedAt, strengthElo}]` from `listRecent()` filtered to finished games with non-null `strengthElo`, sorted oldest-first. `renderStrengthTile` draws a `drawSparkline` on the new `#spark-strength` canvas when ≥ 2 data points exist.
+
+**Files changed:**
+- `src/api/routes/stats.js` — `strengthHistory` derived and added to response
+- `public/stats.html` — `#spark-strength` canvas on Strength Elo tile
+- `public/js/stats.js` — sparkline rendering in `renderStrengthTile`
+- `tests/unit/api-routes.test.js` — 2 new tests
+
+**DoD:** 2 new tests; 1357 total; 90.34% branch coverage; `make verify` clean.
+
+## Phase 48 — Accuracy trend tile with sparkline (Complete — 2026-08-31)
+
+**Goal:** Show whether game accuracy is improving over time — the most direct measure of playing improvement.
+
+**Design:** `GET /api/stats` derives `accuracyHistory: [{playedAt, accuracy}]` from finished games with non-null accuracy, oldest-first. New "Accuracy trend" tile shows avg% of last 10 games, a 7-vs-14-game trend arrow (↑/→/↓), and a full-history `drawSparkline`. `renderAccuracyTrendTile(stats)` added to `renderAll`.
+
+**Files changed:**
+- `src/api/routes/stats.js` — `accuracyHistory` derived and added to response
+- `public/stats.html` — Accuracy trend tile with `#spark-accuracy-trend` canvas
+- `public/js/stats.js` — `renderAccuracyTrendTile(stats)`
+- `tests/unit/api-routes.test.js` — 2 new tests
+
+**DoD:** 2 new tests; 1359 total; 90.35% branch coverage; `make verify` clean.
+
+## Phase 49 — Update VitePress docs site for phases 20–48 (Complete — 2026-08-31)
+
+**Goal:** Bring the public documentation site current after 29 phases of undocumented feature work. The site last reflected ~Phase 19.
+
+**Files changed:**
+- `site/reference/rest-api.md` — add `bestStreak`, `todayDrills`, `activityHistory` to `/api/state`; rewrite `/api/stats` table (25 fields); add `motifSummary`, `motifTag`, `motifExplanation` to review; add `?motif=` to `/api/puzzles/due`
+- `site/guide/analysis.md` — Motif debrief card section; Mistake tags section
+- `site/guide/drilling.md` — Empty-state session summary; Motif-filtered drill sessions
+- `site/guide/stats.md` — New page covering all stat tiles, trend arrows, Rating vs Strength Elo, motif weakness tile, quality mix
+- `site/.vitepress/config.mjs` — add Stats to sidebar
+- `docs/features/pawnbook/feature_steps.md` — phases 46–48 appended
+
+**DoD:** `make verify` clean; docs CI deploys to GitHub Pages.

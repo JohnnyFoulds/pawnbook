@@ -147,8 +147,8 @@ Sent after the engine plays its move.
 | `san` | string | Engine move in SAN |
 | `fen` | string | Position after the engine's move |
 | `legalMoves` | array | Your legal replies (UCI strings) |
-| `gameOver` | boolean \| null | Set to `true` if this move ends the game |
-| `clockUpdate` | object \| null | `{ whiteMs, blackMs }` after engine's time was debited |
+| `gameOver` | `{ result: string, termination: string }` \| null | Present when this move ends the game; same `result`/`termination` values as `game_over` |
+| `clock` | object \| null | `{ whiteMs, blackMs }` after engine's time was debited |
 
 ### game_over
 
@@ -157,7 +157,7 @@ Sent twice per game. The first send (immediately on game end) has `eloBefore: nu
 | Field | Type | Description |
 |---|---|---|
 | `type` | `'game_over'` | |
-| `result` | `'white'` \| `'black'` \| `'draw'` | Game result |
+| `result` | `'win'` \| `'loss'` \| `'draw'` | Game result from the player's perspective |
 | `termination` | string | How the game ended (see below) |
 | `eloBefore` | integer \| null | Elo before this game; null on first send |
 | `eloAfter` | integer \| null | Elo after this game; null on first send; same as `eloBefore` for unranked games |

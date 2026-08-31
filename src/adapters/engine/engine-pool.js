@@ -208,6 +208,27 @@ export function createEnginePool() {
       return client;
     },
 
+    /**
+     * Get a dedicated Maia-3 client configured for policy probing (pass 4).
+     * Separate pool entry ('maia3-policy') from the game-play entry ('maia3')
+     * to avoid Temperature/SelfElo state collisions.
+     * First init sets Temperature=1.0 and VerboseMoveStats=true.
+     * @returns {Promise<import('./uci-engine-client.js').UciEngineClient>}
+     */
+    async getMaia3PolicyClient() {
+      const key = 'maia3-policy';
+      const alreadyInPool = pool.has(key) || pending.has(key);
+      const client = await getClient(key, ENGINE_PATHS.maia3, [
+        '--cache-dir', `${WEIGHTS_DIR}/maia3`,
+        '--local-files-only',
+      ]);
+      if (!alreadyInPool) {
+        client.setOption('Temperature', '1.0');
+        client.setOption('VerboseMoveStats', 'true');
+      }
+      return client;
+    },
+
     /** Shut down all engine processes. */
     dispose() {
       for (const [key, client] of pool) {

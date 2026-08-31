@@ -10,6 +10,8 @@ import { z } from 'zod';
 
 import { gradeAttempt } from '../../domain/puzzles/attempt.js';
 import { sortDueCards, formatDueCount } from '../../domain/review/queue.js';
+import { MOTIF_DIMENSION } from '../../domain/analysis/motif-classifier.js';
+import { explainMotif } from '../../domain/analysis/motif-explainer.js';
 import { DUE_SOFT_CAP, DRILL_BATCH } from '../../shared/balance.js';
 import { logger } from '../../config.js';
 
@@ -29,23 +31,28 @@ const AttemptSchema = z.object({
  * @param {import('../../ports/scheduler.js').Scheduler} deps.scheduler
  * @param {import('../../ports/clock.js').Clock} deps.clock
  * @param {import('../../ports/repositories.js').SettingsRepository} deps.settingsRepo
+ * @param {import('../../ports/repositories.js').GameRepository} [deps.gameRepo]
  * @returns {Router}
  */
-export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _settingsRepo }) {
+export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _settingsRepo, gameRepo }) {
   const router = Router();
 
   router.get('/due', (req, res, next) => {
     try {
       const now = clock.now().getTime();
-      const allDue = puzzleRepo.getDueCards(now);
+      const motifFilter = req.query.motif ?? null;
+      let allDue = puzzleRepo.getDueCards(now);
+      if (motifFilter) allDue = allDue.filter(c => (c.motif_tag ?? c.motifTag) === motifFilter);
       const { overCap } = formatDueCount(allDue.length);
-      const sorted = sortDueCards(allDue, clock.now());
+      const weakDimension = _topWeakDimension(allDue);
+      const sorted = sortDueCards(allDue, clock.now(), weakDimension);
       const cards = sorted.slice(0, DRILL_BATCH);
 
       res.json({
         cards: cards.map(formatCard),
         total: allDue.length,
         displayTotal: overCap ? `${DUE_SOFT_CAP}+` : String(allDue.length),
+        motifFilter: motifFilter ?? null,
       });
     } catch (err) {
       next(err);
@@ -122,6 +129,8 @@ export function puzzlesRouter({ puzzleRepo, scheduler, clock, settingsRepo: _set
         log.warn({ err, puzzleId: req.params.id }, 'failed to save review row — verdict still returned');
       }
 
+      gameRepo?.recordActivity?.(clock.now().getTime(), 'review');
+
       // Current card state after scheduling (for nextDue)
       const updatedCard = puzzleRepo.getCard(req.params.id);
 
@@ -159,7 +168,24 @@ function formatCard(row) {
     ply: row.source_ply ?? row.sourcePly,
     sourceGameId: row.source_game_id ?? row.sourceGameId ?? null,
     kind: row.kind ?? null,
+    motifTag: row.motif_tag ?? row.motifTag ?? null,
+    motifExplanation: explainMotif(
+      row.fen,
+      row.played_move_uci ?? row.playedMoveUci ?? '',
+      row.side_to_move ?? row.sideToMove,
+      row.motif_tag ?? row.motifTag ?? null,
+    ) ?? null,
   };
+}
+
+function _topWeakDimension(cards) {
+  const dimCounts = {};
+  for (const c of cards) {
+    const dim = MOTIF_DIMENSION[c.motif_tag ?? c.motifTag];
+    if (dim) dimCounts[dim] = (dimCounts[dim] || 0) + 1;
+  }
+  const top = Object.entries(dimCounts).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : null;
 }
 
 function pieceAtSquare(fen, square) {

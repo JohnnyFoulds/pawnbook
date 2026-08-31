@@ -582,6 +582,7 @@ function _handleAlertTimeout(ws, deps) {
 function finishGame(ws, session, result, gameRepo, _settingsRepo) {
   log.info({ gameId: session.id, result: result.result, termination: result.termination }, 'game finished');
 
+  const playedAt = Date.now();
   gameRepo.save({
     id: session.id,
     opponentId: session.opponent.id,
@@ -591,8 +592,9 @@ function finishGame(ws, session, result, gameRepo, _settingsRepo) {
     status: 'finished',
     result: result.result,
     termination: result.termination,
-    playedAt: Date.now(),
+    playedAt,
   });
+  gameRepo.recordActivity?.(playedAt, 'game');
 
   // ELO is computed by analyseGame after analysis completes; initial game_over carries null ELO
   send(ws, {

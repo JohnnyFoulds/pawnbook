@@ -126,7 +126,47 @@
  * @returns {void}
  */
 
+/**
+ * @function
+ * @name PuzzleRepository#getMotifDrillAccuracy
+ * @returns {Array<{motifTag: string, total: number, correct: number}>}
+ */
+
+/**
+ * @function
+ * @name PuzzleRepository#getDrillAccuracyHistory
+ * @param {number} [limitDays=30]
+ * @returns {Array<{day: string, attempted: number, correct: number}>} sorted ascending
+ */
+
+/**
+ * @function
+ * @name PuzzleRepository#getTodayDrillStats
+ * @param {number} nowMs - current timestamp in milliseconds
+ * @returns {{attempted: number, correct: number}}
+ */
+
 // ────────────────────────────────────────────────────────────────
+
+/**
+ * @function
+ * @name GameRepository#getActivityHistory
+ * @param {number} [limitDays=30]
+ * @returns {Array<{day: string, games: number, reviews: number}>}
+ */
+
+/**
+ * @function
+ * @name GameRepository#getBestStreak
+ * @returns {number} length of the longest consecutive daily activity run ever recorded
+ */
+
+/**
+ * @function
+ * @name GameRepository#getWinRateHistory
+ * @param {number} [limitDays=90]
+ * @returns {Array<{day: string, played: number, won: number, lost: number, drawn: number}>} sorted ascending
+ */
 
 /**
  * @interface SettingsRepository

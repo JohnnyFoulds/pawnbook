@@ -7,11 +7,12 @@
 import { Chess } from 'chess.js';
 
 import { logger } from '../../config.js';
-import { FINDABILITY_MIN, NEAR_MISS_WIN_PTS } from '../../shared/balance.js';
+import { FINDABILITY_MIN, NEAR_MISS_WIN_PTS, STRENGTH_DECIDED_CP } from '../../shared/balance.js';
 import { getTracer } from '../../telemetry.js';
 
-import { classify, winPct, moveAccuracy, gameAccuracy, playingStrength } from './grade.js';
+import { classify, winPct, moveAccuracy, gameAccuracy, playingStrength, maiaLogProb } from './grade.js';
 import { probeFindability } from './findability.js';
+import { classifyMotif } from './motif-classifier.js';
 
 const log = logger.child({ mod: 'analysis-pipeline' });
 
@@ -28,12 +29,14 @@ const PASS_WEIGHTS = [0.76, 0.22, 0.02];
  * @param {number} opts.playerElo
  * @param {boolean} opts.wasTimed
  * @param {object[]} [opts.existingEvals] — move_evals rows already in the DB; pass-1 skips those positions
+ * @param {import('../../ports/engine-client.js').EngineClient} [opts.maia3Client] — optional Maia-3 client for pass-4 policy probe
  * @param {(event: object) => void} [opts.onProgress]
- * @returns {Promise<{moveEvals: object[], accuracy: number, opponentAccuracy: number, puzzleCandidates: object[]}>}
+ * @returns {Promise<{moveEvals: object[], accuracy: number, opponentAccuracy: number, puzzleCandidates: object[], playerMaiaLogProb: object|null}>}
  */
 export async function runAnalysis({
   plies, playerColor, sfClient, maiaClient, maiaModel, playerElo: _playerElo, wasTimed: _wasTimed,
   existingEvals = [],
+  maia3Client = null,
   onProgress = () => {},
 }) {
   const chess = new Chess();
@@ -95,6 +98,8 @@ export async function runAnalysis({
   const opponentAccuracies = [];
   const playerStrengthSamples = [];
   const opponentStrengthSamples = [];
+  // Pass 4: positions eligible for Maia-3 policy probe (same filter as playerStrengthSamples)
+  const playerMaia3Positions = [];
 
   for (let i = 0; i < plies.length; i++) {
     const before = pass1Results[i];
@@ -143,6 +148,12 @@ export async function runAnalysis({
     if (mover === 'player') {
       playerAccuracies.push(accuracy);
       playerStrengthSamples.push({ cpLoss, cpWhite: before.cp, mateIn: before.mate, legalMovesBefore: before.legalMoves });
+      // Track positions eligible for pass-4 Maia-3 policy probe
+      const eligibleForMaia3 = before.legalMoves > 1 && before.mate === null &&
+        before.cp !== null && Math.abs(before.cp) <= STRENGTH_DECIDED_CP;
+      if (eligibleForMaia3) {
+        playerMaia3Positions.push({ fen: before.fen, moveUci: plies[i] });
+      }
     } else {
       opponentAccuracies.push(accuracy);
       opponentStrengthSamples.push({ cpLoss, cpWhite: before.cp, mateIn: before.mate, legalMovesBefore: before.legalMoves });
@@ -230,6 +241,8 @@ export async function runAnalysis({
       if (temptation > 0.3) tags.push('common_trap');
       if (findability < FINDABILITY_MIN) tags.push('engine_only');
 
+      const motifTag = classifyMotif(c.fen, c.moveUci, playerColor);
+
       puzzleCandidates.push({
         ...c,
         findability,
@@ -240,6 +253,7 @@ export async function runAnalysis({
         tags: tags.join(','),
         engineOnly: findability < FINDABILITY_MIN,
         degraded,
+        motifTag,
       });
 
       const pass3Pct = Math.round((PASS_WEIGHTS[0] + PASS_WEIGHTS[1]) * 100 + ((i + 1) / candidates.length) * 100 * PASS_WEIGHTS[2]);
@@ -265,6 +279,34 @@ export async function runAnalysis({
   selectSpan?.setStatus({ code: 1 });
   selectSpan?.end();
 
+  // ── Pass 4: Maia-3 policy strength probe ─────────────────────────────────
+  // Runs when maia3Client is injected and there are eligible player positions.
+  // Uses the pass-1 strength estimate as SelfElo when available; falls back to
+  // the stored playerElo so short games still contribute to the corpus.
+  let playerMaiaLogProb = null;
+  if (maia3Client && playerMaia3Positions.length > 0) {
+    const selfEloRaw = playerStrength.strength !== null ? playerStrength.strength : (_playerElo ?? 1200);
+    const selfElo = Math.max(1100, Math.min(2400, Math.round(selfEloRaw / 100) * 100));
+    const pass4Span = tracer?.startSpan('maia3_policy_probe', { attributes: { 'analysis.positions': playerMaia3Positions.length } });
+    try {
+      const probs = [];
+      for (const { fen, moveUci } of playerMaia3Positions) {
+        maia3Client.setOption('SelfElo', selfElo);
+        const policyMap = await maia3Client.policy(fen);
+        const prob = policyMap.get(moveUci) ?? 0;
+        probs.push(prob);
+      }
+      playerMaiaLogProb = maiaLogProb(probs);
+      pass4Span?.setStatus({ code: 1 });
+    } catch (err) {
+      log.warn({ err }, 'Maia-3 policy probe failed — skipping pass 4');
+      pass4Span?.recordException(err);
+      pass4Span?.setStatus({ code: 2, message: err.message });
+    } finally {
+      pass4Span?.end();
+    }
+  }
+
   return {
     moveEvals,
     accuracy,
@@ -272,5 +314,6 @@ export async function runAnalysis({
     playerStrength,
     opponentStrength,
     puzzleCandidates,
+    playerMaiaLogProb,
   };
 }

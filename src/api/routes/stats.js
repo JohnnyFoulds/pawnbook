@@ -5,6 +5,13 @@
 
 import { Router } from 'express';
 
+import { MOTIF_DIMENSION } from '../../domain/analysis/motif-classifier.js';
+import { pickFocusMotif } from '../../domain/review/focus.js';
+import {
+  STRENGTH_ANCHOR_ELO, STRENGTH_ANCHOR_ASE, STRENGTH_ELO_PER_ASE,
+  STRENGTH_ELO_MIN, STRENGTH_ELO_MAX, STRENGTH_MIN_PLIES, STRENGTH_ROLLING_N,
+} from '../../shared/balance.js';
+
 /**
  * @param {object} deps
  * @param {import('../../ports/repositories.js').GameRepository} deps.gameRepo
@@ -61,6 +68,31 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         createdAt: p.created_at ?? p.createdAt ?? null,
       }));
 
+      // Motif breakdown — aggregate motif_tag counts across all puzzles
+      const motifBreakdown = {};
+      const mistakesByMotif = [];
+      for (const p of allPuzzles) {
+        const tag = p.motif_tag ?? p.motifTag ?? null;
+        if (!tag) continue;
+        motifBreakdown[tag] = (motifBreakdown[tag] || 0) + 1;
+        mistakesByMotif.push({ motifTag: tag, createdAt: p.created_at ?? p.createdAt ?? null });
+      }
+
+      // Dimension breakdown — roll up motifs into skill dimensions
+      const dimensionBreakdown = {};
+      for (const [tag, n] of Object.entries(motifBreakdown)) {
+        const dim = MOTIF_DIMENSION[tag];
+        if (dim) dimensionBreakdown[dim] = (dimensionBreakdown[dim] || 0) + n;
+      }
+
+      // Rolling style score — geometric mean probability (%) over last 10 games with maia3LogProb
+      const styleGames = games
+        .filter(g => g.status === 'finished' && g.maia3LogProb != null)
+        .slice(0, 10);
+      const rollingStyleScore = styleGames.length > 0
+        ? Math.round(100 * styleGames.reduce((s, g) => s + Math.exp(g.maia3LogProb), 0) / styleGames.length)
+        : null;
+
       // Quality mix from move_evals (all 7 tiers across all player moves)
       const moveClassifications = gameRepo.getPlayerMoveClassifications?.() ?? [];
       const qualityMix = {};
@@ -71,6 +103,63 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         classification: m.classification,
         createdAt: m.played_at,
       }));
+
+      // Per-motif drill accuracy — first-attempt non-practice reviews
+      const motifAccuracy = {};
+      for (const row of (puzzleRepo.getMotifDrillAccuracy?.() ?? [])) {
+        motifAccuracy[row.motifTag] = { total: row.total, correct: row.correct };
+      }
+
+      const drillHistory = puzzleRepo.getDrillAccuracyHistory?.() ?? [];
+      const winRateHistory = gameRepo.getWinRateHistory?.() ?? [];
+
+      // Per-game strength Elo history (oldest-first, finished games with estimates)
+      const strengthHistory = games
+        .filter(g => g.status === 'finished' && g.strengthElo != null)
+        .map(g => ({ playedAt: g.playedAt, strengthElo: g.strengthElo }))
+        .reverse();
+
+      // Per-game accuracy history (oldest-first, finished games with accuracy)
+      const accuracyHistory = games
+        .filter(g => g.status === 'finished' && g.accuracy != null)
+        .map(g => ({ playedAt: g.playedAt, accuracy: g.accuracy }))
+        .reverse();
+
+      // Per-opponent breakdown (sorted by played desc)
+      const oppMap = new Map();
+      for (const g of games) {
+        if (g.status !== 'finished') continue;
+        const o = oppMap.get(g.opponentId) ?? { opponentId: g.opponentId, played: 0, won: 0, lost: 0, drawn: 0, _accSum: 0, _accCount: 0 };
+        o.played++;
+        if (g.result === 'win') o.won++;
+        else if (g.result === 'loss') o.lost++;
+        else if (g.result === 'draw') o.drawn++;
+        if (g.accuracy != null) { o._accSum += g.accuracy; o._accCount++; }
+        oppMap.set(g.opponentId, o);
+      }
+      const opponentStats = [...oppMap.values()]
+        .map(({ _accSum, _accCount, ...o }) => ({
+          ...o,
+          avgAccuracy: _accCount > 0 ? Math.round(_accSum / _accCount) : null,
+        }))
+        .sort((a, b) => b.played - a.played);
+
+      // Rolling inverse-variance strength aggregate over last STRENGTH_ROLLING_N samples
+      const rawSamples = gameRepo.listStrengthSamples?.({ side: 'player', limit: STRENGTH_ROLLING_N }) ?? [];
+      const eligible = rawSamples.filter(r => r.n >= STRENGTH_MIN_PLIES);
+      let rollingStrength = null;
+      let rollingSe = null;
+      if (eligible.length > 0) {
+        const pairs = eligible.map(r => {
+          const elo = Math.round(Math.max(STRENGTH_ELO_MIN, Math.min(STRENGTH_ELO_MAX,
+            STRENGTH_ANCHOR_ELO - STRENGTH_ELO_PER_ASE * (r.ase - STRENGTH_ANCHOR_ASE))));
+          const se = Math.max(1, Math.round(STRENGTH_ELO_PER_ASE * r.sd / Math.sqrt(r.n)));
+          return { elo, se };
+        });
+        const sumWeights = pairs.reduce((s, p) => s + 1 / (p.se * p.se), 0);
+        rollingStrength = Math.round(pairs.reduce((s, p) => s + p.elo / (p.se * p.se), 0) / sumWeights);
+        rollingSe = Math.round(1 / Math.sqrt(sumWeights));
+      }
 
       res.json({
         elo,
@@ -87,6 +176,19 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         mistakesByPhase,
         qualityMix,
         allMoves,
+        motifBreakdown,
+        mistakesByMotif,
+        dimensionBreakdown,
+        rollingStyleScore,
+        motifAccuracy,
+        drillHistory,
+        winRateHistory,
+        rollingStrength,
+        rollingSe,
+        strengthHistory,
+        accuracyHistory,
+        opponentStats,
+        focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {
       next(err);

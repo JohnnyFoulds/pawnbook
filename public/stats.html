@@ -49,6 +49,36 @@
         <canvas class="sparkline" id="spark-elo" width="120" height="28" style="display:block;margin-top:8px"></canvas>
       </div>
 
+      <!-- Streak tile -->
+      <div class="stat-tile" id="streak-tile" style="display:none">
+        <div class="stat-tile__label">Streak</div>
+        <div class="stat-tile__value" id="streak-val">0</div>
+        <div class="stat-tile__delta" style="font-size:12px;color:var(--ink-muted)">day<span id="streak-plural">s</span> in a row</div>
+      </div>
+
+      <!-- Drill accuracy tile -->
+      <div class="stat-tile" id="drill-accuracy-tile" style="display:none">
+        <div class="stat-tile__label">Drill accuracy</div>
+        <div class="stat-tile__value" id="drill-accuracy-val">—</div>
+        <div class="stat-tile__delta" id="drill-accuracy-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+        <canvas class="sparkline" id="spark-drill-accuracy" width="120" height="28" style="display:block;margin-top:8px"></canvas>
+      </div>
+
+      <!-- Style match tile -->
+      <div class="stat-tile" id="style-tile" style="display:none">
+        <div class="stat-tile__label">Style match</div>
+        <div class="stat-tile__value" id="style-val">—</div>
+        <div class="stat-tile__delta" id="style-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+      </div>
+
+      <!-- Strength Elo tile -->
+      <div class="stat-tile" id="strength-tile" style="display:none">
+        <div class="stat-tile__label">Strength Elo</div>
+        <div class="stat-tile__value" id="strength-val">—</div>
+        <div class="stat-tile__delta" id="strength-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+        <canvas class="sparkline" id="spark-strength" width="120" height="28" style="display:block;margin-top:8px"></canvas>
+      </div>
+
       <!-- Retired mistakes tile (R35) -->
       <div class="stat-tile">
         <div class="stat-tile__label">Mistakes retired</div>
@@ -76,6 +106,22 @@
         </div>
       </div>
 
+      <!-- Win rate tile -->
+      <div class="stat-tile" id="win-rate-tile" style="display:none">
+        <div class="stat-tile__label">Win rate</div>
+        <div class="stat-tile__value" id="win-rate-val">—</div>
+        <div class="stat-tile__delta" id="win-rate-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+        <canvas class="sparkline" id="spark-win-rate" width="120" height="28" style="display:block;margin-top:8px"></canvas>
+      </div>
+
+      <!-- Accuracy trend tile -->
+      <div class="stat-tile" id="accuracy-trend-tile" style="display:none">
+        <div class="stat-tile__label">Accuracy trend</div>
+        <div class="stat-tile__value" id="accuracy-trend-val">—</div>
+        <div class="stat-tile__delta" id="accuracy-trend-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+        <canvas class="sparkline" id="spark-accuracy-trend" width="120" height="28" style="display:block;margin-top:8px"></canvas>
+      </div>
+
       <!-- Queue health meter (R11: due / DUE_SOFT_CAP) -->
       <div class="stat-tile">
         <div class="stat-tile__label">Queue health</div>
@@ -98,6 +144,32 @@
     <div class="card" style="margin-top:16px">
       <div style="font-size:14px;font-weight:600;margin-bottom:16px">Mistakes by phase</div>
       <div id="phase-bars" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+
+    <!-- Focus recommendation -->
+    <div class="card" id="focus-card" style="margin-top:16px;display:none">
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">Focus area</div>
+      <div id="focus-text" style="font-size:13px;color:var(--ink-secondary);line-height:1.5;margin-bottom:10px"></div>
+      <a id="focus-drill-link" href="puzzles.html" class="btn btn--primary" style="font-size:13px">Drill this now →</a>
+    </div>
+
+    <!-- Top weakness -->
+    <div class="card" id="weakness-card" style="margin-top:16px;display:none">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">Top weakness</div>
+      <div id="dimension-text" style="font-size:13px;color:var(--ink-secondary);line-height:1.5;margin-bottom:8px"></div>
+      <div id="weakness-text" style="font-size:13px;color:var(--ink-secondary);line-height:1.5"></div>
+      <div id="weakness-bars" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
+    </div>
+
+    <!-- Per-opponent breakdown -->
+    <div class="card" id="opponent-stats-card" style="margin-top:16px;display:none">
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">By opponent</div>
+      <table class="chart-table" id="opponent-stats-table">
+        <thead>
+          <tr><th>Opponent</th><th class="num">Played</th><th class="num">Won</th><th class="num">Lost</th><th class="num">Drew</th><th class="num">Accuracy</th></tr>
+        </thead>
+        <tbody id="opponent-stats-body"></tbody>
+      </table>
     </div>
 
     <!-- Quality mix over time -->

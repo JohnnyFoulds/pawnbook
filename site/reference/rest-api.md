@@ -23,6 +23,9 @@ Lightweight dashboard state and Docker healthcheck endpoint.
 | `dueCount` | integer | Number of FSRS cards currently due |
 | `showStreak` | boolean | Whether the streak display is enabled in settings |
 | `streak` | integer | Current day-streak (days with any activity) |
+| `bestStreak` | integer | Longest ever consecutive day-streak |
+| `todayDrills` | object | `{attempted, correct}` first-attempt non-practice reviews today (04:00 boundary) |
+| `activityHistory` | array | `[{day, games, reviews}]` last 30 days of activity |
 | `gamesPlayed` | integer | Total lifetime games played |
 | `recentGames` | array | Up to 8 most recent games |
 | `suggestedOpponent` | string \| null | Opponent ID suggested based on current Elo |
@@ -35,7 +38,7 @@ Each `recentGames` item:
 |---|---|---|
 | `id` | string | Game UUID |
 | `opponentId` | string | Opponent identifier |
-| `result` | `'white'` \| `'black'` \| `'draw'` | Game result |
+| `result` | `'win'` \| `'loss'` \| `'draw'` | Game result from the player's perspective |
 | `accuracy` | number | Player accuracy (1–100) |
 | `puzzleCount` | integer | Drillable puzzles extracted |
 | `playedAt` | string | ISO 8601 timestamp |
@@ -56,7 +59,7 @@ Each `recentGames` item:
     {
       "id": "a1b2c3d4-...",
       "opponentId": "maia-1400",
-      "result": "white",
+      "result": "win",
       "accuracy": 74.3,
       "puzzleCount": 3,
       "playedAt": "2026-08-31T09:12:00.000Z"
@@ -64,7 +67,10 @@ Each `recentGames` item:
   ],
   "suggestedOpponent": "maia-1500",
   "inProgressGameId": null,
-  "inProgressOpponentId": null
+  "inProgressOpponentId": null,
+  "bestStreak": 12,
+  "todayDrills": { "attempted": 10, "correct": 8 },
+  "activityHistory": [{ "day": "2026-08-30", "games": 1, "reviews": 10 }]
 }
 ```
 
@@ -104,7 +110,7 @@ Returns the 50 most recent games, newest first.
 |---|---|---|
 | `id` | string | Game UUID |
 | `opponentId` | string | Opponent identifier |
-| `result` | string | `'white'`, `'black'`, or `'draw'` |
+| `result` | string | `'win'`, `'loss'`, or `'draw'` (player's perspective) |
 | `accuracy` | number \| null | Player accuracy 1–100; null if analysis pending |
 | `strengthElo` | integer \| null | Player strength estimate for this game |
 | `opponentStrengthElo` | integer \| null | Engine strength estimate for this game |
@@ -120,7 +126,7 @@ Returns the 50 most recent games, newest first.
     {
       "id": "a1b2c3d4-e5f6-...",
       "opponentId": "maia-1400",
-      "result": "white",
+      "result": "win",
       "accuracy": 74.3,
       "strengthElo": 1521,
       "opponentStrengthElo": 1388,
@@ -161,6 +167,7 @@ Full post-game review data for a single game.
 | `eloAfter` | integer | Elo after this game (same if unranked) |
 | `moves` | array | Per-move analysis data |
 | `mistakes` | array | Graded mistake positions |
+| `motifSummary` | array | `[{tag, count, explanation}]` — recurring error patterns, sorted by count desc |
 | `puzzleCount` | integer | Drillable puzzles extracted |
 
 Each `moves[]` item:
@@ -189,6 +196,8 @@ Each `mistakes[]` item:
 | `maiaNearestModel` | string | Maia model used for findability probe |
 | `engineOnly` | boolean | True if below findability gate (not drillable) |
 | `sourcePly` | integer | Ply number of the mistake |
+| `motifTag` | string \| null | Error pattern label (e.g. `fork`, `back_rank`, `pinned_piece`) |
+| `motifExplanation` | string \| null | One-sentence description of the motif |
 
 ---
 
@@ -241,6 +250,12 @@ Returns **202 Accepted** immediately. Analysis runs in the background and emits 
 ## GET /api/puzzles/due
 
 Returns due FSRS cards for the drill screen, sorted by instructiveness × overdue factor.
+
+**Query parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `motif` | string | Optional. Filter cards to a specific motif tag (e.g. `fork`, `back_rank`). Returns only due cards matching that error pattern. |
 
 **Response**
 
@@ -303,26 +318,35 @@ Grades a puzzle attempt and, when in drill phase, schedules the FSRS card.
 
 ## GET /api/stats
 
-Aggregate lifetime statistics.
+Aggregate lifetime statistics for the Stats page.
 
 **Response**
 
 | Field | Type | Description |
 |---|---|---|
-| `elo` | integer | Current Elo |
-| `eloDelta` | integer | Elo change over last 10 ranked games |
-| `eloHistory` | array | Elo data points over time |
-| `dueCount` | integer | Currently due cards |
-| `activeCount` | integer | Cards in active FSRS state |
+| `elo` | integer | Current win/loss Elo rating |
+| `eloDelta` | integer | Elo change vs previous game |
+| `eloHistory` | array | `[{elo, recordedAt}]` all-time Elo data points |
+| `dueCount` | integer | Currently due FSRS cards |
+| `activeCount` | integer | Cards in active FSRS state (not graduated) |
 | `graduatedCount` | integer | Graduated cards (reps ≥ 5, interval > 180 days, no lapses) |
-| `wins` | integer | Lifetime wins |
+| `wins` | integer | Lifetime wins (ranked, finished) |
 | `losses` | integer | Lifetime losses |
 | `draws` | integer | Lifetime draws |
 | `phaseBreakdown` | object | `{ opening, middlegame, endgame }` mistake counts |
-| `gameHistory` | array | Per-game accuracy and Elo history |
-| `mistakesByPhase` | array | Mistake counts grouped by game phase |
-| `qualityMix` | object | Move counts by quality tier |
-| `allMoves` | array | Per-move classification data for charting |
+| `gameHistory` | array | `[{result, playedAt}]` for date-range filtering |
+| `motifBreakdown` | object | Motif tag → count across all puzzles |
+| `motifAccuracy` | object | Motif tag → `{total, correct}` first-attempt drill accuracy |
+| `dimensionBreakdown` | object | Skill dimension → count (tactics, positional, endgame) |
+| `drillHistory` | array | `[{day, attempted, correct}]` per-day first-attempt drill accuracy (last 30 days) |
+| `winRateHistory` | array | `[{day, played, won, lost, drawn}]` per-day ranked game results (last 90 days) |
+| `strengthHistory` | array | `[{playedAt, strengthElo}]` per-game move-quality Elo, oldest-first |
+| `accuracyHistory` | array | `[{playedAt, accuracy}]` per-game player accuracy, oldest-first |
+| `rollingStrength` | integer \| null | Rolling inverse-variance move-quality Elo (last 10 eligible games) |
+| `rollingSe` | integer \| null | Standard error of `rollingStrength` |
+| `rollingStyleScore` | integer \| null | Rolling Maia style-match % (last 10 games with Maia probe) |
+| `qualityMix` | object | Move count by quality tier across all player moves |
+| `focusMotif` | object \| null | Recommended motif to drill: `{tag, explanation, drillCount, accuracy}` |
 
 ---
 
@@ -332,7 +356,7 @@ Aggregate lifetime statistics.
 
 Returns the full repertoire book as a directed acyclic graph.
 
-**Response**: `{ nodes[] }` — each node represents a position (keyed by EPD) and includes its associated moves with roles, observation counts, and scores.
+**Response**: `{ nodes[], lineBudget }` — `nodes` is the list of position objects (keyed by EPD), each including its associated moves with roles, observation counts, and scores. `lineBudget` is the maximum number of lines the book will track (configured balance parameter).
 
 ### GET /api/repertoire/challenges
 
@@ -346,7 +370,7 @@ Returns the deviation log filtered to alerted entries (`alerted_kept`, `alerted_
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `limit` | integer | `200` | Maximum entries to return (max 200) |
+| `limit` | integer | `200` | Maximum entries to return (max 500) |
 
 **Response**
 
@@ -367,7 +391,7 @@ The book change feed — all role transitions and promotions.
 |---|---|---|---|
 | `limit` | integer | `50` | Maximum entries (max 200) |
 
-Entries are enriched with `fromSan` and `toSan` (UCI → SAN conversion). Each entry has a `reversible` flag indicating whether the `/reverse` endpoint can undo it.
+Entries are enriched with `fromSan` and `toSan` (UCI → SAN conversion).
 
 **Changelog event kinds**: `promote`, `retire`, `confirm`, `refuse`, `settle`, `reverse`, `elect`, `quarantine_exit`
 
@@ -409,7 +433,7 @@ Timeline, cumulative growth series, and milestones derived from up to 500 most r
 
 Opponent replies with significant Maia reach probability but no book coverage — positions where you are likely to encounter a move you have not studied.
 
-**Response**: array sorted by `reachProbability` descending. Each entry includes the EPD, the opponent move, and the estimated reach probability.
+**Response**: `{ gaps }` — `gaps` is an array sorted by `reachProbability` descending. Each entry includes the EPD, the opponent move, and the estimated reach probability.
 
 ---
 

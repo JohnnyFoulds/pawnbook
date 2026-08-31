@@ -40,18 +40,19 @@
       <div class="stat-tile" id="tile-streak" data-show-streak="1">
         <div class="stat-tile__label">Day streak</div>
         <div class="stat-tile__value" id="streak-value">—</div>
+        <div id="streak-best" style="font-size:11px;color:var(--ink-muted);margin-top:2px;display:none"></div>
         <canvas class="sparkline" id="spark-streak" width="80" height="24" style="display:block;margin-top:8px"></canvas>
       </div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px">
       <a href="play.html" class="card" style="display:block;text-decoration:none;cursor:pointer">
-        <div style="font-size:15px;font-weight:600;margin-bottom:4px">Play</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px" id="play-card-heading">Play</div>
         <div style="font-size:13px;color:var(--ink-muted)" id="suggested-opponent">Loading…</div>
       </a>
       <a href="puzzles.html" class="card" style="display:block;text-decoration:none;cursor:pointer">
         <div style="font-size:15px;font-weight:600;margin-bottom:4px">Drill <span id="drill-count">—</span> puzzles</div>
-        <div style="font-size:13px;color:var(--ink-muted)">from your own games</div>
+        <div style="font-size:13px;color:var(--ink-muted)" id="drill-today-sub">from your own games</div>
       </a>
     </div>
 

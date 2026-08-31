@@ -11,6 +11,65 @@ const BASE = '';
 const BATCH_SIZE = 10;
 const DUE_SOFT_CAP = 40;
 
+const PIECE_NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
+
+const MOTIF_EXPLANATION = {
+  back_rank: 'Your king was left on the back rank without an escape square — the opponent\'s rook or queen can deliver a back-rank mate.',
+  missed_capture: 'There was a piece you could capture for free or at a material gain — scanning for loose opponent pieces before moving is worth the habit.',
+  fork: 'After this move, the opponent\'s piece attacked two of your pieces at once. Look for knights and diagonals that can create double threats.',
+  overloaded_defender: 'One of your pieces was carrying two defensive jobs at once. When a single piece guards two targets, the opponent can pick one off and the overloaded guardian can only save the other.',
+  pinned_piece: 'After this move one of your pieces was pinned — it was stuck in place because moving it would expose a more valuable piece behind it to capture.',
+  skewer: 'After this move an opponent slider targeted one of your valuable pieces, and a less valuable piece was sitting behind it. When the attacked piece moves to safety, the piece behind is captured for free.',
+  discovered_attack: 'Moving this piece uncovered a hidden attack by an opponent — a slider that was blocked by your piece can now reach another one of your pieces.',
+};
+
+/**
+ * Given the puzzle FEN (before the mistake), the played SAN, and the player's
+ * side, return a one-sentence explanation of why the move was bad, or null if
+ * no obvious threat is detected.
+ */
+async function computeThreatExplanation(fen, playedMoveSan, sideToMove) {
+  try {
+    const { Chess } = await import('https://cdn.jsdelivr.net/npm/chess.js@1/+esm');
+    const chess = new Chess(fen);
+    const playerColor = sideToMove === 'white' ? 'w' : 'b';
+    const oppColor = playerColor === 'w' ? 'b' : 'w';
+
+    const played = chess.move(playedMoveSan);
+    if (!played) return null;
+
+    // Find player pieces that are now hanging (attacked and not sufficiently defended).
+    const hanging = [];
+    for (const row of chess.board()) {
+      for (const cell of row) {
+        if (!cell || cell.color !== playerColor) continue;
+        if (!chess.isAttacked(cell.square, oppColor)) continue;
+        const attackers = chess.attackers(cell.square, oppColor)
+          .map(s => chess.get(s)).filter(Boolean);
+        const defenders = chess.attackers(cell.square, playerColor);
+        const undefended = defenders.length === 0;
+        const cheapest = attackers.reduce((m, p) => Math.min(m, PIECE_VALUE[p.type] ?? 99), 99);
+        if (undefended || cheapest < PIECE_VALUE[cell.type]) {
+          hanging.push({ sq: cell.square, type: cell.type });
+        }
+      }
+    }
+    if (!hanging.length) return null;
+
+    const movedName = PIECE_NAME[played.piece] ?? 'piece';
+    const h = hanging[0];
+    const hangingName = PIECE_NAME[h.type] ?? 'piece';
+
+    if (h.sq === played.to) {
+      return `The ${movedName} moved to ${played.to} has no safe square — the opponent can capture it.`;
+    }
+    return `Moving the ${movedName} away from ${played.from} left the ${hangingName} on ${h.sq} undefended.`;
+  } catch {
+    return null;
+  }
+}
+
 async function api(path, opts) {
   const r = await fetch(BASE + path, opts);
   if (!r.ok) throw new Error(await r.text());
@@ -28,12 +87,43 @@ let currentLegalMoves = [];  // UCI strings for the current puzzle position
 let followupPending = false;
 let followupUci = null;
 let isDrillAhead = false;
+let currentBoard = null;
+
+async function enrichEmptyState() {
+  try {
+    const state = await api('/api/state');
+    const td = state.todayDrills ?? { attempted: 0, correct: 0 };
+    const summaryEl = document.getElementById('empty-session-summary');
+    if (summaryEl && td.attempted > 0) {
+      const pct = Math.round((td.correct / td.attempted) * 100);
+      summaryEl.textContent = `Today: ${td.correct} correct / ${td.attempted} attempted (${pct}%)`;
+      summaryEl.style.display = '';
+    }
+    const streakEl = document.getElementById('empty-streak-line');
+    if (streakEl && (state.streak ?? 0) >= 2) {
+      streakEl.textContent = `${state.streak}-day streak`;
+      streakEl.style.display = '';
+    }
+    const subEl = document.getElementById('empty-sub');
+    if (subEl && td.attempted > 0) subEl.style.display = 'none';
+  } catch { /* non-critical */ }
+}
 
 async function boot() {
   try {
-    const due = await api('/api/puzzles/due');
+    const motifFilter = new URLSearchParams(location.search).get('motif');
+    const duePath = motifFilter ? `/api/puzzles/due?motif=${encodeURIComponent(motifFilter)}` : '/api/puzzles/due';
+    const due = await api(duePath);
     const cards = due.cards ?? [];
     const total = due.total ?? cards.length;
+
+    // Show filter banner if drilling a specific motif
+    if (motifFilter) {
+      const banner = document.getElementById('motif-filter-banner');
+      const labelEl = document.getElementById('motif-filter-label');
+      if (banner) banner.style.display = '';
+      if (labelEl) labelEl.textContent = motifFilter.replace(/_/g, ' ');
+    }
 
     // Update badge
     const dueLabel = total > DUE_SOFT_CAP ? `${DUE_SOFT_CAP}+` : String(total);
@@ -41,6 +131,7 @@ async function boot() {
 
     if (!cards.length) {
       document.getElementById('empty-state').style.display = '';
+      await enrichEmptyState();
       return;
     }
 
@@ -147,7 +238,7 @@ async function initBoard(fen, sideToMove) {
   ]);
   const chess = new Chess(fen);
   currentLegalMoves = chess.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion ?? ''));
-  await createBoard(el, Chessboard, {
+  currentBoard = await createBoard(el, Chessboard, {
     position: fen,
     orientation: sideToMove === 'black' ? 'black' : 'white',
     onMove: ({ from, to }) => submitMove(from + to),
@@ -244,6 +335,22 @@ async function showFeedback(result, _card) {
         ${result.winLoss != null ? `Lost ${Math.round(result.winLoss)}% win.` : ''}
       </div>
     </div>`;
+    // Show best-move arrow on the board so the correct move is visible
+    const card = batch[batchIdx];
+    if (card?.bestMoveUci && currentBoard) {
+      const from = card.bestMoveUci.slice(0, 2);
+      const to = card.bestMoveUci.slice(2, 4);
+      currentBoard.showArrow(from, to, 'success');
+    }
+    // Append one-sentence threat explanation if detectable
+    if (card?.fen && card?.playedMoveSan && card?.sideToMove) {
+      let explain = await computeThreatExplanation(card.fen, card.playedMoveSan, card.sideToMove);
+      if (!explain) explain = card?.motifExplanation ?? (card?.motifTag ? MOTIF_EXPLANATION[card.motifTag] : null) ?? null;
+      if (explain) {
+        wrap.insertAdjacentHTML('beforeend',
+          `<div class="drill-feedback__explain">${explain}</div>`);
+      }
+    }
     document.getElementById('action-btns').style.display = 'none';
     document.getElementById('next-wrap').style.display = '';
   }
