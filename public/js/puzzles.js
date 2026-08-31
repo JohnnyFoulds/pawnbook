@@ -14,6 +14,12 @@ const DUE_SOFT_CAP = 40;
 const PIECE_NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
 const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 
+const MOTIF_EXPLANATION = {
+  back_rank: 'Your king was left on the back rank without an escape square — the opponent\'s rook or queen can deliver a back-rank mate.',
+  missed_capture: 'There was a piece you could capture for free or at a material gain — scanning for loose opponent pieces before moving is worth the habit.',
+  fork: 'After this move, the opponent\'s piece attacked two of your pieces at once. Look for knights and diagonals that can create double threats.',
+};
+
 /**
  * Given the puzzle FEN (before the mistake), the played SAN, and the player's
  * side, return a one-sentence explanation of why the move was bad, or null if
@@ -303,7 +309,8 @@ async function showFeedback(result, _card) {
     }
     // Append one-sentence threat explanation if detectable
     if (card?.fen && card?.playedMoveSan && card?.sideToMove) {
-      const explain = await computeThreatExplanation(card.fen, card.playedMoveSan, card.sideToMove);
+      let explain = await computeThreatExplanation(card.fen, card.playedMoveSan, card.sideToMove);
+      if (!explain && card?.motifTag) explain = MOTIF_EXPLANATION[card.motifTag] ?? null;
       if (explain) {
         wrap.insertAdjacentHTML('beforeend',
           `<div class="drill-feedback__explain">${explain}</div>`);
