@@ -103,6 +103,7 @@ export function gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }) 
           maiaNearestModel: p.maia_model ?? null,
           engineOnly: tags.includes('engine_only'),
           sourcePly: p.source_ply,
+          motifTag: p.motif_tag ?? p.motifTag ?? null,
         };
       });
 
@@ -197,6 +198,7 @@ function formatQuizPosition(row) {
     piece: pieceAtSquare(row.fen ?? '', uci.slice(0, 2)),
     ply: row.source_ply ?? row.sourcePly,
     classification: row.classification,
+    motifTag: row.motif_tag ?? row.motifTag ?? null,
   };
 }
 

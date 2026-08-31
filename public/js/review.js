@@ -219,12 +219,15 @@ function renderMistakeList(review) {
     const chip = glyph
       ? `<span class="quality-chip quality-chip--${m.classification}">${glyph}</span>`
       : '';
+    const MOTIF_LABEL = { hanging_piece: 'hanging piece', fork: 'fork', back_rank: 'back rank', missed_capture: 'missed capture' };
+    const motifBadge = m.motifTag ? `<span class="mistake-row__tag mistake-row__tag--motif">${MOTIF_LABEL[m.motifTag] ?? m.motifTag.replace(/_/g, ' ')}</span>` : '';
     return `<div class="mistake-row">
       <div class="mistake-row__head">
         ${chip}
         <span class="mistake-row__move">${m.moveSan}</span>
         <span class="mistake-row__loss">lost ${m.winLoss != null ? Math.round(m.winLoss) : '?'}% win</span>
         ${m.tags?.includes('common_trap') ? '<span class="mistake-row__tag">common trap</span>' : ''}
+        ${motifBadge}
       </div>
       <div class="mistake-row__detail">
         Best was ${m.bestMoveSan}${m.findability != null

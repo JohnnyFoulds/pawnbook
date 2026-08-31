@@ -664,6 +664,7 @@ button, [role="button"] {
 .mistake-row__move { font-weight: 600; }
 .mistake-row__loss { color: var(--ink-muted); font-size: 13px; }
 .mistake-row__tag  { margin-left: auto; font-size: 11px; color: var(--ink-muted); }
+.mistake-row__tag--motif { margin-left: var(--sp-2); color: var(--accent); opacity: 0.8; }
 
 .mistake-row__detail {
   font-size: 13px;
