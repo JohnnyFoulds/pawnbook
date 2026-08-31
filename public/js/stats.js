@@ -83,12 +83,24 @@ function renderStyleTile(stats) {
   deltaEl.textContent = 'avg last 10 games · higher = more on-style';
 }
 
+function renderStrengthTile(stats) {
+  const tile = document.getElementById('strength-tile');
+  if (stats.rollingStrength == null) { tile.style.display = 'none'; return; }
+  tile.style.display = '';
+  document.getElementById('strength-val').textContent = String(stats.rollingStrength);
+  const se = stats.rollingSe ?? null;
+  document.getElementById('strength-delta').textContent = se != null
+    ? `±${se} · from move quality`
+    : 'from move quality';
+}
+
 function renderAll(stats, state) {
   renderEloTile(stats, state);
   renderStreakTile(state);
   renderDrillAccuracyTile(stats);
   renderWinRateTile(stats);
   renderStyleTile(stats);
+  renderStrengthTile(stats);
   renderRetiredTile(stats);
   renderResultsTile(stats);
   renderQueueHealth(stats, state);

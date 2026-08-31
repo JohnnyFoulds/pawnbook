@@ -7,6 +7,10 @@ import { Router } from 'express';
 
 import { MOTIF_DIMENSION } from '../../domain/analysis/motif-classifier.js';
 import { pickFocusMotif } from '../../domain/review/focus.js';
+import {
+  STRENGTH_ANCHOR_ELO, STRENGTH_ANCHOR_ASE, STRENGTH_ELO_PER_ASE,
+  STRENGTH_ELO_MIN, STRENGTH_ELO_MAX, STRENGTH_MIN_PLIES, STRENGTH_ROLLING_N,
+} from '../../shared/balance.js';
 
 /**
  * @param {object} deps
@@ -109,6 +113,23 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
       const drillHistory = puzzleRepo.getDrillAccuracyHistory?.() ?? [];
       const winRateHistory = gameRepo.getWinRateHistory?.() ?? [];
 
+      // Rolling inverse-variance strength aggregate over last STRENGTH_ROLLING_N samples
+      const rawSamples = gameRepo.listStrengthSamples?.({ side: 'player', limit: STRENGTH_ROLLING_N }) ?? [];
+      const eligible = rawSamples.filter(r => r.n >= STRENGTH_MIN_PLIES);
+      let rollingStrength = null;
+      let rollingSe = null;
+      if (eligible.length > 0) {
+        const pairs = eligible.map(r => {
+          const elo = Math.round(Math.max(STRENGTH_ELO_MIN, Math.min(STRENGTH_ELO_MAX,
+            STRENGTH_ANCHOR_ELO - STRENGTH_ELO_PER_ASE * (r.ase - STRENGTH_ANCHOR_ASE))));
+          const se = Math.max(1, Math.round(STRENGTH_ELO_PER_ASE * r.sd / Math.sqrt(r.n)));
+          return { elo, se };
+        });
+        const sumWeights = pairs.reduce((s, p) => s + 1 / (p.se * p.se), 0);
+        rollingStrength = Math.round(pairs.reduce((s, p) => s + p.elo / (p.se * p.se), 0) / sumWeights);
+        rollingSe = Math.round(1 / Math.sqrt(sumWeights));
+      }
+
       res.json({
         elo,
         eloDelta,
@@ -131,6 +152,8 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         motifAccuracy,
         drillHistory,
         winRateHistory,
+        rollingStrength,
+        rollingSe,
         focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {
