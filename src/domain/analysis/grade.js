@@ -138,6 +138,21 @@ export function playingStrength(samples) {
   return { strength, se, n, ase, sd, p75Loss };
 }
 
+const MAIA_LOG_PROB_FLOOR = 0.001;
+
+/**
+ * Mean log-probability of the player's moves under Maia-3's conditioned policy.
+ * Probability 0 is clamped to MAIA_LOG_PROB_FLOOR to avoid log(0) = -Infinity.
+ * @param {number[]} probabilities — P_maia3(played_move) for each eligible ply
+ * @returns {{maiaLogProb: number|null, n: number}}
+ */
+export function maiaLogProb(probabilities) {
+  if (!probabilities.length) return { maiaLogProb: null, n: 0 };
+  const logProbs = probabilities.map(p => Math.log(Math.max(MAIA_LOG_PROB_FLOOR, p)));
+  const mean = logProbs.reduce((s, v) => s + v, 0) / logProbs.length;
+  return { maiaLogProb: mean, n: logProbs.length };
+}
+
 export function gameAccuracy(accs) {
   if (!accs.length) return 0;
 

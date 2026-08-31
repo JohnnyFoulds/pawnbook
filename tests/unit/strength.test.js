@@ -1,6 +1,7 @@
 /**
  * Phase 14 — FR-GRADE-6..9, FR-GRADE-11, FR-STORE-9
- * Tests for scaledError, playingStrength, and calibration invariants.
+ * Phase 18 — FR-ANALYSE-16 (maiaLogProb)
+ * Tests for scaledError, playingStrength, maiaLogProb, and calibration invariants.
  */
 import { readFileSync, mkdtempSync, rmSync, copyFileSync } from 'fs';
 import { execFileSync } from 'child_process';
@@ -12,7 +13,7 @@ import Database from 'better-sqlite3';
 import { describe, it, expect } from 'vitest';
 
 import { applySchema } from '../../src/adapters/sqlite/schema.js';
-import { scaledError, playingStrength } from '../../src/domain/analysis/grade.js';
+import { scaledError, playingStrength, maiaLogProb } from '../../src/domain/analysis/grade.js';
 import {
   STRENGTH_ANCHOR_ELO, STRENGTH_ANCHOR_ASE, STRENGTH_ELO_PER_ASE,
   STRENGTH_CP_CAP, STRENGTH_DECIDED_CP, STRENGTH_MIN_PLIES,
@@ -205,6 +206,48 @@ describe('strength: playingStrength', () => {
     // The function signature only accepts samples — this test is structural.
     // Verify the function has the expected parameter count (1).
     expect(playingStrength.length).toBe(1);
+  });
+});
+
+// ── maiaLogProb ───────────────────────────────────────────────────────────────
+
+describe('strength: maiaLogProb', () => {
+  it('maiaLogProb([]) returns null with n=0', () => {
+    const result = maiaLogProb([]);
+    expect(result.maiaLogProb).toBeNull();
+    expect(result.n).toBe(0);
+  });
+
+  it('maiaLogProb with a single probability returns mean(log(p))', () => {
+    const p = 0.5;
+    const { maiaLogProb: mlp, n } = maiaLogProb([p]);
+    expect(mlp).toBeCloseTo(Math.log(p));
+    expect(n).toBe(1);
+  });
+
+  it('maiaLogProb over multiple probabilities returns their mean log', () => {
+    const probs = [0.5, 0.25, 0.1];
+    const expected = probs.reduce((s, p) => s + Math.log(p), 0) / probs.length;
+    const { maiaLogProb: mlp, n } = maiaLogProb(probs);
+    expect(mlp).toBeCloseTo(expected);
+    expect(n).toBe(probs.length);
+  });
+
+  it('maiaLogProb clamps zero probability to a floor, not -Infinity', () => {
+    const { maiaLogProb: mlp } = maiaLogProb([0]);
+    expect(Number.isFinite(mlp)).toBe(true);
+    expect(mlp).toBeLessThan(0);
+  });
+
+  it('maiaLogProb is more negative for lower probability moves', () => {
+    const { maiaLogProb: highConf } = maiaLogProb([0.9, 0.8, 0.7]);
+    const { maiaLogProb: lowConf } = maiaLogProb([0.1, 0.05, 0.02]);
+    expect(highConf).toBeGreaterThan(lowConf);
+  });
+
+  it('maiaLogProb never returns NaN', () => {
+    const { maiaLogProb: mlp } = maiaLogProb([0.5, 0, 0.3]);
+    expect(Number.isNaN(mlp)).toBe(false);
   });
 });
 

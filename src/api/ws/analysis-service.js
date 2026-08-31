@@ -71,6 +71,7 @@ export async function analyseGame({
     opponentAccuracy: _prior.opponentAccuracy ?? null,
     strengthElo: _prior.strengthElo ?? null,
     opponentStrengthElo: _prior.opponentStrengthElo ?? null,
+    maia3LogProb: _prior.maia3LogProb ?? null,
     eloBefore: _prior.eloBefore ?? null,
     eloAfter: _prior.eloAfter ?? null,
     analysedAt: _prior.analysedAt ?? null,
@@ -96,7 +97,7 @@ export async function analyseGame({
     : null;
 
   // Acquire engine clients — 3 attempts with exponential backoff + jitter
-  let sfClient, maiaClient;
+  let sfClient, maiaClient, maia3PolicyClient;
   try {
     sfClient = await _acquireWithRetry(() => enginePool.getAnalysisSfClient());
     maiaClient = maiaModel ? await _acquireWithRetry(() => enginePool.getMaiaAnalysisClient(maiaModel)) : null;
@@ -110,6 +111,14 @@ export async function analyseGame({
       message: 'Analysis engine unavailable', detail: {} });
     return;
   }
+  // Maia-3 policy client for pass 4 — optional; failure is non-fatal.
+  try {
+    maia3PolicyClient = enginePool.getMaia3PolicyClient
+      ? await enginePool.getMaia3PolicyClient()
+      : null;
+  } catch {
+    maia3PolicyClient = null;
+  }
 
   // Reconfigure analysis SF to full resources before the post-game deep passes
   await enginePool.reconfigureAnalysisSfForPassTwo?.();
@@ -119,7 +128,7 @@ export async function analyseGame({
   const existingEvals = gameRepo.getEvals(gameId);
 
   try {
-    const { moveEvals, accuracy, opponentAccuracy, playerStrength, opponentStrength, puzzleCandidates } = await runAnalysis({
+    const { moveEvals, accuracy, opponentAccuracy, playerStrength, opponentStrength, puzzleCandidates, playerMaiaLogProb } = await runAnalysis({
       plies,
       playerColor,
       sfClient,
@@ -128,6 +137,7 @@ export async function analyseGame({
       playerElo,
       wasTimed,
       existingEvals,
+      maia3Client: maia3PolicyClient,
       onProgress(event) {
         _sendIfOpen(ws, { type: 'analysis_progress', gameId, ...event });
       },
@@ -243,6 +253,7 @@ export async function analyseGame({
       opponentAccuracy,
       strengthElo: playerStrength.strength,
       opponentStrengthElo: opponentStrength.strength,
+      maia3LogProb: playerMaiaLogProb?.maiaLogProb ?? null,
       analysisState: 'done',
       analysedAt: Date.now(),
       eloBefore,
@@ -300,6 +311,7 @@ function _saveFailed(gameRepo, { gameId, opponentId, opponentElo, playerColor, r
     opponentAccuracy: existing.opponentAccuracy ?? null,
     strengthElo: existing.strengthElo ?? null,
     opponentStrengthElo: existing.opponentStrengthElo ?? null,
+    maia3LogProb: existing.maia3LogProb ?? null,
     eloBefore: existing.eloBefore ?? null,
     eloAfter: existing.eloAfter ?? null,
     analysedAt: existing.analysedAt ?? null,

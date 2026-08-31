@@ -541,6 +541,50 @@ engine pool: maia3 routing: requestMove for unknown type throws
 
 **DoD:** All 20 new tests passing; full suite 644 passing + 2 expected fails; branch coverage 91.05%; no changes to `src/domain/` analysis or scoring logic; `getMaiaAnalysisWeights()` decouples findability from the game roster type; lc0 Maia-1 weights on disk continue to serve pass-3 findability analysis; the 1900→2200 gap is closed with `maia-2000` and a now-required `maia-2200`; `make verify` clean.
 
+## Phase 18 — Maia-3 log-probability strength probe (Complete — 2026-08-31)
+
+**Goal:** Augment the Regan-Haworth strength estimate with a second signal derived from Maia-3's conditioned policy: the mean log-probability of the player's actual moves under Maia-3 at the player's estimated Elo. This measures "how human-at-your-level are your move choices?" — orthogonal to centipawn loss.
+
+**Design:** Pass 4 runs after pass 3, for every eligible player ply (same filter as `playingStrength`: legalMovesBefore > 1, mateIn null, |cpWhite| ≤ STRENGTH_DECIDED_CP). Maia-3 is called with SelfElo = pass-1 strength estimate (rounded to nearest 100, clamped to [1100, 2400]); when pass-1 strength is null (short game), the stored playerElo is used as SelfElo. The probability of the played move under Maia-3's policy is extracted; `maiaLogProb = mean(log(P_maia3(played_move)))` over eligible positions. Zero probability is clamped to 0.001 to avoid -Infinity. The result is stored in `games.maia3_log_prob`.
+
+**Files changed:**
+- `src/domain/analysis/grade.js` — added `maiaLogProb(probabilities)` pure function
+- `src/adapters/engine/scripted-engine-client.js` — added `setOption()` (records calls for test assertions)
+- `src/adapters/engine/engine-pool.js` — added `getMaia3PolicyClient()`: separate pool key `maia3-policy`, Temperature=1.0, VerboseMoveStats=true on first init
+- `src/domain/analysis/pipeline.js` — added `maia3Client` optional param; tracked `playerMaia3Positions` in move-eval loop; added Pass 4; returns `playerMaiaLogProb` in result
+- `src/adapters/sqlite/schema.js` — added `maia3_log_prob REAL` to CREATE TABLE and ALTER TABLE migration
+- `src/adapters/sqlite/repositories.js` — added `maia3_log_prob` to save/findById
+- `src/api/ws/analysis-service.js` — acquires `maia3PolicyClient` (optional, non-fatal failure); passes to `runAnalysis`; saves `maia3LogProb` to game row; carries forward on failure/retry
+- `eslint.config.js` — added `site/.vitepress/dist/` to ignores (pre-existing lint false-positives)
+- `Makefile` — aligned `make verify` to use `--omit=dev` to match CI audit job
+- `tests/unit/strength.test.js` — 6 new `maiaLogProb` tests
+- `tests/unit/engine-pool.test.js` — 6 new `getMaia3PolicyClient` tests
+- `tests/unit/pipeline.test.js` — 6 new pass-4 tests
+
+**Tests:**
+```
+strength: maiaLogProb: maiaLogProb([]) returns null with n=0
+strength: maiaLogProb: maiaLogProb with a single probability returns mean(log(p))
+strength: maiaLogProb: maiaLogProb over multiple probabilities returns their mean log
+strength: maiaLogProb: maiaLogProb clamps zero probability to a floor, not -Infinity
+strength: maiaLogProb: maiaLogProb is more negative for lower probability moves
+strength: maiaLogProb: maiaLogProb never returns NaN
+engine pool: maia3 policy client: getMaia3PolicyClient returns a client
+engine pool: maia3 policy client: getMaia3PolicyClient sets Temperature 1.0 on first init
+engine pool: maia3 policy client: getMaia3PolicyClient sets VerboseMoveStats true on first init
+engine pool: maia3 policy client: getMaia3PolicyClient uses a separate pool key from game-play maia3
+engine pool: maia3 policy client: getMaia3PolicyClient reuses the policy client across calls
+engine pool: maia3 policy client: getMaia3PolicyClient passes --cache-dir and --local-files-only
+pipeline pass 4: pass 4: result includes playerMaiaLogProb when maia3Client is provided
+pipeline pass 4: pass 4: probes maia3 for each eligible player ply
+pipeline pass 4: pass 4: sets SelfElo on maia3Client for each eligible ply
+pipeline pass 4: pass 4: skipped when maia3Client is not provided
+pipeline pass 4: pass 4: skipped when all player plies are ineligible (decided position)
+pipeline pass 4: pass 4: uses stored playerElo as SelfElo when playerStrength is null
+```
+
+**DoD:** All 18 new tests passing; full suite 1266 passing + 2 expected fails; branch coverage 91.42%; `make verify` clean; `maia3_log_prob` stored in `games` table; pass 4 skipped gracefully when maia3 binary unavailable.
+
 ## Phase 17 — Production-readiness hardening (Complete — 2026-08-31)
 
 **Goal:** Close three production-readiness gaps: (1) weights-missing check fires before a game row is created, (2) analysis engine acquisition retries on transient failures, (3) full error-path test coverage.
