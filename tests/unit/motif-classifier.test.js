@@ -49,4 +49,35 @@ describe('classifyMotif', () => {
     const fen = '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1';
     expect(classifyMotif(fen, 'e2e4', 'white')).toBe(null);
   });
+
+  // ── missed_capture ────────────────────────────────────────────────────────
+
+  it('detects missed_capture — undefended opponent piece left on the board', () => {
+    // White Na6 attacks undefended Qc7; white plays a6b4 instead of taking it.
+    // King has luft (d2,e2,f2 pawns) so back_rank does not fire first.
+    const fen = '4k3/2q5/N7/8/8/8/3PPP2/4K3 w - - 0 1';
+    expect(classifyMotif(fen, 'a6b4', 'white')).toBe('missed_capture');
+  });
+
+  it('missed_capture does not fire when player captures the free piece', () => {
+    // Same position but white plays Na6xc7 — takes the queen — so nothing is missed.
+    const fen = '4k3/2q5/N7/8/8/8/3PPP2/4K3 w - - 0 1';
+    expect(classifyMotif(fen, 'a6c7', 'white')).toBe(null);
+  });
+
+  // ── back_rank ─────────────────────────────────────────────────────────────
+
+  it('detects back_rank — king on back rank loses luft pawn, opponent has rook', () => {
+    // White king g1, only pawn h2 left as luft. White plays h2h4 (removes the pawn).
+    // After h4: f2,g2,h2 all empty → no luft; black rook a8 present → back_rank.
+    const fen = 'r3k3/8/8/8/8/8/7P/6K1 w - - 0 1';
+    expect(classifyMotif(fen, 'h2h4', 'white')).toBe('back_rank');
+  });
+
+  it('back_rank does not fire when king has pawn cover', () => {
+    // White king g1, pawns f2,g2,h2 all intact. White plays Nf3-e5 (not touching pawns).
+    // After Ne5: g2 still there → king has luft → no back_rank.
+    const fen = 'r3k3/8/8/8/8/5N2/5PPP/6K1 w - - 0 1';
+    expect(classifyMotif(fen, 'f3e5', 'white')).toBe(null);
+  });
 });
