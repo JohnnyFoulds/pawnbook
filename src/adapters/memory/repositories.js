@@ -227,7 +227,7 @@ export class InMemoryPuzzleRepository {
       return existing;
     }
     const id = puzzle.id ?? randomUUID();
-    const stored = { ...puzzle, id, kind, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
+    const stored = { ...puzzle, id, kind, motifTag: puzzle.motifTag ?? null, timesSeen: 1, createdAt: puzzle.createdAt ?? Date.now() };
     this._puzzles.set(id, stored);
     this._fenKindIndex.set(key, id);
     return id;

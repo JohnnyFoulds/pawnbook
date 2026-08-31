@@ -12,6 +12,7 @@ import { getTracer } from '../../telemetry.js';
 
 import { classify, winPct, moveAccuracy, gameAccuracy, playingStrength, maiaLogProb } from './grade.js';
 import { probeFindability } from './findability.js';
+import { classifyMotif } from './motif-classifier.js';
 
 const log = logger.child({ mod: 'analysis-pipeline' });
 
@@ -240,6 +241,8 @@ export async function runAnalysis({
       if (temptation > 0.3) tags.push('common_trap');
       if (findability < FINDABILITY_MIN) tags.push('engine_only');
 
+      const motifTag = classifyMotif(c.fen, c.moveUci, playerColor);
+
       puzzleCandidates.push({
         ...c,
         findability,
@@ -250,6 +253,7 @@ export async function runAnalysis({
         tags: tags.join(','),
         engineOnly: findability < FINDABILITY_MIN,
         degraded,
+        motifTag,
       });
 
       const pass3Pct = Math.round((PASS_WEIGHTS[0] + PASS_WEIGHTS[1]) * 100 + ((i + 1) / candidates.length) * 100 * PASS_WEIGHTS[2]);
