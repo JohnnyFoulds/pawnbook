@@ -230,12 +230,19 @@ button, [role="button"] {
 
 .move-list__num { color: var(--ink-muted); }
 .move-list__move {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 20px;
   align-items: center;
-  gap: var(--sp-1);
   cursor: pointer;
   border-radius: 3px;
   padding: 0 3px;
+}
+.move-list__san { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.move-list__glyph {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 .move-list__move:hover { background: var(--surface-2); }
 .move-list__move--active { background: var(--surface-2); color: var(--ink-primary); }

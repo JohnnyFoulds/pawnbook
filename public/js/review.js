@@ -132,16 +132,18 @@ function renderMoveList(moves) {
     const row = document.createElement('div');
     row.className = 'move-list__row';
 
-    const chipFor = (m) => {
-      if (!m || !m.classification || !GLYPH_TIERS.includes(m.classification)) return '';
+    const glyphFor = (m) => {
+      if (!m || !m.classification || !GLYPH_TIERS.includes(m.classification)) {
+        return '<span class="move-list__glyph"></span>';
+      }
       const tier = QUALITY[m.classification];
-      return `<span class="quality-chip quality-chip--${m.classification}">${tier.glyph}</span>`;
+      return `<span class="move-list__glyph quality-chip--${m.classification}">${tier.glyph}</span>`;
     };
 
     row.innerHTML = `
       <span class="move-list__num">${moveNum}.</span>
-      <span class="move-list__move" data-ply="${white?.ply}">${white?.san ?? ''} ${chipFor(white)}</span>
-      <span class="move-list__move" data-ply="${black?.ply}">${black?.san ?? ''} ${chipFor(black)}</span>
+      <span class="move-list__move" data-ply="${white?.ply}"><span class="move-list__san">${white?.san ?? ''}</span>${glyphFor(white)}</span>
+      <span class="move-list__move" data-ply="${black?.ply}"><span class="move-list__san">${black?.san ?? ''}</span>${glyphFor(black)}</span>
     `;
     list.appendChild(row);
   }
