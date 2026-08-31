@@ -7,6 +7,15 @@
 
 const CDN = 'https://cdn.jsdelivr.net/npm/cm-chessboard@8';
 
+// Colour strings accepted by showArrow() → mapped to cm-chessboard ARROW_TYPE objects.
+const ARROW_COLORS = {
+  success:   { class: 'arrow-success' },
+  danger:    { class: 'arrow-danger' },
+  warning:   { class: 'arrow-warning' },
+  secondary: { class: 'arrow-secondary' },
+  info:      { class: 'arrow-info' },
+};
+
 function injectCdnCss() {
   if (document.getElementById('cm-chessboard-css')) return;
   // Inline critical pointer-events rule so it takes effect synchronously
@@ -21,7 +30,7 @@ function injectCdnCss() {
     `.cm-chessboard .board { pointer-events: all; cursor: pointer; }`,
   ].join('\n');
   document.head.appendChild(style);
-  // Also load the full stylesheet for visuals (colours, coordinates, markers)
+  // Also load the full stylesheets for visuals (colours, coordinates, markers, arrows)
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = `${CDN}/assets/chessboard.css`;
@@ -30,6 +39,10 @@ function injectCdnCss() {
   markersLink.rel = 'stylesheet';
   markersLink.href = `${CDN}/assets/extensions/markers/markers.css`;
   document.head.appendChild(markersLink);
+  const arrowsLink = document.createElement('link');
+  arrowsLink.rel = 'stylesheet';
+  arrowsLink.href = `${CDN}/assets/extensions/arrows/arrows.css`;
+  document.head.appendChild(arrowsLink);
 }
 
 /**
@@ -57,6 +70,7 @@ export async function createBoard(el, Chessboard, opts = {}) {
   injectCdnCss();
 
   const { Markers, MARKER_TYPE } = await import(`${CDN}/src/extensions/markers/Markers.js`);
+  const { Arrows } = await import(`${CDN}/src/extensions/arrows/Arrows.js`);
 
   const boardConfig = {
     position,
@@ -68,7 +82,7 @@ export async function createBoard(el, Chessboard, opts = {}) {
         file: 'pieces/staunty.svg',
       },
     },
-    extensions: [{ class: Markers }],
+    extensions: [{ class: Markers }, { class: Arrows }],
   };
 
   const board = new Chessboard(el, boardConfig);
@@ -140,6 +154,19 @@ export async function createBoard(el, Chessboard, opts = {}) {
     /** Flip board. */
     flip() {
       board.setOrientation(board.getOrientation() === 'w' ? 'b' : 'w');
+    },
+    /**
+     * Draw an arrow between two squares.
+     * @param {string} from - e.g. 'e2'
+     * @param {string} to   - e.g. 'e4'
+     * @param {'success'|'danger'|'warning'|'secondary'|'info'} [color='success']
+     */
+    showArrow(from, to, color = 'success') {
+      board.addArrow(ARROW_COLORS[color] ?? ARROW_COLORS.success, from, to);
+    },
+    /** Remove all arrows. */
+    clearArrows() {
+      board.removeArrows();
     },
   };
 }
