@@ -159,6 +159,26 @@ Returns the book DAG for display in `public/repertoire.html`.
 }
 ```
 
+### `GET /api/repertoire/gaps`
+
+Returns positions with no book coverage, sorted by reach probability descending. Read-only.
+
+**Response 200:**
+```json
+{
+  "gaps": [
+    {
+      "epd": "...",
+      "side": "white",
+      "opponentReplyUci": "d7d5",
+      "reachProb": 0.083
+    }
+  ]
+}
+```
+
+---
+
 ### `GET /api/repertoire/challenges`
 
 Returns open challenges. Read-only.
