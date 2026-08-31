@@ -7,6 +7,14 @@ import { Chess } from 'chess.js';
 
 const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 
+/** Maps each motif tag to its skill dimension. */
+export const MOTIF_DIMENSION = {
+  hanging_piece: 'tactics',
+  fork: 'tactics',
+  missed_capture: 'tactics',
+  back_rank: 'defense',
+};
+
 /**
  * Classify a mistake into a motif tag.
  * Priority order: hanging_piece → fork → back_rank → missed_capture.
