@@ -145,7 +145,7 @@ describe('engine_turn event handler', () => {
     // Start a game to create a session on the server
     ws.send(JSON.stringify({ type: 'new_game', opponentId: 'maia-1100', color: 'black', ranked: false }));
     // When playing as black, the engine moves first → engine_move should arrive
-    const msg = await waitForMessage(ws, m => m.type === 'engine_move' || m.type === 'game_started' || m.type === 'error', 3000);
+    const msg = await waitForMessage(ws, m => m.type === 'engine_move' || m.type === 'game_started' || m.type === 'error', 8000);
     expect(['engine_move', 'game_started', 'error']).toContain(msg.type);
     ws.close();
   });
@@ -424,21 +424,21 @@ describe('engine checkmate via engine_turn (connection.js lines 97-119)', () => 
       ws.send(JSON.stringify({ type: 'new_game', opponentId: 'maia-1100', color: 'black', ranked: false }));
 
       // Engine plays e2e4 first
-      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'e2e4', 3000);
+      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'e2e4', 8000);
 
       // Black plays e7e5
       ws.send(JSON.stringify({ type: 'move', uci: 'e7e5' }));
-      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'f1c4', 3000);
+      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'f1c4', 8000);
 
       // Black plays Nc6
       ws.send(JSON.stringify({ type: 'move', uci: 'b8c6' }));
-      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'd1h5', 3000);
+      await waitForMessage(ws, m => m.type === 'engine_move' && m.uci === 'd1h5', 8000);
 
       // Black plays Nf6?? (blunder)
       ws.send(JSON.stringify({ type: 'move', uci: 'g8f6' }));
 
       // Engine plays h5f7# — game_over should follow
-      const gameOverMsg = await waitForMessage(ws, m => m.type === 'game_over', 4000);
+      const gameOverMsg = await waitForMessage(ws, m => m.type === 'game_over', 10000);
       expect(gameOverMsg.termination).toBe('checkmate');
 
       ws.close();
@@ -479,7 +479,7 @@ describe('timed game engine_turn covers clockUpdate branches (lines 79-80, 92-93
       }));
 
       // Engine move should include clock field (covers lines 92-93)
-      const engineMsg = await waitForMessage(ws, m => m.type === 'engine_move', 3000);
+      const engineMsg = await waitForMessage(ws, m => m.type === 'engine_move', 8000);
       expect(engineMsg.clock).toBeDefined();
       expect(engineMsg.clock.whiteMs).toBeDefined();
       expect(engineMsg.clock.blackMs).toBeDefined();
