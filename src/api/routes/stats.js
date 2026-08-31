@@ -106,6 +106,8 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         motifAccuracy[row.motifTag] = { total: row.total, correct: row.correct };
       }
 
+      const drillHistory = puzzleRepo.getDrillAccuracyHistory?.() ?? [];
+
       res.json({
         elo,
         eloDelta,
@@ -126,6 +128,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         dimensionBreakdown,
         rollingStyleScore,
         motifAccuracy,
+        drillHistory,
         focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {

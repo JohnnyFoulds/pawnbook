@@ -56,6 +56,14 @@
         <div class="stat-tile__delta" style="font-size:12px;color:var(--ink-muted)">day<span id="streak-plural">s</span> in a row</div>
       </div>
 
+      <!-- Drill accuracy tile -->
+      <div class="stat-tile" id="drill-accuracy-tile" style="display:none">
+        <div class="stat-tile__label">Drill accuracy</div>
+        <div class="stat-tile__value" id="drill-accuracy-val">—</div>
+        <div class="stat-tile__delta" id="drill-accuracy-delta" style="font-size:12px;color:var(--ink-muted)"></div>
+        <canvas class="sparkline" id="spark-drill-accuracy" width="120" height="28" style="display:block;margin-top:8px"></canvas>
+      </div>
+
       <!-- Style match tile -->
       <div class="stat-tile" id="style-tile" style="display:none">
         <div class="stat-tile__label">Style match</div>

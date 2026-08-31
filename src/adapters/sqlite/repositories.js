@@ -573,6 +573,20 @@ export class SqlitePuzzleRepository {
     `).all();
   }
 
+  getDrillAccuracyHistory(limitDays = 30) {
+    return this._db.prepare(`
+      SELECT
+        strftime('%Y-%m-%d', datetime((reviewed_at / 1000) - 14400, 'unixepoch')) AS day,
+        COUNT(*) AS attempted,
+        CAST(SUM(correct) AS INTEGER) AS correct
+      FROM reviews
+      WHERE attempt_no = 1 AND practice = 0
+      GROUP BY day
+      ORDER BY day DESC
+      LIMIT ?
+    `).all(limitDays).reverse();
+  }
+
   /**
    * @param {string} gameId
    * @returns {object[]}
