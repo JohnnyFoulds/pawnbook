@@ -125,6 +125,25 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         .map(g => ({ playedAt: g.playedAt, accuracy: g.accuracy }))
         .reverse();
 
+      // Per-opponent breakdown (sorted by played desc)
+      const oppMap = new Map();
+      for (const g of games) {
+        if (g.status !== 'finished') continue;
+        const o = oppMap.get(g.opponentId) ?? { opponentId: g.opponentId, played: 0, won: 0, lost: 0, drawn: 0, _accSum: 0, _accCount: 0 };
+        o.played++;
+        if (g.result === 'win') o.won++;
+        else if (g.result === 'loss') o.lost++;
+        else if (g.result === 'draw') o.drawn++;
+        if (g.accuracy != null) { o._accSum += g.accuracy; o._accCount++; }
+        oppMap.set(g.opponentId, o);
+      }
+      const opponentStats = [...oppMap.values()]
+        .map(({ _accSum, _accCount, ...o }) => ({
+          ...o,
+          avgAccuracy: _accCount > 0 ? Math.round(_accSum / _accCount) : null,
+        }))
+        .sort((a, b) => b.played - a.played);
+
       // Rolling inverse-variance strength aggregate over last STRENGTH_ROLLING_N samples
       const rawSamples = gameRepo.listStrengthSamples?.({ side: 'player', limit: STRENGTH_ROLLING_N }) ?? [];
       const eligible = rawSamples.filter(r => r.n >= STRENGTH_MIN_PLIES);
@@ -168,6 +187,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         rollingSe,
         strengthHistory,
         accuracyHistory,
+        opponentStats,
         focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {
