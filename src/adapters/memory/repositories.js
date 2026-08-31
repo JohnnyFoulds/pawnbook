@@ -408,6 +408,18 @@ export class InMemoryPuzzleRepository {
       .sort((a, b) => (a.day < b.day ? -1 : 1))
       .slice(-limitDays);
   }
+
+  getTodayDrillStats(nowMs) {
+    const today = _activityDayKey(nowMs);
+    let attempted = 0, correct = 0;
+    for (const r of (this._reviews ?? [])) {
+      if (r.practice || r.attemptNo !== 1) continue;
+      if (_activityDayKey(r.reviewedAt) !== today) continue;
+      attempted++;
+      if (r.correct) correct++;
+    }
+    return { attempted, correct };
+  }
 }
 
 export class InMemorySettingsRepository {

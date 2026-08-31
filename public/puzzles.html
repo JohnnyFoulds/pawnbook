@@ -28,8 +28,10 @@
     <!-- Empty state: nothing due -->
     <div id="empty-state" style="display:none">
       <div class="empty-state">
-        <div class="empty-state__message" style="font-size:20px;font-weight:600">Nothing due — you're clear.</div>
-        <div style="font-size:14px;color:var(--ink-muted);margin-bottom:16px">Play a game or drill ahead.</div>
+        <div class="empty-state__message" id="empty-heading" style="font-size:20px;font-weight:600">Nothing due — you're clear.</div>
+        <div id="empty-session-summary" style="font-size:13px;color:var(--ink-muted);margin-bottom:4px;display:none"></div>
+        <div id="empty-streak-line" style="font-size:13px;color:var(--ink-muted);margin-bottom:16px;display:none"></div>
+        <div style="font-size:14px;color:var(--ink-muted);margin-bottom:16px" id="empty-sub">Play a game or drill ahead.</div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
           <a href="play.html" class="btn btn--primary">Play a game</a>
           <button class="btn btn--ghost" id="drill-ahead-btn">Drill ahead</button>

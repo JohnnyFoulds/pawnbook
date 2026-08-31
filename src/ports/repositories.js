@@ -139,6 +139,13 @@
  * @returns {Array<{day: string, attempted: number, correct: number}>} sorted ascending
  */
 
+/**
+ * @function
+ * @name PuzzleRepository#getTodayDrillStats
+ * @param {number} nowMs - current timestamp in milliseconds
+ * @returns {{attempted: number, correct: number}}
+ */
+
 // ────────────────────────────────────────────────────────────────
 
 /**

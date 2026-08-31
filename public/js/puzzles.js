@@ -89,6 +89,26 @@ let followupUci = null;
 let isDrillAhead = false;
 let currentBoard = null;
 
+async function enrichEmptyState() {
+  try {
+    const state = await api('/api/state');
+    const td = state.todayDrills ?? { attempted: 0, correct: 0 };
+    const summaryEl = document.getElementById('empty-session-summary');
+    if (summaryEl && td.attempted > 0) {
+      const pct = Math.round((td.correct / td.attempted) * 100);
+      summaryEl.textContent = `Today: ${td.correct} correct / ${td.attempted} attempted (${pct}%)`;
+      summaryEl.style.display = '';
+    }
+    const streakEl = document.getElementById('empty-streak-line');
+    if (streakEl && (state.streak ?? 0) >= 2) {
+      streakEl.textContent = `${state.streak}-day streak`;
+      streakEl.style.display = '';
+    }
+    const subEl = document.getElementById('empty-sub');
+    if (subEl && td.attempted > 0) subEl.style.display = 'none';
+  } catch { /* non-critical */ }
+}
+
 async function boot() {
   try {
     const motifFilter = new URLSearchParams(location.search).get('motif');
@@ -111,6 +131,7 @@ async function boot() {
 
     if (!cards.length) {
       document.getElementById('empty-state').style.display = '';
+      await enrichEmptyState();
       return;
     }
 

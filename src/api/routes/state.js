@@ -30,6 +30,7 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
 
       const streak = gameRepo.getStreak?.(now) ?? 0;
       const bestStreak = gameRepo.getBestStreak?.() ?? 0;
+      const todayDrills = puzzleRepo.getTodayDrillStats?.(now) ?? { attempted: 0, correct: 0 };
 
       const eloHistory = gameRepo.getEloHistory();
       const eloDelta = eloHistory.length >= 2
@@ -70,6 +71,7 @@ export function stateRouter({ settingsRepo, puzzleRepo, gameRepo, clock }) {
         showStreak,
         streak,
         bestStreak,
+        todayDrills,
         activityHistory: gameRepo.getActivityHistory?.(30) ?? [],
         status: 'ok',
         gamesPlayed,
