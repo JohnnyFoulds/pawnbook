@@ -623,6 +623,15 @@ button, [role="button"] {
   flex-shrink: 0;
 }
 
+.drill-feedback__explain {
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--hairline);
+  width: 100%;
+}
+
 /* ── Review layout ── */
 .review-layout {
   display: grid;
