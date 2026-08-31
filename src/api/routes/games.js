@@ -114,6 +114,17 @@ export function gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }) 
         };
       });
 
+      const tagCounts = new Map();
+      for (const m of mistakes) {
+        if (m.motifTag) {
+          const entry = tagCounts.get(m.motifTag)
+            ?? { tag: m.motifTag, count: 0, explanation: m.motifExplanation };
+          entry.count++;
+          tagCounts.set(m.motifTag, entry);
+        }
+      }
+      const motifSummary = [...tagCounts.values()].sort((a, b) => b.count - a.count);
+
       res.json({
         id: game.id,
         analysisState: game.analysisState,
@@ -135,6 +146,7 @@ export function gamesRouter({ gameRepo, puzzleRepo, settingsRepo, enginePool }) 
         eloAfter: game.eloAfter,
         moves,
         mistakes,
+        motifSummary,
         puzzleCount: puzzles.length,
       });
     } catch (err) {

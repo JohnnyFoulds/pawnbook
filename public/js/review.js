@@ -10,6 +10,12 @@ import { QUALITY, GLYPH_TIERS } from '/shared/quality.js';
 
 const BASE = '';
 
+const MOTIF_LABEL = {
+  hanging_piece: 'hanging piece', fork: 'fork', back_rank: 'back rank',
+  missed_capture: 'missed capture', overloaded_defender: 'overloaded defender',
+  pinned_piece: 'pin', skewer: 'skewer', discovered_attack: 'discovered attack',
+};
+
 async function api(path) {
   const r = await fetch(BASE + path);
   if (!r.ok) throw new Error(await r.text());
@@ -54,6 +60,7 @@ async function boot() {
     renderMoveList(review.moves ?? []);
     renderEvalGraphSection(review);
     renderBreakdownSection(review);
+    renderDebriefCard(review);
     renderMistakeList(review);
     setupQuizLink(gameId, review.puzzleCount ?? 0);
     await setupBoard(review);
@@ -210,6 +217,22 @@ function renderBreakdownSection(review) {
   });
 }
 
+function renderDebriefCard(review) {
+  const summary = review.motifSummary ?? [];
+  const card = document.getElementById('debrief-card');
+  if (!summary.length) { card.hidden = true; return; }
+  card.hidden = false;
+  document.getElementById('debrief-body').innerHTML = summary.map((s) => {
+    const label = MOTIF_LABEL[s.tag] ?? s.tag.replace(/_/g, ' ');
+    const times = s.count === 1 ? '1 time' : `${s.count} times`;
+    return `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+      <span class="mistake-row__tag mistake-row__tag--motif">${label}</span>
+      <span style="font-size:13px;color:var(--ink-muted)">${times}</span>
+      <a href="puzzles.html?motif=${encodeURIComponent(s.tag)}" style="margin-left:auto;font-size:12px">Drill →</a>
+    </div>`;
+  }).join('');
+}
+
 function renderMistakeList(review) {
   const drillable = (review.mistakes ?? []).filter((m) => !m.engineOnly);
   const engineOnly = (review.mistakes ?? []).filter((m) => m.engineOnly);
@@ -223,7 +246,6 @@ function renderMistakeList(review) {
     const chip = glyph
       ? `<span class="quality-chip quality-chip--${m.classification}">${glyph}</span>`
       : '';
-    const MOTIF_LABEL = { hanging_piece: 'hanging piece', fork: 'fork', back_rank: 'back rank', missed_capture: 'missed capture', overloaded_defender: 'overloaded defender', pinned_piece: 'pin', skewer: 'skewer', discovered_attack: 'discovered attack' };
     const motifBadge = m.motifTag ? `<span class="mistake-row__tag mistake-row__tag--motif">${MOTIF_LABEL[m.motifTag] ?? m.motifTag.replace(/_/g, ' ')}</span>` : '';
     const explainHtml = m.motifExplanation
       ? `<div class="mistake-row__explain">${m.motifExplanation}</div>`
