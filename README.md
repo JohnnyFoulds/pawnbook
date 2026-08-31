@@ -7,6 +7,7 @@
 [![Docker Hub](https://img.shields.io/docker/v/johannesfoulds/pawnbook?sort=semver&label=docker)](https://hub.docker.com/r/johannesfoulds/pawnbook)
 [![Docker Pulls](https://img.shields.io/docker/pulls/johannesfoulds/pawnbook)](https://hub.docker.com/r/johannesfoulds/pawnbook)
 [![Docs](https://img.shields.io/badge/docs-online-blue)](https://johnnyfoulds.github.io/pawnbook/)
+[![codecov](https://codecov.io/gh/JohnnyFoulds/pawnbook/branch/master/graph/badge.svg?token=6d4c1170-5cc0-4d6d-b540-a5ede72d98c6)](https://codecov.io/gh/JohnnyFoulds/pawnbook)
 [![Node 22](https://img.shields.io/badge/node-22-green.svg)](package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
