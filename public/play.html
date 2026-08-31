@@ -123,25 +123,31 @@
         </div>
 
         <div class="play-rail">
-          <div style="font-size:14px;font-weight:600" id="opponent-name-display"></div>
-          <div id="thinking-display" class="thinking-pulse" style="display:none">
-            <div class="thinking-dot"></div>
-            <span>thinking</span>
-            <span class="think-stats" id="think-stats"></span>
+          <!-- Opponent info section -->
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:14px;font-weight:600;color:var(--ink-primary)" id="opponent-name-display"></div>
+            <div id="thinking-display" class="thinking-pulse" style="display:none">
+              <div class="thinking-dot"></div>
+              <span>thinking</span>
+              <span class="think-stats" id="think-stats"></span>
+            </div>
+            <div id="clock-opp" class="clock-row" style="display:none">
+              <div class="clock-row__pip"></div>
+              <span style="font-size:13px" id="opp-name-clock"></span>
+              <span class="clock-row__time" id="clock-opp-time">—</span>
+            </div>
           </div>
 
-          <div id="clock-opp" class="clock-row" style="display:none">
-            <div class="clock-row__pip"></div>
-            <span style="font-size:13px" id="opp-name-clock"></span>
-            <span class="clock-row__time" id="clock-opp-time">—</span>
-          </div>
+          <div style="border-top:1px solid var(--gridline);margin:0 calc(-1 * var(--sp-4))"></div>
 
-          <div class="move-list" id="move-list" style="max-height:320px;overflow-y:auto"></div>
+          <div class="move-list" id="move-list"></div>
+
+          <div style="border-top:1px solid var(--gridline);margin:0 calc(-1 * var(--sp-4))"></div>
 
           <div style="display:flex;gap:8px">
             <button class="btn btn--ghost" id="flip-btn">Flip</button>
             <button class="btn btn--ghost" id="hint-btn" style="display:none">Hint</button>
-            <button class="btn btn--ghost" id="resign-btn">Resign</button>
+            <button class="btn btn--ghost btn--danger" id="resign-btn">Resign</button>
           </div>
         </div>
       </div>
