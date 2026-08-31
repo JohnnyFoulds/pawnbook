@@ -166,6 +166,27 @@ describe('GET /api/games/:id/review', () => {
     expect(res.body.mistakes[0].maiaNearestModel).toBeNull();
   });
 
+  it('includes maia3LogProb in review response when game has it set', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const game = makeGame();
+    game.maia3LogProb = -1.8;
+    gameRepo.save(game);
+    const res = await request(makeApp(gameRepo, puzzleRepo)).get(`/api/games/${game.id}/review`);
+    expect(res.status).toBe(200);
+    expect(res.body.maia3LogProb).toBeCloseTo(-1.8);
+  });
+
+  it('includes maia3LogProb as null when game does not have it set', async () => {
+    const gameRepo = new InMemoryGameRepository();
+    const puzzleRepo = new InMemoryPuzzleRepository();
+    const game = makeGame();
+    gameRepo.save(game);
+    const res = await request(makeApp(gameRepo, puzzleRepo)).get(`/api/games/${game.id}/review`);
+    expect(res.status).toBe(200);
+    expect(res.body.maia3LogProb).toBeNull();
+  });
+
   it('includes motifTag in mistake when puzzle has motifTag set', async () => {
     const gameRepo = new InMemoryGameRepository();
     const puzzleRepo = new InMemoryPuzzleRepository();

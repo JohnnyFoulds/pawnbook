@@ -95,7 +95,7 @@ function renderAccuracyBars(review) {
 function renderStrengthLine(review) {
   const el = document.getElementById('strength-line');
   if (!el) return;
-  const { strengthElo, opponentStrengthElo, strengthSe, opponentStrengthSe, rollingStrength, rollingSe, opponentId } = review;
+  const { strengthElo, opponentStrengthElo, strengthSe, opponentStrengthSe, rollingStrength, rollingSe, opponentId, maia3LogProb } = review;
   if (strengthElo == null && opponentStrengthElo == null) {
     el.innerHTML = '<span style="color:var(--ink-muted)">Not enough positions to estimate strength.</span>';
     return;
@@ -104,10 +104,14 @@ function renderStrengthLine(review) {
   const rolling = rollingStrength != null
     ? `<span style="color:var(--ink-muted);font-size:12px;margin-left:12px">Last 10 games: ${rollingStrength}${rollingSe != null ? ' ±' + rollingSe : ''}</span>`
     : '';
+  const styleScore = maia3LogProb != null
+    ? ` &nbsp;·&nbsp; <span title="Style match: how often Maia-3 predicted your moves at your Elo level">Style ${Math.round(100 * Math.exp(maia3LogProb))}%</span>`
+    : '';
   el.innerHTML =
     `<strong>You</strong> ${fmt(strengthElo, strengthSe)} &nbsp;·&nbsp; ` +
     `<strong>${opponentId ?? 'Opponent'}</strong> ${fmt(opponentStrengthElo, opponentStrengthSe)}` +
     rolling +
+    styleScore +
     `<span style="color:var(--ink-muted);font-size:11px;margin-left:8px">(± = 1 SE)</span>`;
 }
 

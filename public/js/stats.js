@@ -69,8 +69,19 @@ const DIMENSION_LABEL = {
   defense: 'defensive awareness',
 };
 
+function renderStyleTile(stats) {
+  const tile = document.getElementById('style-tile');
+  const valEl = document.getElementById('style-val');
+  const deltaEl = document.getElementById('style-delta');
+  if (stats.rollingStyleScore == null) { tile.style.display = 'none'; return; }
+  tile.style.display = '';
+  valEl.textContent = `${stats.rollingStyleScore}%`;
+  deltaEl.textContent = 'avg last 10 games · higher = more on-style';
+}
+
 function renderAll(stats, state) {
   renderEloTile(stats, state);
+  renderStyleTile(stats);
   renderRetiredTile(stats);
   renderResultsTile(stats);
   renderQueueHealth(stats, state);
