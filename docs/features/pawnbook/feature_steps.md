@@ -852,3 +852,154 @@ GET /api/stats: rollingStyleScore is null when no games have maia3LogProb
 - `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 8
 
 **DoD:** 2 new classifier tests; 1307 total; 91.19% branch coverage; `make verify` clean.
+
+## Phase 27 — Composition root, injected clock/scheduler/ids/engine (Complete — 2026-08-30)
+
+**Goal:** Extract a proper composition root so all stateful dependencies (clock, scheduler, ID generator, engine pool) are injected rather than constructed inline, enabling deterministic tests and a fake-engine mode that needs no Stockfish or lc0 binaries.
+
+**Design:** `src/app.js` exports `createApp({db, clock, scheduler, enginePool})`, which wires every router and handler with injected deps. `src/server.js` becomes a thin shell that constructs real adapters and calls `createApp`. New adapter pairs: `RealTimer`/`ManualTimer` for the scheduler port; `UuidIds`/`SequentialIds` for the IDs port; `FakeEnginePool` for `ENGINE_MODE=fake` (returns first legal move — no engines required). Bug B15 fixed: `InMemoryGameRepository._normaliseMoveEval()` ensures `getEvals()` always returns snake_case, matching the SQLite adapter. Baseline lint debt cleared: `import/order` auto-fixed codebase-wide (42 → 0 errors).
+
+**Files changed:**
+- `src/app.js` — new composition root; `createApp` wires all routers/handlers
+- `src/server.js` — refactored to thin shell; constructs real adapters + calls `createApp`
+- `src/ports/clock.js`, `src/ports/scheduler.js`, `src/ports/ids.js` — JSDoc port contracts
+- `src/adapters/scheduler/real-timer.js`, `src/adapters/scheduler/manual-timer.js` — scheduler adapter pair
+- `src/adapters/ids/uuid-ids.js`, `src/adapters/ids/sequential-ids.js` — IDs adapter pair
+- `src/adapters/engine/fake-engine-pool.js` — `ENGINE_MODE=fake`; first-legal-move deterministic engine
+- `src/adapters/memory/repositories.js` — `_normaliseMoveEval()` helper fixing B15
+- `src/api/ws/handlers.js`, `src/api/routes/*.js` — clock/scheduler/ids threaded through
+- `tests/unit/adapters/phase-27-adapters.test.js` — 19 new tests covering `ManualTimer`, `SequentialIds`, `UuidIds`, `FakeEnginePool`
+
+**DoD:** 19 new adapter tests; lint debt cleared (42 → 0 import/order errors); 90.23% branch coverage; `make verify` clean.
+
+## Phase 28 — Dynamic slot-filled motif explanations (Complete — 2026-08-31)
+
+**Goal:** Replace static one-sentence motif descriptions with position-specific explanations that name the actual pieces and squares involved, completing the template-NLG prescription from the research note.
+
+Before: *"After this move one of your pieces was pinned — it was stuck in place because moving it would expose a more valuable piece behind it to capture."*
+After: *"Your knight on d4 is pinned by the opponent's bishop on b2 — moving it would expose your queen on f6 to capture."*
+
+**Design:** Pure function `explainMotif(fen, playedMoveUci, sideToMove, motifTag)` in `src/domain/analysis/motif-explainer.js`. Each of the 8 motifs has its own piece-finding logic that locates the concrete squares from the position and interpolates them into a template sentence. Returns `null` when the motif tag is absent or piece-finding fails.
+
+**Files changed:**
+- `src/domain/analysis/motif-explainer.js` — new; `explainMotif` with per-motif handlers for all 8 motifs
+- `src/api/routes/games.js` (`formatCard`, `formatQuizPosition`) — `motifExplanation` added to every puzzle/quiz response
+- `src/api/routes/puzzles.js` (`formatCard`) — `motifExplanation` added to due/practice card response
+- `public/js/puzzles.js`, `quiz.js` — render explanation text below motif badge on failure
+- `tests/unit/motif-explainer.test.js` — 16 tests covering all 8 motifs (positive + null cases)
+
+**DoD:** 16 new tests; 1316 total; 90.65% branch coverage; `make verify` clean.
+
+## Phase 29 — Motif-filtered drill sessions (Complete — 2026-08-31)
+
+**Goal:** Close the deliberate-practice loop — a player can drill a specific weakness pattern directly from the stats page weakness tile.
+
+**Design:** `GET /api/puzzles/due?motif=<tag>` filters the due-card list to puzzles whose `motif_tag` matches the query param. The drill page reads `?motif=` from its URL, passes it to the API, and shows a filter banner ("Drilling: fork · show all"). Stats page weakness tile gains "Drill this →" and per-bar "drill →" links that deep-link to the filtered drill session.
+
+**Files changed:**
+- `src/api/routes/puzzles.js` — `motif` query param filtering on `getDueCards`; same filter forwarded to practice endpoint
+- `public/js/puzzles.js` — reads `?motif=` from URL; shows filter banner; "show all" back-link
+- `public/js/stats.js` — "Drill this →" link on top weakness + per-bar "drill →" links
+- `tests/unit/api-routes.test.js` — 2 new tests: filter returns only matching motif cards; absent param returns all cards
+
+**DoD:** 2 new route tests; 1321 total; 90.61% branch coverage; `make verify` clean.
+
+## Phase 30 — motifExplanation on review-page mistake list (Complete — 2026-08-31)
+
+**Goal:** Surface position-specific motif explanations on the post-game review page, so players see exactly why each mistake was flagged.
+
+**Design:** `GET /api/games/:id/review` maps `explainMotif(fen, played_move_uci, side_to_move, motif_tag)` onto each mistake and includes `motifExplanation` in the response. `renderMistake()` in the browser client renders the explanation as a `.mistake-row__explain` div below the motif badge when present.
+
+**Files changed:**
+- `src/api/routes/games.js` — `motifExplanation` field added to the mistakes mapping in the review endpoint
+- `public/js/review.js` — `renderMistake()` renders `.mistake-row__explain` div when `m.motifExplanation` is truthy
+- `tests/unit/api-routes.test.js` — 2 new tests: string explanation when motif + move present; null when motif absent
+
+**DoD:** 2 new tests; 1323 total; 90.83% branch coverage; `make verify` clean.
+
+## Phase 31 — Per-motif drill accuracy on stats page (Complete — 2026-08-31)
+
+**Goal:** Show how accurately a player has drilled each motif pattern so the weakness tile reflects both frequency of mistakes and quality of drilling.
+
+**Design:** `getMotifDrillAccuracy()` JOINs `reviews` and `puzzles`, filtering to first-attempt non-practice reviews (`attempt_no = 1 AND practice = 0`), and returns `[{motifTag, total, correct}]`. `GET /api/stats` exposes this as a `motifAccuracy` map keyed by tag. Stats page weakness bars annotate each row with accuracy % and a tooltip showing raw counts.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `PuzzleRepository#getMotifDrillAccuracy`
+- `src/adapters/sqlite/repositories.js` — SQL JOIN implementation of `getMotifDrillAccuracy`
+- `src/adapters/memory/repositories.js` — in-memory implementation of `getMotifDrillAccuracy`
+- `src/api/routes/stats.js` — `motifAccuracy` map added to response
+- `public/js/stats.js` — accuracy % displayed next to each motif bar; tooltip with raw counts
+- `tests/unit/api-routes.test.js` — 2 new tests: accuracy populated from drill reviews; empty object when no reviews
+
+**DoD:** 2 new tests; 1325 total; 90.81% branch coverage; `make verify` clean.
+
+## Phase 32 — Focus recommendation card (Complete — 2026-08-31)
+
+**Goal:** Give players a single actionable recommendation: "This is the pattern most worth drilling right now."
+
+**Design:** Pure domain function `pickFocusMotif(motifBreakdown, motifAccuracy)` in `src/domain/review/focus.js`. Priority score = `mistakes × (1 − drillAccuracy)`; motifs with no drill history are scored at full penalty (rate = 0). `GET /api/stats` adds `focusMotif: { tag, mistakes, accuracy }`. Stats page renders a **Focus area** card above the weakness tile with motif label, mistake count, drill accuracy note, and a direct "Drill this now →" button.
+
+**Files changed:**
+- `src/domain/review/focus.js` — new; `pickFocusMotif` pure function
+- `src/api/routes/stats.js` — `focusMotif` added to response
+- `public/stats.html` — `#focus-card` element added before weakness tile
+- `public/js/stats.js` — `renderFocusCard(stats)` renders the card; hidden when `focusMotif` is null
+- `tests/unit/focus.test.js` — 5 unit tests covering prioritisation, no-history penalty, null on empty input
+- `tests/unit/api-routes.test.js` — 2 new route tests
+
+**DoD:** 7 new tests; 1332 total; 90.84% branch coverage; `make verify` clean.
+
+## Phase 33 — Wire up drill streak (Complete — 2026-08-31)
+
+**Goal:** Fix the always-zero streak bug and wire up activity recording so the streak counter reflects real daily drilling and game activity.
+
+**Design:** Root cause: `streak_cache` was never written anywhere — streak was always 0. Fix: `GET /api/state` now computes streak live via `gameRepo.getStreak(now)`. Activity recording added at two call sites: `POST /api/puzzles/:id/attempt` calls `gameRepo.recordActivity(…, 'review')` after saving the review row; `finishGame` in `src/api/ws/handlers.js` calls `gameRepo.recordActivity(…, 'game')`. Stats page gains a streak tile (hidden when streak = 0 or `showStreak` is off).
+
+**Files changed:**
+- `src/api/routes/state.js` — `streak` computed from `gameRepo.getStreak(now)` (removed stale `streak_cache` lookup)
+- `src/api/routes/puzzles.js` — accepts optional `gameRepo`; calls `gameRepo.recordActivity` after `saveReview`
+- `src/api/ws/handlers.js` — `finishGame` calls `gameRepo.recordActivity` with `played_at` timestamp
+- `src/server.js` — passes `gameRepo` to `puzzlesRouter`
+- `public/stats.html` — `#streak-tile` stat tile added
+- `public/js/stats.js` — `renderStreakTile(state)` renders streak tile
+- `tests/unit/api-routes.test.js` — 3 new tests; `buildApp` updated to wire `gameRepo` to `puzzlesRouter`
+
+**DoD:** 3 new tests; 1334 total; 90.81% branch coverage; `make verify` clean.
+
+## Phase 34 — Activity history sparkline on streak tile (Complete — 2026-08-31)
+
+**Goal:** Render a 30-day activity bar chart on the dashboard streak tile so players can see their practice rhythm at a glance.
+
+**Design:** `getActivityHistory(limitDays=30)` returns sorted `[{day, games, reviews}]` from the `activity` table. `GET /api/state` includes `activityHistory`. `drawActivityBars(canvas, values, opts)` in `chart.js` draws one vertical bar per day, height proportional to review count, filled with accent colour for active days and dimmed for zero days (minimum 2 px so inactive days are still visible). Dashboard streak tile feeds `activityHistory.map(h => h.reviews)` to the canvas.
+
+**Files changed:**
+- `src/ports/repositories.js` — JSDoc for `GameRepository#getActivityHistory`
+- `src/adapters/sqlite/repositories.js` — `getActivityHistory` SQL query (DESC LIMIT, then reversed)
+- `src/adapters/memory/repositories.js` — in-memory `getActivityHistory`
+- `src/api/routes/state.js` — `activityHistory` added to response
+- `public/js/lib/chart.js` — `drawActivityBars` exported
+- `public/js/dashboard.js` — streak tile uses `drawActivityBars` on the spark-streak canvas
+- `tests/unit/api-routes.test.js` — 2 new tests: history array populated; empty array on fresh DB
+
+**DoD:** 2 new tests; 1336 total; 90.68% branch coverage; `make verify` clean.
+
+## Phase 35 — Activity backfill for pre-Phase-33 data (Complete — 2026-08-31)
+
+**Goal:** Retroactively populate the `activity` table from existing `reviews` and `games` rows so that users who played and drilled before Phase 33 see a real streak and sparkline rather than starting from zero.
+
+**Design:** One-time backfill in `applySchema` (runs on every startup). Uses the same 04:00 local-time day boundary as `recordActivity`. Two `INSERT … ON CONFLICT DO UPDATE` statements aggregate historical reviews and finished games into `activity`. Guarded by a `settings.activity_backfill_v1` sentinel written only when actual data is found — fresh empty DBs do not set the sentinel, so the backfill will run again once real data exists. The entire block is wrapped in `try/catch` so partial migration schemas in other test suites do not break unrelated tests.
+
+**Files changed:**
+- `src/adapters/sqlite/schema.js` — backfill block appended after `applySchema` migrations; sentinel check + two aggregating `INSERT … ON CONFLICT` statements
+- `tests/unit/migration-activity-backfill.test.js` — 4 new tests: review backfill, game backfill, idempotency, post-backfill streak correctness
+
+**DoD:** 4 new tests; 1340 total; 90.7% branch coverage; `make verify` clean.
+
+## Phase 36 — Document phases 27–35 in feature_steps.md (Complete — 2026-08-31)
+
+**Goal:** Catch up the `feature_steps.md` process log, which was 9 phases behind (phases 27–35 undocumented).
+
+**Files changed:**
+- `docs/features/pawnbook/feature_steps.md` — phases 27–35 appended
+
+**DoD:** `make verify` clean (docs-only change; test count and coverage unchanged).
