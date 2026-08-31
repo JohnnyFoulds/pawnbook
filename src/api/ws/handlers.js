@@ -10,7 +10,7 @@ import { ZodError } from 'zod';
 
 import { InboundMessageSchema } from '../../schemas/messages.js';
 import { GameSession } from '../../domain/game/session.js';
-import { getOpponent } from '../../domain/game/roster.js';
+import { getOpponent, checkOpponentAvailability } from '../../domain/game/roster.js';
 import { ErrorCode, errorCodeFor } from '../../errors.js';
 import { classifyDeviation } from '../../domain/repertoire/deviation.js';
 import { extractEpd, sideFromFen } from '../../domain/repertoire/epd.js';
@@ -113,6 +113,7 @@ export function makeMessageHandler({ gameRepo, settingsRepo, clock, enginePool =
 
 async function handleNewGame(ws, msg, { gameRepo, clock, sessions }) {
   const opponent = getOpponent(msg.opponentId);
+  checkOpponentAvailability(opponent);
 
   let playerColor = msg.color;
   if (playerColor === 'random') playerColor = Math.random() < 0.5 ? 'white' : 'black';
