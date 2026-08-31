@@ -159,3 +159,30 @@ test('stage10: show-candidates toggle re-renders tree', async ({ page }) => {
   expect(treeContent).not.toContain('Could not load');
   await screenshot(page, 'stage10-tree-toggle');
 });
+
+// ── Stage 11 — Line-health panel renders ─────────────────────────────────
+
+test('stage11: line-health panel renders without error', async ({ page }) => {
+  await page.goto('/repertoire.html');
+  await page.waitForFunction(() => {
+    const el = document.getElementById('line-health-list');
+    return el && el.textContent.trim().length > 0 && !el.textContent.includes('Loading');
+  }, { timeout: 10000 });
+  const text = await page.locator('#line-health-list').textContent();
+  expect(text).not.toContain('Could not load');
+  await screenshot(page, 'stage11-line-health');
+});
+
+// ── Stage 12 — Journey milestones panel shows at least one milestone ─────
+
+test('stage12: journey milestones shows at least one entry', async ({ page }) => {
+  await page.goto('/repertoire.html');
+  await page.waitForFunction(() => {
+    const el = document.getElementById('journey-milestones');
+    return el && el.textContent.trim().length > 0 && !el.textContent.includes('Loading');
+  }, { timeout: 10000 });
+  const text = await page.locator('#journey-milestones').textContent();
+  // Simulated 30-day journey always has firstConfirm, coachWoke, firstPromotion
+  expect(text).toMatch(/First confirmed move/);
+  await screenshot(page, 'stage12-journey');
+});

@@ -107,7 +107,7 @@ sqlite: startup re-derives settings.elo and logs error when it disagrees
 **Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-4-engine`  
-**Files:** `src/adapters/engine/uci-engine-client.js`, `src/adapters/engine/pool.js`, `src/adapters/engine/scripted-engine-client.js`, `scripts/record-fixtures.sh`
+**Files:** `src/adapters/engine/uci-engine-client.js`, `src/adapters/engine/engine-pool.js`, `src/adapters/engine/scripted-engine-client.js`, `scripts/record-fixtures.sh`
 
 ```
 uci: handshake sends uci then isready and resolves on readyok
@@ -207,7 +207,8 @@ findability: unparseable policy output falls back to binary 1.0/0.25 and logs a 
 **Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-7-puzzles`  
-**Files:** `src/domain/puzzles/select.js`, `src/domain/puzzles/dedupe.js`, `src/domain/puzzles/attempt.js`, `src/domain/review/queue.js`, `src/domain/review/rating.js`, `src/adapters/scheduler/`
+**Files:** `src/domain/puzzles/select.js`, `src/domain/puzzles/attempt.js`, `src/domain/review/queue.js`, `src/domain/review/rating.js`, `src/adapters/scheduler/`
+**Note:** `dedupe.js` and its three tests (`dedupe: …`) remain deferred — the tests are in `select.test.js` as `test.fails(...)` stubs.
 
 ```
 select: findability >= 0.04 becomes a puzzle
@@ -539,3 +540,25 @@ engine pool: maia3 routing: requestMove for unknown type throws
 ```
 
 **DoD:** All 20 new tests passing; full suite 644 passing + 2 expected fails; branch coverage 91.05%; no changes to `src/domain/` analysis or scoring logic; `getMaiaAnalysisWeights()` decouples findability from the game roster type; lc0 Maia-1 weights on disk continue to serve pass-3 findability analysis; the 1900→2200 gap is closed with `maia-2000` and a now-required `maia-2200`; `make verify` clean.
+
+## Phase 17 — Production-readiness hardening (Complete — 2026-08-31)
+
+**Goal:** Close three production-readiness gaps: (1) weights-missing check fires before a game row is created, (2) analysis engine acquisition retries on transient failures, (3) full error-path test coverage.
+
+**Files changed:**
+- `src/domain/game/roster.js` — added `checkOpponentAvailability(opponent)`: throws `WeightsMissingError` for maia3 when binary is missing, and for maia (lc0) when the `.pb.gz` weights file is absent; stockfish and drawfish are always available
+- `src/api/ws/handlers.js` — `handleNewGame` calls `checkOpponentAvailability(opponent)` before `gameRepo.save()`; `WeightsMissingError` is caught by the existing try/catch and sent as `{ type: 'error', error_code: 'weights_missing' }`; no orphan game rows are written
+- `src/api/ws/analysis-service.js` — `_acquireWithRetry(thunk)` wraps `getAnalysisSfClient()`: 3 attempts with exponential backoff (100ms × 2^attempt) plus random jitter (0–50ms); re-throws on final failure so `_saveFailed` and `analysis_failed` WS error are still sent
+- `tests/unit/ws/error-paths.test.js` — new: 6 tests covering all three scenarios
+
+**Tests:**
+```
+WeightsMissingError: maia3 opponent: returns weights_missing error and saves no game row
+WeightsMissingError: maia1 (lc0) opponent: returns weights_missing error and saves no game row
+WeightsMissingError: stockfish opponent: starts game normally even when existsSync returns false
+hint_not_allowed: returns hint_not_allowed error when hint is sent during a ranked game
+analysis engine unavailable: saves analysis_state=failed and sends analysis_failed error when engine unavailable
+analysis engine unavailable: saves analysis_state=failed when runAnalysis throws mid-pass
+```
+
+**DoD:** All 6 new tests passing; full suite 1244 passing + 2 expected fails; branch coverage 91.85%; `make verify` clean.

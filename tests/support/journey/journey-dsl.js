@@ -75,8 +75,7 @@ export async function playGame(harness, {
       if (alertAction === 'keep') {
         await harness.send(ws, { type: 'repertoire_choice', choice: 'keep' });
       } else if (alertAction === 'book') {
-        const alert = ws.lastOfType('repertoire_alert');
-        await harness.send(ws, { type: 'repertoire_choice', choice: 'correct', uci: alert.bookUci });
+        await harness.send(ws, { type: 'repertoire_choice', choice: 'correct' });
       } else {
         // 'timeout': fire the alert timeout → auto-applies move, no challenge (invariant 15)
         harness.scheduler.fireAll();
@@ -112,10 +111,9 @@ export async function acceptAlert(harness, ws) {
 
 /**
  * Refuse a pending book alert (player takes back and plays the book move).
- * @param {string} bookMoveUci — the UCI move the coach suggests
  */
-export async function refuseAlert(harness, ws, bookMoveUci) {
-  await harness.send(ws, { type: 'repertoire_choice', choice: 'book', uci: bookMoveUci });
+export async function refuseAlert(harness, ws) {
+  await harness.send(ws, { type: 'repertoire_choice', choice: 'correct' });
 }
 
 // ─── Day advance ─────────────────────────────────────────────────────────────

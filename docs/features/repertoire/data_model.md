@@ -29,7 +29,7 @@ Migration procedure (table-rebuild pattern, same as `move_evals` NOT-NULL migrat
 CREATE TABLE puzzles_new (
   id              INTEGER PRIMARY KEY,
   fen             TEXT NOT NULL,
-  kind            TEXT NOT NULL DEFAULT 'tactics',
+  kind            TEXT NOT NULL DEFAULT 'tactical',
   best_move_uci   TEXT NOT NULL,
   accepted_moves_json TEXT,
   temptation      REAL,
@@ -38,9 +38,9 @@ CREATE TABLE puzzles_new (
   UNIQUE(fen, kind)
 );
 
--- 2. Copy rows (existing rows get kind='tactics')
+-- 2. Copy rows (existing rows get kind='tactical')
 INSERT INTO puzzles_new
-SELECT id, fen, 'tactics', best_move_uci, accepted_moves_json,
+SELECT id, fen, 'tactical', best_move_uci, accepted_moves_json,
        temptation, instructiveness, times_seen
 FROM puzzles;
 
@@ -69,13 +69,13 @@ present in the DDL.
 CREATE TABLE IF NOT EXISTS rep_provenance (
   id              INTEGER PRIMARY KEY,
   at              INTEGER NOT NULL,        -- Unix epoch ms
-  schema_version  INTEGER NOT NULL,
+  schema_version  TEXT NOT NULL,
   balance_hash    TEXT NOT NULL,           -- SHA-256 of src/shared/balance.js
-  app_git_sha     TEXT NOT NULL,
-  sf_version      TEXT NOT NULL,           -- Stockfish version string
-  sf_depth        INTEGER NOT NULL,
-  sf_multipv      INTEGER NOT NULL,
-  maia_weights_id TEXT NOT NULL
+  app_git_sha     TEXT,
+  sf_version      TEXT,                    -- Stockfish version string
+  sf_depth        INTEGER,
+  sf_multipv      INTEGER,
+  maia_weights_id TEXT
 );
 ```
 
@@ -87,10 +87,10 @@ Mixing them would force a new provenance row per change and destroy the reuse.
 
 ```sql
 CREATE TABLE IF NOT EXISTS rep_book_version (
-  id      INTEGER PRIMARY KEY CHECK(id = 1),  -- single row
-  version INTEGER NOT NULL DEFAULT 0
+  singleton INTEGER PRIMARY KEY DEFAULT 0 CHECK(singleton = 0),  -- single row
+  version   INTEGER NOT NULL DEFAULT 0
 );
-INSERT OR IGNORE INTO rep_book_version(id, version) VALUES (1, 0);
+INSERT OR IGNORE INTO rep_book_version (singleton, version) VALUES (0, 0);
 ```
 
 Incremented in the same transaction as every book change (invariant 12).
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS rep_deviations (
   kind             TEXT NOT NULL,          -- deviation classification (§FR-REP-BOOK)
   played_uci       TEXT NOT NULL,
   book_uci         TEXT,                   -- NULL if no canonical move at node
-  resolution       TEXT NOT NULL CHECK(resolution IN (
+  resolution       TEXT CHECK(resolution IN (
                      'alerted_corrected','alerted_kept','alerted_timeout','post_game')),
   decision_ms_taken INTEGER,              -- NULL for timeout/post_game
   provenance_id    INTEGER NOT NULL REFERENCES rep_provenance(id),
@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS rep_challenges (
   inc_card_state        TEXT,                    -- FSRS card state JSON, nullable
 
   -- Accumulated evidence
-  challenger_plays      INTEGER NOT NULL DEFAULT 1,  -- 1 = the opening refusal itself
+  challenger_plays      INTEGER NOT NULL DEFAULT 0,
   incumbent_plays       INTEGER NOT NULL DEFAULT 0,
   encounters_since_open INTEGER NOT NULL DEFAULT 0,
   move_ms_taken         INTEGER,                 -- think-time before played_uci
@@ -234,7 +234,8 @@ CREATE TABLE IF NOT EXISTS rep_changelog (
   at           INTEGER NOT NULL,    -- Unix epoch ms
   epd          TEXT NOT NULL,
   side         TEXT NOT NULL CHECK(side IN ('white','black')),
-  kind         TEXT NOT NULL CHECK(kind IN ('promote','retire','confirm','refuse','settle','reverse')),
+  kind         TEXT NOT NULL CHECK(kind IN ('promote','retire','confirm','refuse','settle','reverse',
+                      'elect','quarantine_exit')),
   from_uci     TEXT,
   to_uci       TEXT,
   challenge_id INTEGER REFERENCES rep_challenges(id),
@@ -326,16 +327,18 @@ CREATE TABLE IF NOT EXISTS rep_moves (
 
 ```sql
 CREATE TABLE IF NOT EXISTS rep_policy (
-  epd             TEXT NOT NULL,
-  maia_weights_id TEXT NOT NULL,
-  policy_json     TEXT NOT NULL,    -- {move_uci: probability} for all legal moves
+  epd             TEXT    NOT NULL,
+  maia_model      TEXT    NOT NULL,
+  maia_weights_id TEXT    NOT NULL,
+  policy_json     TEXT    NOT NULL,    -- {move_uci: probability} for all legal moves
   computed_at     INTEGER NOT NULL,
-  PRIMARY KEY (epd, maia_weights_id)
+  PRIMARY KEY (epd, maia_model, maia_weights_id)
 );
 ```
 
-`maia_weights_id` in the key: a weights upgrade invalidates the cache rather than silently mixing
-two models' probabilities into one calibration curve (RQ5 would be quietly wrong otherwise).
+`maia_model` and `maia_weights_id` in the key: a model type change or weights upgrade invalidates
+the cache rather than silently mixing two models' probabilities into one calibration curve
+(RQ5 would be quietly wrong otherwise).
 
 ---
 

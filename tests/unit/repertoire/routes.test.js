@@ -10,6 +10,7 @@ import request from 'supertest';
 
 import { makeRepertoireRouter } from '../../../src/api/routes/repertoire.js';
 import { InMemoryRepertoireRepository } from '../../../src/adapters/memory/repositories.js';
+import { REP_LINE_BUDGET_WIN_PTS } from '../../../src/shared/balance.js';
 
 function makeApp(repo) {
   const app = express();
@@ -25,7 +26,14 @@ describe('GET /api/repertoire/tree', () => {
     const repo = new InMemoryRepertoireRepository();
     const res = await request(makeApp(repo)).get('/api/repertoire/tree');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ nodes: [] });
+    expect(res.body.nodes).toEqual([]);
+  });
+
+  it('includes lineBudget matching REP_LINE_BUDGET_WIN_PTS from balance.js', async () => {
+    const repo = new InMemoryRepertoireRepository();
+    const res = await request(makeApp(repo)).get('/api/repertoire/tree');
+    expect(res.status).toBe(200);
+    expect(res.body.lineBudget).toBe(REP_LINE_BUDGET_WIN_PTS);
   });
 
   it('returns nodes with moves', async () => {

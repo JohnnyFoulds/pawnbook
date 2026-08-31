@@ -68,7 +68,7 @@ All `FR-REP-*` codes from `feature_spec.md`.
 | FR-REP-DRILL-2 | `drill: accepted_moves_json canonical+alts+challenger` | `tests/unit/repertoire/build.test.js` |
 | FR-REP-DRILL-3 | `drill: opening cards exempt from FINDABILITY_MIN` (×3 files) | `tests/unit/select.test.js`, `tests/unit/queue.test.js`, `tests/unit/rating.test.js` |
 | FR-REP-DRILL-4 | schema migration test | `tests/unit/adapters/phase-27-adapters.test.js` |
-| FR-REP-DRILL-5 | `opening cards sort before tactical when over DUE_SOFT_CAP` *(partial — reach-weighted sort within kind deferred)* | `tests/unit/queue.test.js` |
+| FR-REP-DRILL-5 | `opening cards sort before tactical when over DUE_SOFT_CAP`; `opening cards sorted by reachProb descending within the opening group` | `tests/unit/queue.test.js` |
 | FR-REP-STORE-1 | invariant 3 test | `src/adapters/sqlite/repositories.js` |
 | FR-REP-STORE-2 | invariants 11, 12 tests | `src/adapters/sqlite/repositories.js` |
 | FR-REP-STORE-3 | rebuild determinism test | `scripts/seed-repertoire.js` |

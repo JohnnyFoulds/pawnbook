@@ -41,8 +41,8 @@ All parameters live in `src/shared/balance.js`. A balance change requires a `doc
 | Parameter | Default | Notes |
 |---|---|---|
 | `STRENGTH_ANCHOR_ELO` | 1600 | Elo value the anchor `ase` maps to; fitted locally against maia-1600 games |
-| `STRENGTH_ANCHOR_ASE` | 0.137 | Mean scaled error at the anchor Elo; provisional from Regan's 1600 table row until measured |
-| `STRENGTH_ELO_PER_ASE` | 13034 | Elo per unit scaled error; least-squares fit of Regan & Haworth 2011 table (R²=0.981). Transfer as prior only — units differ from Regan's `ada`; validate against local maia-1500/1900 pair before trusting |
+| `STRENGTH_ANCHOR_ASE` | 0.2638 | Mean scaled error at the anchor Elo; v1 calibration from two maia-1600 games (2026-08-28) |
+| `STRENGTH_ELO_PER_ASE` | 6500 | Elo per unit scaled error; local fit — Regan & Haworth 2011 slope (13034) was too steep because Regan's `ada` uses all-legal-moves while our `ase` uses best-vs-played only. Will be refined at ≥ 20 samples across ≥ 3 distinct ratings |
 | `STRENGTH_CP_CAP` | 300 | Winsorisation cap on cpLoss before `ln(1+x)` scaling; blunders above 3 pawns all contribute `ln(4)=1.386`. Deliberate: distinguishing a 3-pawn blunder from a queen loss is not the goal |
 | `STRENGTH_DECIDED_CP` | 600 | Exclude plies where \|cpWhite\| exceeds this; dead positions dominate ACPL and add noise |
 | `STRENGTH_MIN_PLIES` | 12 | Minimum eligible plies to report a non-null estimate |

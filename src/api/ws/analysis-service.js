@@ -94,11 +94,11 @@ export async function analyseGame({
     ? nearestMaiaModel(playerElo, availableMaias)
     : null;
 
-  // Acquire engine clients
+  // Acquire engine clients — 3 attempts with exponential backoff + jitter
   let sfClient, maiaClient;
   try {
-    sfClient = await enginePool.getAnalysisSfClient();
-    maiaClient = maiaModel ? await enginePool.getMaiaAnalysisClient(maiaModel) : null;
+    sfClient = await _acquireWithRetry(() => enginePool.getAnalysisSfClient());
+    maiaClient = maiaModel ? await _acquireWithRetry(() => enginePool.getMaiaAnalysisClient(maiaModel)) : null;
   } catch (err) {
     log.error({ err, gameId }, 'failed to start analysis engines');
     span?.recordException(err);
@@ -303,6 +303,29 @@ function _saveFailed(gameRepo, { gameId, opponentId, opponentElo, playerColor, r
 
 function _sendIfOpen(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+}
+
+const ACQUIRE_MAX_ATTEMPTS = 3;
+
+/**
+ * Retry an engine-acquire thunk up to ACQUIRE_MAX_ATTEMPTS times with
+ * exponential backoff and jitter. Re-throws on the final failure.
+ * @param {() => Promise<any>} thunk
+ */
+async function _acquireWithRetry(thunk) {
+  let lastErr;
+  for (let attempt = 0; attempt < ACQUIRE_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await thunk();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < ACQUIRE_MAX_ATTEMPTS - 1) {
+        const backoffMs = (2 ** attempt) * 100 + Math.random() * 50;
+        await new Promise(r => setTimeout(r, backoffMs));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 /**

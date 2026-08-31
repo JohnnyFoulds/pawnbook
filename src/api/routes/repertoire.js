@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto';
 import { Chess } from 'chess.js';
 import { Router } from 'express';
 
-import { REP_REVERSAL_SUPPRESS_ENCOUNTERS } from '../../shared/balance.js';
+import { REP_REVERSAL_SUPPRESS_ENCOUNTERS, REP_LINE_BUDGET_WIN_PTS } from '../../shared/balance.js';
 import { logger } from '../../config.js';
 import { computeCoverage, computeGapReport } from '../ws/reach-service.js';
 import { buildTimeline, buildGrowthSeries, buildMilestones } from '../../domain/repertoire/history.js';
@@ -42,7 +42,7 @@ export function makeRepertoireRouter({ repertoireRepo }) {
         ...node,
         moves: repertoireRepo.getMovesForNode(node.epd, node.side),
       }));
-      res.json({ nodes: result });
+      res.json({ nodes: result, lineBudget: REP_LINE_BUDGET_WIN_PTS });
     } catch (err) {
       log.error({ err }, 'GET /tree failed');
       res.status(500).json({ error: 'internal_error', message: err.message });

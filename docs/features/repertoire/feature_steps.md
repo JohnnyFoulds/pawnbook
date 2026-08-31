@@ -741,3 +741,39 @@ The Phase 37 reconciliation marked B7 CLOSED (Phase 31). The longitudinal journe
 - `tests/support/journey/journeys/v1.js` — `DIVERGENT_MOVE_WHITE` changed to 3-move Ruy Lopez; Stage 5 `alertAction:'book'`; Stage 7 `alertAction:'keep'`; Stage 8 `alertAction:'timeout'`; Stages 8 and 9 `expectFail:false`
 
 **DoD:** `make verify` green; 1235 tests pass; 91.95% branch coverage; `npm run journey` 15/15 stages; B7 register entry updated to Phase 38; all 35 defects CLOSED or ACCEPTED.
+
+---
+
+## Phase 39 — FR-REP-DRILL-5 + Playwright hardening
+
+Branch: `development` (post-review fixes batch)
+
+### Objective
+
+Close FR-REP-DRILL-5 (reach-weighted sort within the opening drill group, deferred since Phase 33)
+and harden the Playwright journey suite with two new stages.
+
+### Files changed
+
+- `src/domain/review/queue.js` — `sortDueCards`: within the opening group (over `DUE_SOFT_CAP`),
+  sort by `reachProb` descending so highest-reach positions are drilled first; missing `reachProb`
+  defaults to 0 (FR-REP-DRILL-5)
+- `tests/unit/queue.test.js` — two new tests: reach-prob ordering within opening group; null
+  `reachProb` fallback
+- `tests/playwright/journey.spec.js` — stage 11: line-health panel renders without error;
+  stage 12: journey milestones panel shows `firstConfirm` milestone
+- `docs/features/repertoire/traceability.md` — FR-REP-DRILL-5 row updated from partial/deferred
+  to fully proved
+
+### Code-review fixes (same batch, committed as `91b2437`)
+
+- `journey-dsl.js` `alertAction='book'` payload had stray `uci` field rejected by `.strict()` schema
+- `refuseAlert` sent `choice:'book'` (not in enum) and an extra `uci` field — both fixed
+- `DIVERGENT_MOVE_WHITE` missing `fen` fields — added correct FEN strings
+- `handlers.js` misleading comment corrected ("stale engine turn" → "stale browser move")
+- `GET /api/repertoire/tree` now returns `lineBudget: REP_LINE_BUDGET_WIN_PTS`; browser
+  `renderTree` and `renderLineHealth` read it instead of a hardcoded `20` literal
+
+**DoD:** `make verify` green; 1238 tests pass (+ 2 expected-fail); 91.89% branch coverage;
+`npx playwright test -c playwright.journey.config.js` 12/12 stages; FR-REP-DRILL-5 closed;
+traceability.md updated.

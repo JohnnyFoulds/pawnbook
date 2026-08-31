@@ -49,32 +49,32 @@ Sent when a move is held pending the player's decision.
 {
   "type": "repertoire_alert",
   "kind": "order_slip",
-  "playedUci": "d2d4",
-  "bookUci": "e2e4",
-  "winPctCost": null,
-  "timeoutSec": 60
+  "playerUci": "d2d4",
+  "playerSan": "d4",
+  "bookSan": "e4",
+  "costWinPts": 0
 }
 ```
 
 | Field | Type | Notes |
 |---|---|---|
 | `kind` | `string` | One of the deviation kinds from §FR-REP-BOOK (§5 table) |
-| `playedUci` | `string` | The move the player tried to make |
-| `bookUci` | `string \| null` | The canonical book move, or null if none (should not alert — but included defensively) |
-| `winPctCost` | `number \| null` | Win% points cost vs engine best; null for `order_slip` and `refused_repeat` where cost is shown differently |
-| `timeoutSec` | `number` | Always `REP_ALERT_TIMEOUT_SEC` |
+| `playerUci` | `string` | The move the player tried to make (UCI) |
+| `playerSan` | `string` | The move the player tried to make (SAN) |
+| `bookSan` | `string \| null` | The canonical book move in SAN, or null if none |
+| `costWinPts` | `number` | Win% points cost vs engine best (`meanWinLossPts` of the played move, 0 if unavailable) |
 
 ### Inbound: `repertoire_choice`
 
 The player's decision after receiving an alert. Zod schema MUST use `.strict()`.
 
 ```json
-{ "type": "repertoire_choice", "decision": "keep" }
+{ "type": "repertoire_choice", "choice": "keep" }
 ```
 
 | Field | Type | Constraint |
 |---|---|---|
-| `decision` | `'correct' \| 'keep'` | Literal union; no other value accepted; no other fields permitted |
+| `choice` | `'correct' \| 'keep'` | Literal union; no other value accepted; no other fields permitted |
 
 Handled by the same WS dispatcher that handles `'move'`. The handler MUST verify that a pending
 move exists for this connection before acting (`NoPendingMoveError` if not).
@@ -84,7 +84,7 @@ move exists for this connection before acting (`NoPendingMoveError` if not).
 Sent when the first alert in a game flips it unranked.
 
 ```json
-{ "type": "ranked_changed", "reason": "repertoire_coach", "gameId": 42 }
+{ "type": "ranked_changed", "ranked": false }
 ```
 
 ### Outbound: `repertoire_update`
@@ -116,6 +116,7 @@ Returns the book DAG for display in `public/repertoire.html`.
 **Response 200:**
 ```json
 {
+  "lineBudget": 20,
   "nodes": [
     {
       "epd": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3",
@@ -288,7 +289,7 @@ Reverses a book change. Allowed only if the change is still reversible (not alre
 
 **Request:** no body required.
 
-**Response 200:** `{ "ok": true, "suppressedUntil": 1050 }` (encounter count)  
+**Response 200:** `{ "ok": true }`  
 **Response 404:** `RepertoireNodeNotFoundError` — change id not found  
 **Response 409:** `ChallengeNotOpenError` — change already superseded
 
@@ -299,7 +300,7 @@ Reverses a book change. Allowed only if the change is still reversible (not alre
 ```js
 export const RepertoireChoiceSchema = z.object({
   type: z.literal('repertoire_choice'),
-  decision: z.enum(['correct', 'keep']),
+  choice: z.enum(['correct', 'keep']),
 }).strict();  // .strict() rejects any extra field — enforces invariant 10
 ```
 
@@ -310,9 +311,9 @@ classification field added to the client would be caught here, not silently igno
 export const RepertoireAlertSchema = z.object({
   type: z.literal('repertoire_alert'),
   kind: z.string(),
-  playedUci: z.string(),
-  bookUci: z.string().nullable(),
-  winPctCost: z.number().nullable(),
-  timeoutSec: z.number(),
+  playerUci: z.string(),
+  playerSan: z.string(),
+  bookSan: z.string().nullable(),
+  costWinPts: z.number(),
 });
 ```
