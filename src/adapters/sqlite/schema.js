@@ -473,4 +473,42 @@ export function applySchema(db) {
   `);
 
   db.prepare('INSERT OR IGNORE INTO rep_book_version (singleton, version) VALUES (0, 0)').run();
+
+  // One-time activity backfill: populate activity table from existing reviews and games.
+  // Only runs when there are reviews/games to backfill and the sentinel is not yet set.
+  const alreadyBackfilled = db.prepare(
+    "SELECT value FROM settings WHERE key = 'activity_backfill_v1'"
+  ).get();
+  if (!alreadyBackfilled) {
+    try {
+      const hasData = db.prepare(
+        'SELECT 1 FROM (SELECT 1 FROM reviews UNION ALL SELECT 1 FROM games WHERE status = ? AND played_at IS NOT NULL) LIMIT 1'
+      ).get('finished');
+      if (hasData) {
+        // Backfill review activity — day key uses 04:00 local boundary.
+        // SQLite strftime operates in UTC; we subtract 4 hours (14400 seconds) first.
+        db.exec(`
+          INSERT INTO activity (day, games, reviews)
+          SELECT
+            strftime('%Y-%m-%d', datetime((reviewed_at / 1000) - 14400, 'unixepoch')) AS day,
+            0 AS games,
+            COUNT(*) AS reviews
+          FROM reviews
+          GROUP BY day
+          ON CONFLICT(day) DO UPDATE SET reviews = reviews + excluded.reviews;
+
+          INSERT INTO activity (day, games, reviews)
+          SELECT
+            strftime('%Y-%m-%d', datetime((played_at / 1000) - 14400, 'unixepoch')) AS day,
+            COUNT(*) AS games,
+            0 AS reviews
+          FROM games
+          WHERE status = 'finished' AND played_at IS NOT NULL
+          GROUP BY day
+          ON CONFLICT(day) DO UPDATE SET games = games + excluded.games;
+        `);
+        db.prepare("INSERT INTO settings (key, value) VALUES ('activity_backfill_v1', '1')").run();
+      }
+    } catch { /* partial schema during migration tests — skip backfill */ }
+  }
 }
