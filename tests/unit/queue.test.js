@@ -124,5 +124,40 @@ describe('queue', () => {
       const sorted = sortDueCards(cards, now);
       expect(sorted[0].kind).toBe('opening');
     });
+
+    it('FR-REP-DRILL-5: opening cards sorted by reachProb descending within the opening group', () => {
+      const base = new Date('2025-01-10T00:00:00Z').getTime();
+      const tactical = Array.from({ length: DUE_SOFT_CAP - 1 }, (_, i) => ({
+        due: new Date(base - i * 86_400_000).toISOString(),
+        instructiveness: 10,
+        kind: 'tactical',
+      }));
+      const opening = [
+        { due: new Date(base).toISOString(), instructiveness: 5, kind: 'opening', reachProb: 0.1 },
+        { due: new Date(base).toISOString(), instructiveness: 5, kind: 'opening', reachProb: 0.8 },
+        { due: new Date(base).toISOString(), instructiveness: 5, kind: 'opening', reachProb: 0.4 },
+      ];
+      const sorted = sortDueCards([...tactical, ...opening], now);
+      const openingSorted = sorted.filter(c => c.kind === 'opening');
+      expect(openingSorted[0].reachProb).toBe(0.8);
+      expect(openingSorted[1].reachProb).toBe(0.4);
+      expect(openingSorted[2].reachProb).toBe(0.1);
+    });
+
+    it('FR-REP-DRILL-5: opening cards with missing reachProb treated as 0', () => {
+      const base = new Date('2025-01-10T00:00:00Z').getTime();
+      const tactical = Array.from({ length: DUE_SOFT_CAP - 1 }, (_, i) => ({
+        due: new Date(base - i * 86_400_000).toISOString(),
+        instructiveness: 10,
+        kind: 'tactical',
+      }));
+      const opening = [
+        { due: new Date(base).toISOString(), instructiveness: 5, kind: 'opening', reachProb: 0.5 },
+        { due: new Date(base).toISOString(), instructiveness: 5, kind: 'opening' },
+      ];
+      const sorted = sortDueCards([...tactical, ...opening], now);
+      const openingSorted = sorted.filter(c => c.kind === 'opening');
+      expect(openingSorted[0].reachProb).toBe(0.5);
+    });
   });
 });
