@@ -64,6 +64,7 @@ const MOTIF_LABEL = {
   missed_capture: 'missed capture',
   overloaded_defender: 'overloaded defender',
   pinned_piece: 'pin',
+  skewer: 'skewer',
 };
 
 const DIMENSION_LABEL = {
@@ -226,7 +227,7 @@ function renderWeaknessTile(stats) {
   card.style.display = '';
 
   // Dimension summary line
-  const MOTIF_DIM = { hanging_piece: 'tactics', fork: 'tactics', missed_capture: 'tactics', back_rank: 'defense', overloaded_defender: 'defense', pinned_piece: 'tactics' };
+  const MOTIF_DIM = { hanging_piece: 'tactics', fork: 'tactics', missed_capture: 'tactics', back_rank: 'defense', overloaded_defender: 'defense', pinned_piece: 'tactics', skewer: 'tactics' };
   const dimCounts = {};
   for (const [tag, n] of Object.entries(counts)) {
     const d = MOTIF_DIM[tag];

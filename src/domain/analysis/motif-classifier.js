@@ -15,6 +15,7 @@ export const MOTIF_DIMENSION = {
   back_rank: 'defense',
   overloaded_defender: 'defense',
   pinned_piece: 'tactics',
+  skewer: 'tactics',
 };
 
 /**
@@ -24,7 +25,7 @@ export const MOTIF_DIMENSION = {
  * @param {string} fen - FEN before the move
  * @param {string} playedMoveUci - UCI string of the move played (e.g. 'e2e4', 'e7e8q')
  * @param {'white'|'black'} sideToMove
- * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|'overloaded_defender'|'pinned_piece'|null}
+ * @returns {'hanging_piece'|'fork'|'back_rank'|'missed_capture'|'overloaded_defender'|'pinned_piece'|'skewer'|null}
  */
 export function classifyMotif(fen, playedMoveUci, sideToMove) {
   if (!fen || !playedMoveUci || !sideToMove) return null;
@@ -83,6 +84,9 @@ export function classifyMotif(fen, playedMoveUci, sideToMove) {
 
     // POST-MOVE: pinned_piece — opponent slider pins a player piece against a more valuable one behind
     if (_hasPinnedPiece(chess, playerColor, oppColor)) return 'pinned_piece';
+
+    // POST-MOVE: skewer — opponent slider attacks a more valuable player piece; less valuable piece behind it is lost when the first moves
+    if (_hasSkewer(chess, playerColor, oppColor)) return 'skewer';
 
     return null;
   } catch {
@@ -205,6 +209,47 @@ function _hasPinnedPiece(chess, playerColor, oppColor) {
               }
             } else {
               break; // opponent piece blocks this ray
+            }
+          }
+          f += df;
+          r += dr;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Mirror of _hasPinnedPiece with reversed value comparison: first piece is MORE valuable,
+// forcing it to move exposes the less valuable piece behind it.
+function _hasSkewer(chess, playerColor, oppColor) {
+  const board = chess.board();
+  for (const row of board) {
+    for (const cell of row) {
+      if (!cell || cell.color !== oppColor) continue;
+      const dirs = _RAY_DIRS[cell.type];
+      if (!dirs) continue;
+      const fileIdx = cell.square.charCodeAt(0) - 97;
+      const rankIdx = parseInt(cell.square[1], 10) - 1;
+      for (const [df, dr] of dirs) {
+        let f = fileIdx + df;
+        let r = rankIdx + dr;
+        let first = null;
+        while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+          const sq = String.fromCharCode(97 + f) + (r + 1);
+          const piece = chess.get(sq);
+          if (piece) {
+            if (piece.color === playerColor) {
+              if (first === null) {
+                first = piece;
+              } else {
+                if ((PIECE_VALUE[first.type] ?? 0) > (PIECE_VALUE[piece.type] ?? 0)) {
+                  return true; // first (more valuable) is skewered onto second (less valuable)
+                }
+                break;
+              }
+            } else {
+              break;
             }
           }
           f += df;
