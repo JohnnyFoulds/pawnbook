@@ -1,0 +1,101 @@
+/* pawnbook design token overrides for VitePress dark theme */
+/* Source: docs/game/art_direction.md */
+
+:root {
+  /* Brand / accent */
+  --vp-c-brand-1: #3987e5;
+  --vp-c-brand-2: #256abf;
+  --vp-c-brand-3: #6da7ec;
+  --vp-c-brand-soft: rgba(57, 135, 229, 0.14);
+
+  /* Backgrounds */
+  --vp-c-bg: #0d0d0d;
+  --vp-c-bg-soft: #151517;
+  --vp-c-bg-mute: #1e1e21;
+  --vp-c-bg-alt: #1a1a1a;
+
+  /* Text */
+  --vp-c-text-1: #e8e6e1;
+  --vp-c-text-2: #c3c2b7;
+  --vp-c-text-3: #898781;
+
+  /* Dividers */
+  --vp-c-divider: #2c2c2a;
+  --vp-c-border: rgba(255, 255, 255, 0.10);
+
+  /* Nav */
+  --vp-nav-bg-color: #0d0d0d;
+
+  /* Sidebar */
+  --vp-sidebar-bg-color: #0d0d0d;
+
+  /* Code blocks */
+  --vp-code-bg: #1e1e21;
+  --vp-code-color: #c3c2b7;
+
+  /* Custom properties: move quality palette */
+  --pawn-blunder:    #dd7065;
+  --pawn-mistake:    #b85a50;
+  --pawn-inaccuracy: #8f4a45;
+  --pawn-ok:         #6f6f69;
+  --pawn-good:       #256abf;
+  --pawn-great:      #3987e5;
+  --pawn-best:       #6da7ec;
+}
+
+/* Home page hero refinements */
+.VPHero .tagline {
+  color: var(--vp-c-text-2);
+}
+
+.VPFeature {
+  background: var(--vp-c-bg-soft) !important;
+  border: 1px solid var(--vp-c-divider) !important;
+}
+
+/* Move quality colour swatches used inline in docs */
+.quality-blunder    { color: var(--pawn-blunder); font-weight: 600; }
+.quality-mistake    { color: var(--pawn-mistake); font-weight: 600; }
+.quality-inaccuracy { color: var(--pawn-inaccuracy); font-weight: 600; }
+.quality-ok         { color: var(--pawn-ok); }
+.quality-good       { color: var(--pawn-good); font-weight: 600; }
+.quality-great      { color: var(--pawn-great); font-weight: 600; }
+.quality-best       { color: var(--pawn-best); font-weight: 600; }
+
+/* Code blocks */
+.vp-doc div[class*='language-'] {
+  background: #1a1a1a;
+  border: 1px solid var(--vp-c-divider);
+}
+
+/* Table styling */
+.vp-doc table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.vp-doc th {
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-2);
+}
+
+.vp-doc tr:nth-child(even) td {
+  background: rgba(255,255,255,0.02);
+}
+
+/* Reduce heading weight creep */
+.vp-doc h1, .vp-doc h2, .vp-doc h3 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Home page action buttons */
+.VPButton.brand {
+  background-color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+}
+
+.VPButton.brand:hover {
+  background-color: var(--vp-c-brand-2);
+  border-color: var(--vp-c-brand-2);
+}

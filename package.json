@@ -17,7 +17,10 @@
     "test:watch": "vitest",
     "journey": "vitest run tests/journey/",
     "lint": "eslint .",
-    "format": "eslint . --fix"
+    "format": "eslint . --fix",
+    "docs:dev": "vitepress dev site",
+    "docs:build": "vitepress build site",
+    "docs:preview": "vitepress preview site"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
@@ -31,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "vitepress": "^1.6.3",
     "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.9.1",
