@@ -93,8 +93,9 @@ export async function playGame(harness, {
 
   // analyseGame is triggered by the game_finished event (wired in harness.newWs).
   // The FakeEnginePool resolves all engine calls as Promises that complete in
-  // the microtask queue before the next macrotask. This setTimeout lets them settle.
-  await new Promise(resolve => setTimeout(resolve, 10));
+  // the microtask queue before the next macrotask. 200ms is generous enough for
+  // CI runners under coverage instrumentation (10ms was too tight).
+  await new Promise(resolve => setTimeout(resolve, 200));
 
   return { ws, gameId, moves: appliedMoves };
 }
