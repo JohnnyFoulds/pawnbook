@@ -92,6 +92,16 @@ function renderStrengthTile(stats) {
   document.getElementById('strength-delta').textContent = se != null
     ? `±${se} · from move quality`
     : 'from move quality';
+  const canvas = document.getElementById('spark-strength');
+  const history = stats.strengthHistory ?? [];
+  if (canvas && history.length >= 2) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = (canvas.offsetWidth || 120) * dpr;
+    canvas.height = (canvas.offsetHeight || 28) * dpr;
+    drawSparkline(canvas, history.map(h => h.strengthElo));
+  } else if (canvas) {
+    canvas.style.display = 'none';
+  }
 }
 
 function renderAll(stats, state) {

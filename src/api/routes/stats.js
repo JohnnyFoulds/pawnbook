@@ -113,6 +113,12 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
       const drillHistory = puzzleRepo.getDrillAccuracyHistory?.() ?? [];
       const winRateHistory = gameRepo.getWinRateHistory?.() ?? [];
 
+      // Per-game strength Elo history (oldest-first, finished games with estimates)
+      const strengthHistory = games
+        .filter(g => g.status === 'finished' && g.strengthElo != null)
+        .map(g => ({ playedAt: g.playedAt, strengthElo: g.strengthElo }))
+        .reverse();
+
       // Rolling inverse-variance strength aggregate over last STRENGTH_ROLLING_N samples
       const rawSamples = gameRepo.listStrengthSamples?.({ side: 'player', limit: STRENGTH_ROLLING_N }) ?? [];
       const eligible = rawSamples.filter(r => r.n >= STRENGTH_MIN_PLIES);
@@ -154,6 +160,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         winRateHistory,
         rollingStrength,
         rollingSe,
+        strengthHistory,
         focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {
