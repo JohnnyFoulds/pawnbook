@@ -35,8 +35,12 @@ describe('MOTIF_DIMENSION', () => {
     expect(MOTIF_DIMENSION.skewer).toBe('tactics');
   });
 
+  it('maps discovered_attack to tactics', () => {
+    expect(MOTIF_DIMENSION.discovered_attack).toBe('tactics');
+  });
+
   it('covers every known motif tag (no unmapped motif)', () => {
-    const known = ['hanging_piece', 'fork', 'missed_capture', 'back_rank', 'overloaded_defender', 'pinned_piece', 'skewer'];
+    const known = ['hanging_piece', 'fork', 'missed_capture', 'back_rank', 'overloaded_defender', 'pinned_piece', 'skewer', 'discovered_attack'];
     for (const tag of known) {
       expect(MOTIF_DIMENSION[tag]).toBeDefined();
     }
