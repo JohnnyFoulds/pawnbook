@@ -246,6 +246,12 @@ describe('JS modules', () => {
     expect(js).toMatch(/drill-today-sub/);
   });
 
+  it('dashboard.js surfaces inProgressGameId as a resume prompt on the Play card', () => {
+    const js = readFile('public/js/dashboard.js');
+    expect(js).toMatch(/inProgressGameId/);
+    expect(js).toMatch(/[Rr]esume/);
+  });
+
   it('index.html has drill-today-sub element in the drill action card', () => {
     const html = readFile('public/index.html');
     expect(html).toMatch(/drill-today-sub/);
