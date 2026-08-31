@@ -74,11 +74,18 @@ async function init() {
       drillSubEl.textContent = `${td.correct} correct · ${td.attempted} done today (${pct}%)`;
     }
 
-    // Suggested opponent
-    document.getElementById('suggested-opponent').textContent =
-      state.suggestedOpponent
-        ? `Suggested: ${state.suggestedOpponent}`
-        : 'Choose your opponent';
+    // Play card: resume prompt or suggested opponent
+    if (state.inProgressGameId) {
+      const headingEl = document.getElementById('play-card-heading');
+      if (headingEl) headingEl.textContent = 'Resume';
+      document.getElementById('suggested-opponent').textContent =
+        `vs ${state.inProgressOpponentId ?? 'opponent'} →`;
+    } else {
+      document.getElementById('suggested-opponent').textContent =
+        state.suggestedOpponent
+          ? `Suggested: ${state.suggestedOpponent}`
+          : 'Choose your opponent';
+    }
 
     // Activity sparkline (daily review counts for last 30 days)
     const activityCanvas = document.getElementById('spark-streak');
