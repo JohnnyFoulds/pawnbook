@@ -52,6 +52,7 @@ export default defineConfig({
             { text: 'Playing Games', link: '/guide/playing' },
             { text: 'Post-game Analysis', link: '/guide/analysis' },
             { text: 'The Drill System', link: '/guide/drilling' },
+            { text: 'Stats', link: '/guide/stats' },
             { text: 'The Repertoire Coach', link: '/guide/repertoire' },
             { text: 'Terminal UI', link: '/guide/tui' },
           ],

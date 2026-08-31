@@ -99,6 +99,32 @@ A findability of 0.8 means Maia finds this move 80% of the time. The 0.04 gate r
 
 ---
 
+## Motif debrief card
+
+Above the mistake list, a **Patterns in this game** card appears when the same error type occurs more than once. It lists each recurring motif tag, how many times it appeared, and a direct link to drill only that pattern.
+
+| Column | Description |
+|---|---|
+| Tag | Named error type (e.g. *Fork*, *Back rank*, *Pinned piece*) |
+| Count | Times this pattern appeared in this game |
+| Drill → | Link to the drill screen filtered to that motif |
+
+If all mistakes are distinct patterns, or if no mistakes are classified, the card is hidden. The debrief is a game-level summary; the per-mistake tag is also visible in each mistake row.
+
+---
+
+## Mistake tags
+
+Each mistake row includes the `motifTag` (if classified) and a `motifExplanation` — a one-sentence description of why the move was a problem. Examples:
+
+- **fork** — "After this move, the opponent's piece attacked two of your pieces at once."
+- **back_rank** — "Your king was left on the back rank without an escape square."
+- **pinned_piece** — "After this move one of your pieces was pinned."
+
+Tags are used by the Stats page weakness tile and the motif-filtered drill screen.
+
+---
+
 ## Opponent analysis
 
 The review page shows the opponent's accuracy and strength estimate alongside yours. The opponent's mistakes are shown for context; they do not enter your drill queue.
