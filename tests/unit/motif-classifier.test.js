@@ -65,6 +65,24 @@ describe('classifyMotif', () => {
     expect(classifyMotif(fen, 'a6c7', 'white')).toBe(null);
   });
 
+  // ── overloaded_defender ───────────────────────────────────────────────────
+
+  it('detects overloaded_defender — one piece is sole guardian of two attacked pieces', () => {
+    // White Re5 defends both Nd5 (attacked by Rd8) and Nf5 (attacked by Rf8).
+    // White plays Ka1-a2 (quiet king move). After the move Re5 is still the sole
+    // defender of both knights → overloaded_defender.
+    const fen = '3r1r2/8/8/3NRN2/8/8/8/K6k w - - 0 1';
+    expect(classifyMotif(fen, 'a1a2', 'white')).toBe('overloaded_defender');
+  });
+
+  it('overloaded_defender does not fire when each threatened piece has two defenders', () => {
+    // Nd5 is defended by both Rc5 and Re5 (flanking it on the 5th rank).
+    // Nf5 is defended by both Re5 and Rg5. No piece is the sole guardian of any threatened
+    // piece → null. White: Ka1, Rc5, Re5, Rg5, Nd5, Nf5; Black: Kh1, Rd8, Rf8.
+    const fen = '3r1r2/8/8/2RNRNR1/8/8/8/K6k w - - 0 1';
+    expect(classifyMotif(fen, 'a1a2', 'white')).toBe(null);
+  });
+
   // ── back_rank ─────────────────────────────────────────────────────────────
 
   it('detects back_rank — king on back rank loses luft pawn, opponent has rook', () => {

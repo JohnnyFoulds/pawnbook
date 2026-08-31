@@ -23,8 +23,12 @@ describe('MOTIF_DIMENSION', () => {
     expect(MOTIF_DIMENSION.back_rank).toBe('defense');
   });
 
+  it('maps overloaded_defender to defense', () => {
+    expect(MOTIF_DIMENSION.overloaded_defender).toBe('defense');
+  });
+
   it('covers every known motif tag (no unmapped motif)', () => {
-    const known = ['hanging_piece', 'fork', 'missed_capture', 'back_rank'];
+    const known = ['hanging_piece', 'fork', 'missed_capture', 'back_rank', 'overloaded_defender'];
     for (const tag of known) {
       expect(MOTIF_DIMENSION[tag]).toBeDefined();
     }
