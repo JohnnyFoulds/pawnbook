@@ -66,6 +66,14 @@ async function init() {
       }
     }
 
+    // Today's drill progress
+    const td = state.todayDrills ?? { attempted: 0, correct: 0 };
+    const drillSubEl = document.getElementById('drill-today-sub');
+    if (drillSubEl && td.attempted > 0) {
+      const pct = Math.round((td.correct / td.attempted) * 100);
+      drillSubEl.textContent = `${td.correct} correct · ${td.attempted} done today (${pct}%)`;
+    }
+
     // Suggested opponent
     document.getElementById('suggested-opponent').textContent =
       state.suggestedOpponent
