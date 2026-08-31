@@ -278,6 +278,35 @@ describe('GET /api/stats', () => {
     const res = await request(app).get('/api/stats');
     expect(res.body.motifAccuracy).toEqual({});
   });
+
+  it('includes focusMotif pointing to highest-priority motif', async () => {
+    const { app, gameRepo, puzzleRepo } = buildApp();
+    addFinishedGame(gameRepo);
+    // fork: 5 mistakes, 80% accuracy → score 5*0.2=1.0
+    // back_rank: 3 mistakes, no drill history → score 3*1.0=3.0 — wins
+    const forkId = addPuzzle(puzzleRepo, { motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-a', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-b', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-c', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-d', motifTag: 'fork' });
+    addPuzzle(puzzleRepo, { fen: 'fen-e', motifTag: 'back_rank' });
+    addPuzzle(puzzleRepo, { fen: 'fen-f', motifTag: 'back_rank' });
+    addPuzzle(puzzleRepo, { fen: 'fen-g', motifTag: 'back_rank' });
+    // Drill reviews for fork only (80% accuracy)
+    for (let i = 0; i < 5; i++) {
+      puzzleRepo.saveReview({ puzzleId: forkId, correct: i < 4, attemptNo: 1, practice: 0, reviewedAt: NOW });
+    }
+    const res = await request(app).get('/api/stats');
+    expect(res.body.focusMotif).toBeDefined();
+    expect(res.body.focusMotif.tag).toBe('back_rank');
+    expect(res.body.focusMotif.accuracy).toBeNull();
+  });
+
+  it('includes focusMotif as null when no motif breakdown exists', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/stats');
+    expect(res.body.focusMotif).toBeNull();
+  });
 });
 
 // ─── GET /api/games ───────────────────────────────────────────────────────────

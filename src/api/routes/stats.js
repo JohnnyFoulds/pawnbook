@@ -6,6 +6,7 @@
 import { Router } from 'express';
 
 import { MOTIF_DIMENSION } from '../../domain/analysis/motif-classifier.js';
+import { pickFocusMotif } from '../../domain/review/focus.js';
 
 /**
  * @param {object} deps
@@ -125,6 +126,7 @@ export function statsRouter({ gameRepo, puzzleRepo, settingsRepo, clock }) {
         dimensionBreakdown,
         rollingStyleScore,
         motifAccuracy,
+        focusMotif: pickFocusMotif(motifBreakdown, motifAccuracy),
       });
     } catch (err) {
       next(err);

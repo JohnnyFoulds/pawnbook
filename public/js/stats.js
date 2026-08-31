@@ -91,8 +91,24 @@ function renderAll(stats, state) {
   renderQueueHealth(stats, state);
   renderEloChart(stats);
   renderPhaseBars(stats);
+  renderFocusCard(stats);
   renderWeaknessTile(stats);
   renderQualityMix(stats);
+}
+
+function renderFocusCard(stats) {
+  const card = document.getElementById('focus-card');
+  const textEl = document.getElementById('focus-text');
+  const linkEl = document.getElementById('focus-drill-link');
+  const focus = stats.focusMotif;
+  if (!focus) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const label = MOTIF_LABEL[focus.tag] ?? focus.tag.replace(/_/g, ' ');
+  const accPart = focus.accuracy != null
+    ? ` — you solve these ${focus.accuracy}% of the time`
+    : ' — you have not drilled these yet';
+  textEl.textContent = `${label} (${focus.mistakes} mistake${focus.mistakes === 1 ? '' : 's'})${accPart}.`;
+  linkEl.href = `puzzles.html?motif=${encodeURIComponent(focus.tag)}`;
 }
 
 function renderEloTile(stats, state) {
