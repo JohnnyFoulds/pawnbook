@@ -154,9 +154,13 @@ async function initBoard(fen, sideToMove, playedMoveUci) {
     onMove: ({ from, to }) => submitMove(from + to),
     getLegalMoves: () => currentLegalMoves,
   });
-  // Show the move the player originally played (the bad one) as a red arrow
+  // Defer arrow to next animation frame so the board SVG has been laid out
+  // and squareWidth/squareHeight are non-zero before addArrow tries to render.
   if (playedMoveUci && playedMoveUci.length >= 4) {
-    currentBoard.showArrow(playedMoveUci.slice(0, 2), playedMoveUci.slice(2, 4), 'danger');
+    const b = currentBoard;
+    const from = playedMoveUci.slice(0, 2);
+    const to = playedMoveUci.slice(2, 4);
+    requestAnimationFrame(() => b.showArrow(from, to, 'danger'));
   }
 }
 
@@ -241,7 +245,7 @@ async function showFeedback(result) {
     </div>`;
     // Reset the board so the player can make a second attempt
     const pos = positions[currentIdx];
-    if (pos) initBoard(pos.fen, pos.sideToMove);
+    if (pos) initBoard(pos.fen, pos.sideToMove, pos.playedMoveUci);
   } else {
     // Teach
     wrap.innerHTML = `<div class="drill-feedback drill-feedback--wrong">
