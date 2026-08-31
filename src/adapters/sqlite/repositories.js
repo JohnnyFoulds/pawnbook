@@ -624,6 +624,17 @@ export class SqlitePuzzleRepository {
     `).all(limitDays).reverse();
   }
 
+  getTodayDrillStats(nowMs) {
+    const row = this._db.prepare(`
+      SELECT COUNT(*) AS attempted, CAST(SUM(correct) AS INTEGER) AS correct
+      FROM reviews
+      WHERE attempt_no = 1 AND practice = 0
+        AND strftime('%Y-%m-%d', datetime((reviewed_at / 1000) - 14400, 'unixepoch'))
+          = strftime('%Y-%m-%d', datetime((? / 1000) - 14400, 'unixepoch'))
+    `).get(nowMs);
+    return { attempted: row.attempted ?? 0, correct: row.correct ?? 0 };
+  }
+
   /**
    * @param {string} gameId
    * @returns {object[]}

@@ -208,6 +208,21 @@ describe('GET /api/state', () => {
     expect(today).toMatchObject({ reviews: 1, games: 1 });
     expect(typeof today.day).toBe('string');
   });
+
+  it('includes todayDrills with attempted and correct counts for today', async () => {
+    const { app, puzzleRepo } = buildApp();
+    const pid = addPuzzle(puzzleRepo);
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt: NOW, correct: true,  attemptNo: 1, practice: false, suspectRecall: false });
+    puzzleRepo.saveReview({ puzzleId: pid, reviewedAt: NOW, correct: false, attemptNo: 1, practice: false, suspectRecall: false });
+    const res = await request(app).get('/api/state');
+    expect(res.body.todayDrills).toMatchObject({ attempted: 2, correct: 1 });
+  });
+
+  it('returns todayDrills with zeros when no drills today', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/api/state');
+    expect(res.body.todayDrills).toMatchObject({ attempted: 0, correct: 0 });
+  });
 });
 
 // ─── GET /api/stats ───────────────────────────────────────────────────────────
