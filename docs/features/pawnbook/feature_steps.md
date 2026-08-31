@@ -606,3 +606,249 @@ analysis engine unavailable: saves analysis_state=failed when runAnalysis throws
 ```
 
 **DoD:** All 6 new tests passing; full suite 1244 passing + 2 expected fails; branch coverage 91.85%; `make verify` clean.
+
+## Phase 19a — Best-move arrow on puzzle failure (Complete — 2026-08-31)
+
+**Goal:** When a player fails a puzzle (second wrong attempt), draw a green arrow from the correct move's source to its destination on the board, making the correct solution immediately visible without text decoding.
+
+**Files changed:**
+- `public/js/lib/board.js` — loaded Arrows extension + arrows.css; exposed `showArrow(from, to, color)` and `clearArrows()` on the board wrapper
+- `public/js/puzzles.js` — store board instance in `currentBoard`; on attempt-2 failure draw success arrow from `bestMoveUci`
+- `public/js/quiz.js` — same pattern
+
+**DoD:** Arrow renders on the board at the correct move after two wrong attempts; no test changes (UI-only); `make verify` clean.
+
+## Phase 19b — Threat explanation on puzzle failure (Complete — 2026-08-31)
+
+**Goal:** Show a one-sentence human-readable explanation of why the played move was bad, computed deterministically from board state using chess.js — no LLM, no network call.
+
+**Design:** `computeThreatExplanation(fen, playedMoveSan, sideToMove)` loads the FEN, applies the played move, then scans all player pieces for hanging squares (attacked and undefended, or attacked by a cheaper piece). Two template variants: (1) moved piece is itself hanging — "The knight moved to d5 has no safe square — the opponent can capture it."; (2) defender-removal — "Moving the rook away from e1 left the queen on e8 undefended." Returns null silently if no obvious threat is detected, so feedback degrades gracefully to the existing arrow.
+
+**Files changed:**
+- `public/js/puzzles.js` — added `computeThreatExplanation`; appended explanation block in teach branch
+- `public/js/quiz.js` — same
+
+**DoD:** One-sentence threat explanation renders on the second wrong attempt when a hanging piece is detected; degrades gracefully to null; no test changes (UI-only); `make verify` clean.
+
+## Phase 19c — Motif classifier (Complete — 2026-08-31)
+
+**Goal:** Implement a `classifyMotif(fen, playedMoveUci, sideToMove)` function that returns a named motif tag for the mistake. Persist the tag on puzzle rows. Start with `hanging_piece` and `fork`.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — NEW: pure `classifyMotif()` using chess.js; detects `hanging_piece` (post-move player piece attacked with no defenders) and `fork` (single opponent non-king attacks 2+ valuable player pieces); returns null otherwise
+- `src/adapters/sqlite/schema.js` — added `motif_tag TEXT` column to `puzzles` DDL + ALTER TABLE migration
+- `src/adapters/sqlite/repositories.js` — `motif_tag` in INSERT
+- `src/adapters/memory/repositories.js` — `motifTag` propagated through in-memory save
+- `src/api/routes/puzzles.js` — `motifTag` exposed in `formatCard()`
+- `tests/unit/motif-classifier.test.js` — NEW: 7 tests (null inputs, illegal move, opening move, hanging knight, defender-removal, fork, quiet)
+
+**Tests:**
+```
+classifyMotif: returns null for null inputs
+classifyMotif: returns null for an illegal move
+classifyMotif: returns null for a normal opening move
+classifyMotif: detects hanging_piece — knight moves to attacked, undefended square
+classifyMotif: detects hanging_piece — removing the only defender exposes a piece
+classifyMotif: detects fork — opponent knight forks two valuable white pieces
+classifyMotif: returns null when no motif is detectable
+```
+
+**DoD:** 7 new tests passing; `motif_tag` column migrated in DB; `make verify` clean.
+
+## Phase 19d — Motif breakdown and top-weakness tile (Complete — 2026-08-31)
+
+**Goal:** Aggregate motif tags across all puzzle rows and surface a "top weakness" tile on the stats page showing which motif pattern the player blunders on most often.
+
+**Files changed:**
+- `src/api/routes/stats.js` — computed `motifBreakdown` (count per tag) and `topWeakness` (tag + count) from puzzle rows; added to `GET /api/stats` response
+- `public/stats.html` — added `#weakness-card` tile with `#weakness-text` and `#weakness-bars`
+- `public/js/stats.js` — `renderWeaknessTile(stats)` renders sorted breakdown bars and top-pattern sentence; `MOTIF_LABEL` map for display names
+
+**DoD:** Weakness tile renders when motif data exists; hidden when no motifs tagged; existing stats tests pass; `make verify` clean.
+
+## Phase 19e — Motif classifier: back_rank and missed_capture (Complete — 2026-08-31)
+
+**Goal:** Expand the classifier to detect two more common club-level patterns. Priority order becomes: `hanging_piece → fork → back_rank → missed_capture`.
+
+**Design:**
+- `back_rank`: post-move, player's king is on their back rank with no pawn on the 3 squares directly in front of it, AND opponent has at least one rook or queen.
+- `missed_capture`: pre-move, a winning capture existed (target undefended, or cheapest attacker < target value) but the played move didn't take it.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_hasBackRank` and `_hasMissedCapture` helpers; updated priority chain
+- `public/js/stats.js` — `MOTIF_LABEL` extended with `back_rank` and `missed_capture`
+- `site/research/chess-feedback.md` — motif table updated
+- `tests/unit/motif-classifier.test.js` — 4 new tests (2 per motif, positive + negative)
+
+**Tests:**
+```
+classifyMotif: detects missed_capture — undefended opponent piece left on the board
+classifyMotif: missed_capture does not fire when player captures the free piece
+classifyMotif: detects back_rank — king on back rank loses luft pawn, opponent has rook
+classifyMotif: back_rank does not fire when king has pawn cover
+```
+
+**DoD:** All 11 classifier tests passing; `make verify` clean.
+
+## Phase 19f — Motif-driven fallback explanation on puzzle failure (Complete — 2026-08-31)
+
+**Goal:** When `computeThreatExplanation` returns null (non-hanging motif), fall back to a static one-sentence template keyed on `card.motifTag` for `back_rank`, `missed_capture`, and `fork`.
+
+**Files changed:**
+- `public/js/puzzles.js` — added `MOTIF_EXPLANATION` map; fallback used when dynamic explanation is null and `pos.motifTag` is set
+- `public/js/quiz.js` — same
+
+**DoD:** `back_rank` and `missed_capture` cards always surface an explanation on failure; `make verify` clean.
+
+## Phase 19g — Motif tag badge on review page mistake list (Complete — 2026-08-31)
+
+**Goal:** Show the motif tag as a small badge on each drillable mistake in the review page mistake list, and expose `motifTag` in the quiz position payload so the quiz failure path can read it.
+
+**Files changed:**
+- `src/api/routes/games.js` — `GET /api/games/:id/review` now includes `motifTag` on each mistake object; `formatQuizPosition` also exposes `motifTag`
+- `public/js/review.js` — `renderMistake()` renders accent-coloured badge (e.g. "hanging piece") when `motifTag` is present
+- `public/css/app.css` — added `.mistake-row__tag--motif` style
+- `tests/unit/routes/games-routes.test.js` — 1 new test: `motifTag` round-trips from puzzle save to review response
+
+**DoD:** 1 new test passing; badge visible on review page; `make verify` clean.
+
+## Phase 19h — Backfill motif tags for existing puzzles (Complete — 2026-08-31)
+
+**Goal:** Idempotent CLI script to classify motif tags for existing puzzle rows that pre-date the classifier. Fixes `SqliteError: no such column: motif_tag` on databases created before Phase 19c.
+
+**Design:** `scripts/backfill-motif-tags.js` calls `applySchema(db)` on startup (runs the ALTER TABLE migration if needed), then SELECTs all tactical puzzles with `motif_tag IS NULL`, calls `classifyMotif` on each, and writes results in a single transaction. Supports `--dry-run` and `--db` flags; prints per-tag counts on completion.
+
+**Files changed:**
+- `scripts/backfill-motif-tags.js` — NEW: 87-line idempotent backfill script
+
+**DoD:** Script runs against a live DB without errors; prints counts; `--dry-run` makes no writes; `make verify` clean.
+
+## Phase 20 — Skill-dimension aggregation from motif tags (Complete — 2026-08-31)
+
+**Goal:** Map each motif tag to a skill dimension (tactics / defense), aggregate across the player's puzzles, and surface the top weak dimension alongside the motif breakdown on the stats page.
+
+**Design:** `MOTIF_DIMENSION` map exported from `motif-classifier.js` maps all 4 (later 8) motifs to a dimension. `GET /api/stats` computes `dimensionBreakdown` by rolling up `motifBreakdown` through the map and adds it to the response. The stats page weakness tile gains a dimension summary line ("7 of your 12 mistakes were tactics problems.").
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `MOTIF_DIMENSION` export: `{ hanging_piece: 'tactics', fork: 'tactics', missed_capture: 'tactics', back_rank: 'defense' }`
+- `src/api/routes/stats.js` — compute and return `dimensionBreakdown`
+- `public/stats.html` — added `#dimension-text` inside `#weakness-card`
+- `public/js/stats.js` — `DIMENSION_LABEL` map; `renderWeaknessTile` now renders dimension summary line
+- `tests/unit/motif-dimension.test.js` — NEW: 8 tests for `MOTIF_DIMENSION` entries + aggregation logic
+- `tests/unit/routes/state-stats-routes.test.js` — `dimensionBreakdown` assertions added to 2 existing tests
+
+**Tests:**
+```
+MOTIF_DIMENSION: maps hanging_piece to tactics
+MOTIF_DIMENSION: maps fork to tactics
+MOTIF_DIMENSION: maps missed_capture to tactics
+MOTIF_DIMENSION: maps back_rank to defense
+MOTIF_DIMENSION: covers every known motif tag (no unmapped motif)
+dimensionBreakdown in stats: is derived from motifBreakdown via MOTIF_DIMENSION
+dimensionBreakdown in stats: ignores unknown tags gracefully
+dimensionBreakdown in stats: produces empty object when no motifs are tagged
+```
+
+**DoD:** 8 new + 2 updated tests passing; `dimensionBreakdown` in stats response; `make verify` clean.
+
+## Phase 21 — Prioritise weak-dimension puzzles in drill queue (Complete — 2026-08-31)
+
+**Goal:** Close the deliberate-practice loop: when the stats page identifies the player's top weak dimension, the drill queue should surface over-cap tactical cards that match that dimension before other tactical cards.
+
+**Design:** `/api/puzzles/due` computes `weakDimension` (top dimension from due-card motif tags via `MOTIF_DIMENSION`) and passes it to `sortDueCards`. Within the tactical over-cap group, cards whose motif maps to `weakDimension` sort before others. Opening cards and non-tactical cards are unaffected. The `motif_tag` column is now included in the `getDueCards` SELECT.
+
+**Files changed:**
+- `src/domain/review/queue.js` — `sortDueCards(cards, now, weakDimension = null)` extended: within the tactical over-cap group, `MOTIF_DIMENSION[motif_tag] === weakDimension` cards sort first
+- `src/adapters/sqlite/repositories.js` — `p.motif_tag` added to `getDueCards` SELECT
+- `src/api/routes/puzzles.js` — computes `weakDimension` via `_topWeakDimension(cards)`; passes to `sortDueCards`
+- `tests/unit/queue.test.js` — 3 new tests (weak-dimension boost; opening-card precedence; null weakDimension fallback)
+
+**Tests:**
+```
+sortDueCards: weak-dimension boost sorts matching tactical cards first within over-cap group
+sortDueCards: opening cards still sort before tactical cards regardless of weakDimension
+sortDueCards: weakDimension=null behaves identically to original sort
+```
+
+**DoD:** 3 new tests passing; drill queue now prioritises player's top weak dimension; `make verify` clean.
+
+## Phase 22 — Maia-3 style score on review and stats pages (Complete — 2026-08-31)
+
+**Goal:** Surface the Maia-3 log-probability strength probe (stored as `maia3_log_prob` in Phase 18) as a human-readable "Style match %" on the review page and as a rolling 10-game average on the stats page.
+
+**Design:** Style score = `Math.round(100 * Math.exp(maia3LogProb))` — the geometric mean move probability expressed as a percentage. Rolling average = mean of `Math.exp(g.maia3LogProb) × 100` over the last 10 games with non-null `maia3LogProb`. Style tile is hidden when no data exists.
+
+**Files changed:**
+- `src/api/routes/games.js` — added `maia3LogProb: game.maia3LogProb ?? null` to `GET /api/games/:id/review` response
+- `src/api/routes/stats.js` — computed `rollingStyleScore` from last 10 games; added to response
+- `public/stats.html` — added `#style-tile` (hidden by default), `#style-val`, `#style-delta`
+- `public/js/stats.js` — `renderStyleTile(stats)` populates or hides the tile; called from `renderAll`
+- `public/js/review.js` — strength line appends "Style X%" when `maia3LogProb` is present
+- `tests/unit/routes/games-routes.test.js` — 2 new tests: `maia3LogProb` present / null in review response
+- `tests/unit/routes/state-stats-routes.test.js` — 2 new tests: `rollingStyleScore` computed / null
+
+**Tests:**
+```
+GET /api/games/:id/review: includes maia3LogProb when game has one
+GET /api/games/:id/review: maia3LogProb is null when game has none
+GET /api/stats: rollingStyleScore is computed from last 10 games with non-null logProb
+GET /api/stats: rollingStyleScore is null when no games have maia3LogProb
+```
+
+**DoD:** 4 new tests passing; style score visible on review when data available; `make verify` clean.
+
+## Phase 23 — Motif classifier: overloaded_defender (Complete — 2026-08-31)
+
+**Goal:** Detect the overloaded-defender pattern: a single player piece is the sole guardian of two or more attacked player pieces, making it impossible to defend both if the opponent strikes.
+
+**Design:** `_hasOverloadedDefender(chess, playerColor, oppColor)` scans all attacked player pieces, records the sole defender (if only one exists) per piece, and returns true if any defender is sole guardian of ≥ 2 pieces.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_hasOverloadedDefender`; added `overloaded_defender: 'defense'` to `MOTIF_DIMENSION`; updated priority chain and JSDoc
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label and explanation text added
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Re5 sole guardian of Nd5 + Nf5 → positive; flanking rooks give two defenders each → negative)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 6
+
+**DoD:** 3 new tests passing; 1298 total; 91.15% branch coverage; `make verify` clean.
+
+## Phase 24 — Motif classifier: pinned_piece (Complete — 2026-08-31)
+
+**Goal:** Detect the pin pattern: an opponent sliding piece (rook, bishop, queen) is aimed along a ray at a player piece, and behind that piece on the same ray is a more valuable player piece. The first piece is "pinned" — moving it would expose the second to capture.
+
+**Design:** `_hasPinnedPiece(chess, playerColor, oppColor)` walks rays from every opponent sliding piece using a `_RAY_DIRS` table; fires when the first player piece on a ray has lower value than the second player piece on the same ray (`PIECE_VALUE[second] > PIECE_VALUE[first]`).
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_RAY_DIRS`, `_hasPinnedPiece`; `pinned_piece: 'tactics'` in `MOTIF_DIMENSION`
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label `'pin'` and explanation text
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Bb2 pins Nd4 against Qf6; no-alignment negative)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 7 (wait, 6 at this point)
+
+**DoD:** 2 new classifier tests; 1301 total; 91.15% branch coverage; `make verify` clean.
+
+## Phase 25 — Motif classifier: skewer (Complete — 2026-08-31)
+
+**Goal:** Detect the skewer pattern: the mirror of a pin. An opponent slider attacks a more valuable player piece; when it moves to safety, the less valuable player piece behind it is captured.
+
+**Design:** `_hasSkewer(chess, playerColor, oppColor)` is the same ray-walking code as `_hasPinnedPiece` with the value comparison reversed: fires when `PIECE_VALUE[first] > PIECE_VALUE[second]` (first piece on the ray is more valuable than the second).
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `_hasSkewer`; `skewer: 'tactics'` in `MOTIF_DIMENSION`; priority chain now has 7 entries
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label and explanation text
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Ba1 skewers Qb5 onto Rb2 via NE diagonal; negative null case)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 7
+
+**DoD:** 2 new classifier tests; 1304 total; 91.16% branch coverage; `make verify` clean.
+
+## Phase 26 — Motif classifier: discovered_attack (Complete — 2026-08-31)
+
+**Goal:** Detect the discovered-attack pattern: the player moves a piece that was blocking an opponent slider from reaching another player piece; after the move that piece becomes newly attacked.
+
+**Design:** Before `chess.move()`, capture a `preAttacked` Set of squares of player pieces currently attacked by the opponent. After the move, `_hasDiscoveredAttack` checks whether any player piece ≥ knight value is now attacked by the opponent, was NOT in `preAttacked`, and is not the destination square (which is already covered by `hanging_piece`/`fork`). No second Chess instance required.
+
+**Files changed:**
+- `src/domain/analysis/motif-classifier.js` — added `preAttacked` Set capture pre-move; added `_hasDiscoveredAttack`; `discovered_attack: 'tactics'` in `MOTIF_DIMENSION`; priority chain now has 8 entries
+- `public/js/stats.js`, `review.js`, `puzzles.js`, `quiz.js` — label and explanation text
+- `tests/unit/motif-classifier.test.js` — 2 new tests (Rg4-g2 uncovers Rh4 attack on defended Nd4; quiet Ke1-e2 negative)
+- `tests/unit/motif-dimension.test.js` — 1 new test; known-motif array expanded to 8
+
+**DoD:** 2 new classifier tests; 1307 total; 91.19% branch coverage; `make verify` clean.
