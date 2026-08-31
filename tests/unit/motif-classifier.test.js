@@ -101,6 +101,23 @@ describe('classifyMotif', () => {
     expect(classifyMotif(fen, 'h1h2', 'white')).toBe(null);
   });
 
+  // ── skewer ────────────────────────────────────────────────────────────────
+
+  it('detects skewer — black bishop skewers white queen onto white rook behind', () => {
+    // Black Ba1 NE diagonal: d4(Qd4, val 9) → g7(Rg7, val 5).
+    // 9 > 5 → skewer (queen must move, rook behind is captured).
+    // Qd4 defended by Rd1 (not hanging). Nb3 defends Ba1 (no missed_capture).
+    const fen = 'K1k5/6R1/8/8/3Q4/1n6/8/b2R4 w - - 0 1';
+    expect(classifyMotif(fen, 'a8a7', 'white')).toBe('skewer');
+  });
+
+  it('skewer does not fire when second piece is more valuable than first (that is a pin)', () => {
+    // Black Ba1 NE diagonal: f3(Nf3, val 3) → h5(Qh5, val 9). 9 > 3 → pin, not skewer.
+    // Nf3 defended by Ka2 (adjacent). White plays a quiet king move.
+    const fen = 'k7/8/8/8/7b/8/5PPP/4K3 w - - 0 1';
+    expect(classifyMotif(fen, 'e1e2', 'white')).toBe(null);
+  });
+
   // ── back_rank ─────────────────────────────────────────────────────────────
 
   it('detects back_rank — king on back rank loses luft pawn, opponent has rook', () => {
