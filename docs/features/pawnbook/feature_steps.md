@@ -207,8 +207,8 @@ findability: unparseable policy output falls back to binary 1.0/0.25 and logs a 
 **Status:** Complete — 2026-08-26
 
 **Branch:** `feat/phase-7-puzzles`  
-**Files:** `src/domain/puzzles/select.js`, `src/domain/puzzles/attempt.js`, `src/domain/review/queue.js`, `src/domain/review/rating.js`, `src/adapters/scheduler/`
-**Note:** `dedupe.js` and its three tests (`dedupe: …`) remain deferred — the tests are in `select.test.js` as `test.fails(...)` stubs.
+**Files:** `src/domain/puzzles/select.js`, `src/domain/puzzles/dedupe.js`, `src/domain/puzzles/attempt.js`, `src/domain/review/queue.js`, `src/domain/review/rating.js`, `src/adapters/scheduler/`
+**Note:** `dedupe.js` implemented in Phase 7b (feat/phase-7b-dedupe). Also adds `updateFindability` to both adapters and the port.
 
 ```
 select: findability >= 0.04 becomes a puzzle

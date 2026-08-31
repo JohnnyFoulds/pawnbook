@@ -11,6 +11,7 @@ import { Chess } from 'chess.js';
 
 import { runAnalysis } from '../../domain/analysis/pipeline.js';
 import { selectPuzzles } from '../../domain/puzzles/select.js';
+import { dedupeAndSave } from '../../domain/puzzles/dedupe.js';
 import { nearestMaiaModel } from '../../domain/analysis/findability.js';
 import { updateElo } from '../../domain/game/elo.js';
 import { getMaiaAnalysisWeights } from '../../domain/game/roster.js';
@@ -156,30 +157,34 @@ export async function analyseGame({
       const altLines = p.altMovesJson ? JSON.parse(p.altMovesJson) : [];
       const acceptedMoves = [p.bestMoveUci, ...altLines.map(a => a.uci).filter(Boolean)];
 
-      const puzzleId = puzzleRepo.save({
-        fen: p.fen,
-        sideToMove: playerColor === 'white' ? 'white' : 'black',
-        bestMoveUci: p.bestMoveUci,
-        bestMoveSan: _uciToSan(p.fen, p.bestMoveUci),
-        pv: p.pv ?? null,
-        acceptedMovesJson: JSON.stringify([...new Set(acceptedMoves)]),
-        followupUci: p.pv ? p.pv.split(' ')[1] ?? null : null,
-        playedMoveUci: p.moveUci,
-        playedMoveSan: _uciToSan(p.fen, p.moveUci),
-        cpLoss: p.cpLoss,
-        winLossPts: p.winLoss,
-        classification: p.classification,
-        findability: p.findability,
-        temptation: p.temptation,
-        instructiveness: p.instructiveness,
-        tags: p.tags ?? '',
-        maiaModel: p.maiaModel,
-        policyTemperature: p.policyTemperature ?? 1.0,
-        eloAtCreation: playerElo,
-        sourceGameId: gameId,
-        sourcePly: p.ply,
-        phase: p.phase,
-        wasTimed: wasTimed ? 1 : 0,
+      const { id: puzzleId } = await dedupeAndSave({
+        puzzle: {
+          fen: p.fen,
+          sideToMove: playerColor === 'white' ? 'white' : 'black',
+          bestMoveUci: p.bestMoveUci,
+          bestMoveSan: _uciToSan(p.fen, p.bestMoveUci),
+          pv: p.pv ?? null,
+          acceptedMovesJson: JSON.stringify([...new Set(acceptedMoves)]),
+          followupUci: p.pv ? p.pv.split(' ')[1] ?? null : null,
+          playedMoveUci: p.moveUci,
+          playedMoveSan: _uciToSan(p.fen, p.moveUci),
+          cpLoss: p.cpLoss,
+          winLossPts: p.winLoss,
+          classification: p.classification,
+          findability: p.findability,
+          temptation: p.temptation,
+          instructiveness: p.instructiveness,
+          tags: p.tags ?? '',
+          maiaModel: p.maiaModel,
+          policyTemperature: p.policyTemperature ?? 1.0,
+          eloAtCreation: playerElo,
+          sourceGameId: gameId,
+          sourcePly: p.ply,
+          phase: p.phase,
+          wasTimed: wasTimed ? 1 : 0,
+        },
+        puzzleRepo,
+        maiaClient,
       });
 
       // Only init FSRS card if none exists — do not overwrite a card with existing review history
