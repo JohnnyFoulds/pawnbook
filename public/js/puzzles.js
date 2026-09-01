@@ -207,7 +207,9 @@ function loadCard(idx) {
   gameLink.href = `review.html?game=${card.sourceGameId}`;
 
   const isOpening = card.kind === 'opening';
-  const moveLabel = `Move ${Math.ceil(card.ply / 2)}${card.ply % 2 === 1 ? '.' : '…'}  ${card.sideToMove === 'white' ? 'White' : 'Black'} to play`;
+  const plyNum = card.ply != null ? Math.ceil(card.ply / 2) : '?';
+  const plySuffix = card.ply != null ? (card.ply % 2 === 1 ? '.' : '…') : '';
+  const moveLabel = `Move ${plyNum}${plySuffix}  ${card.sideToMove === 'white' ? 'White' : 'Black'} to play`;
   document.getElementById('move-label').textContent = isOpening
     ? `Opening — ${moveLabel}`
     : moveLabel;

@@ -34,7 +34,7 @@ function renderTree() {
   const showAlt = document.getElementById('show-alt')?.checked ?? true;
   const el = document.getElementById('tree-list');
   if (!_treeNodes.length) {
-    el.innerHTML = '<div style="color:var(--ink-muted);font-size:13px">No book moves yet.</div>';
+    el.innerHTML = '<div style="color:var(--ink-muted);font-size:13px;font-family:system-ui,sans-serif">No book moves yet.</div>';
     return;
   }
   const ROLE_ORDER = { canonical: 0, alt: 1, candidate: 2, retired: 3, refused: 4, quarantined: 5 };
@@ -70,7 +70,7 @@ function renderTree() {
       : '';
     rows.push(`<div style="white-space:pre">${indent}<span style="color:var(--ink-muted);font-size:11px">${moveNo ? moveNo + (ply % 2 === 1 ? '.' : '…') + ' ' : ''}</span>${moveParts}${reachStr}${healthStr}</div>`);
   }
-  el.innerHTML = rows.length ? rows.join('') : '<div style="color:var(--ink-muted);font-size:13px">No moves to display.</div>';
+  el.innerHTML = rows.length ? rows.join('') : '<div style="color:var(--ink-muted);font-size:13px;font-family:system-ui,sans-serif">No moves to display.</div>';
 }
 
 function renderLineHealth() {
@@ -104,7 +104,12 @@ function renderLineHealth() {
   const summary = overBudget > 0
     ? `<div style="color:#d9534f;font-size:12px;margin-bottom:8px">${overBudget} line${overBudget > 1 ? 's' : ''} over budget (≥${_lineBudget} pts) — gate 3 would veto these positions</div>`
     : `<div style="color:var(--ink-muted);font-size:12px;margin-bottom:8px">No lines over the ${_lineBudget}-pt budget yet.</div>`;
-  el.innerHTML = summary + rows.join('');
+  const legend = `<div style="display:flex;gap:16px;font-size:11px;color:var(--ink-muted);margin-bottom:10px">
+    <span><span style="display:inline-block;width:10px;height:10px;background:#d9534f;border-radius:2px;margin-right:4px;vertical-align:middle"></span>over budget</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#e8a020;border-radius:2px;margin-right:4px;vertical-align:middle"></span>half budget</span>
+    <span style="margin-left:4px">B = Black · W = White · bar = centipawn loss</span>
+  </div>`;
+  el.innerHTML = legend + summary + rows.join('');
 }
 
 async function loadGaps() {
@@ -162,7 +167,7 @@ async function loadCoverage() {
   try {
     const r = await fetch('/api/repertoire/coverage');
     const data = await r.json();
-    document.getElementById('coverage-pct').textContent = `${data.coveragePct}%`;
+    document.getElementById('coverage-pct').textContent = `${(+data.coveragePct).toFixed(1)}%`;
     document.getElementById('canonical-count').textContent = data.canonicalCount;
     document.getElementById('candidate-count').textContent = data.candidateCount;
     document.getElementById('total-nodes').textContent = data.totalNodes;
