@@ -10,7 +10,7 @@ export default [
   },
   // Node.js: server, tui, tests, scripts
   {
-    files: ['src/**/*.js', 'tui/**/*.js', 'bin/**/*.js', 'tests/**/*.js', 'scripts/**/*.js', '*.js'],
+    files: ['src/**/*.js', 'tui/**/*.js', 'bin/**/*.js', 'tests/**/*.js', 'scripts/**/*.js', 'scripts/**/*.mjs', '*.js'],
     languageOptions: {
       globals: {
         ...globals.node,

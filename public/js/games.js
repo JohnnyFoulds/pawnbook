@@ -13,13 +13,17 @@ async function api(path, opts) {
 
 function relativeTime(iso) {
   if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const diff = Date.now() - d.getTime();
+  if (diff < 0) return 'just now';
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  if (days < 60) return `${days}d ago`;
+  return d.toLocaleDateString();
 }
 
 async function retryAnalysis(id, btn) {
@@ -53,6 +57,12 @@ async function boot() {
       return;
     }
 
+    // Show Play CTA when the list is short so the page isn't just a small table on a black void
+    if (games.length < 10) {
+      const ctaEl = document.getElementById('cta-play');
+      if (ctaEl) ctaEl.style.display = '';
+    }
+
     tbody.innerHTML = games.map((g) => {
       const icon = g.result === 'win' ? '✓' : g.result === 'loss' ? '✗' : '=';
       const cls = g.result === 'win' ? 'result-icon--won' : g.result === 'loss' ? 'result-icon--lost' : '';
@@ -61,6 +71,7 @@ async function boot() {
         : null;
       const retryBtn = g.analysisState === 'failed'
         ? `<button data-id="${g.id}" class="retry-analysis-btn"
+             title="Analysis failed — click to retry"
              style="margin-left:6px;padding:1px 7px;font-size:11px;cursor:pointer;
                     border:1px solid var(--critical,#d9534f);border-radius:3px;background:none;
                     color:var(--critical,#d9534f)">Retry</button>`
