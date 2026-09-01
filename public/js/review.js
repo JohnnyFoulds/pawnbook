@@ -29,7 +29,10 @@ function getGameId() {
 async function boot() {
   const gameId = getGameId();
   if (!gameId) {
-    document.getElementById('game-meta').textContent = 'No game specified.';
+    const meta = document.getElementById('game-meta');
+    meta.innerHTML = 'No game specified — <a href="games.html" style="color:var(--accent)">choose a game</a>.';
+    document.querySelector('.review-grid').style.display = 'none';
+    document.getElementById('acc-bars').style.display = 'none';
     return;
   }
 

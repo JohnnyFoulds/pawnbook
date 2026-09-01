@@ -85,7 +85,12 @@ let currentBoard = null;
 
 async function boot() {
   const gameId = getGameId();
-  if (!gameId) return;
+  if (!gameId) {
+    document.getElementById('quiz-header').innerHTML =
+      '<span style="color:var(--ink-muted)">No game specified — <a href="games.html">choose a game</a>.</span>';
+    document.querySelector('.drill-layout').style.display = 'none';
+    return;
+  }
 
   try {
     const quiz = await api(`/api/games/${gameId}/quiz`);
@@ -121,8 +126,10 @@ function loadPosition(idx) {
   startMs = Date.now();
 
   document.getElementById('pos-num').textContent = String(idx + 1);
+  const plyNum = pos.ply != null ? Math.ceil(pos.ply / 2) : '?';
+  const plySuffix = pos.ply != null ? (pos.ply % 2 === 1 ? '.' : '…') : '';
   document.getElementById('move-label').textContent =
-    `Move ${Math.ceil(pos.ply / 2)}${pos.ply % 2 === 1 ? '.' : '…'}  ${pos.sideToMove === 'white' ? 'White' : 'Black'} to play`;
+    `Move ${plyNum}${plySuffix}  ${pos.sideToMove === 'white' ? 'White' : 'Black'} to play`;
 
   document.getElementById('drill-prompt').innerHTML =
     `You played <span class="drill-prompt__move">${pos.playedMoveSan}</span> here and `

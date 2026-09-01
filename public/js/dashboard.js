@@ -15,12 +15,18 @@ async function api(path) {
 }
 
 function relativeTime(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const diff = Date.now() - d.getTime();
+  if (diff < 0) return 'just now';
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 60) return `${days}d ago`;
+  return d.toLocaleDateString();
 }
 
 async function init() {
@@ -35,8 +41,9 @@ async function init() {
     const provisional = state.gamesPlayed < 15;
     document.getElementById('elo-value').textContent =
       elo + (provisional ? '' : '');
-    document.getElementById('elo-display').textContent =
-      `${elo} vs engines${provisional ? ' (provisional)' : ''}`;
+    const eloDisplayEl = document.getElementById('elo-display');
+    eloDisplayEl.textContent = `${elo} vs engines${provisional ? '*' : ''}`;
+    if (provisional) eloDisplayEl.title = 'Rating is provisional (fewer than 15 games played)';
     document.getElementById('elo-delta').textContent =
       state.eloDelta ? `${state.eloDelta > 0 ? '+' : ''}${state.eloDelta} vs last game` : '';
 
@@ -47,6 +54,18 @@ async function init() {
     document.getElementById('due-value').textContent = dueLabel;
     document.getElementById('drill-count').textContent = dueLabel;
     document.querySelectorAll('#due-count').forEach((el) => { el.textContent = dueLabel; });
+
+    // Drill CTA: suppress the count-based invite when nothing is due
+    const drillCardHead = document.getElementById('drill-card-heading');
+    const drillCardSub = document.getElementById('drill-today-sub');
+    if (drillCardHead) {
+      if (dueCount === 0) {
+        drillCardHead.textContent = 'Drills up to date';
+        if (drillCardSub) drillCardSub.textContent = 'Play a game to generate more';
+      } else {
+        drillCardHead.innerHTML = `Drill <span id="drill-count">${dueLabel}</span> puzzle${dueCount === 1 ? '' : 's'}`;
+      }
+    }
 
     // Streak tile visibility (show_streak setting)
     const showStreak = state.showStreak !== false;
@@ -126,6 +145,15 @@ async function init() {
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
       ctx.stroke();
+
+      // Date range label
+      const datesEl = document.getElementById('elo-chart-dates');
+      if (datesEl && data.length >= 2) {
+        const fmt = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const startDate = data[0].recordedAt;
+        const endDate = data[data.length - 1].recordedAt;
+        datesEl.textContent = startDate ? `${fmt(startDate)} – ${fmt(endDate)}` : '';
+      }
     }
 
     // Time range filter (cosmetic — full chart is on stats.html)
@@ -149,7 +177,7 @@ async function init() {
           <td><span class="${cls}">${icon}</span></td>
           <td><a href="review.html?game=${g.id}" style="color:var(--ink-secondary)">${g.opponentId}</a></td>
           <td>${g.accuracy != null ? Math.round(g.accuracy) + '%' : '—'}</td>
-          <td>${g.puzzleCount ?? 0} puzzles</td>
+          <td>${(() => { const n = g.puzzleCount ?? 0; return `${n} puzzle${n === 1 ? '' : 's'}`; })()}</td>
           <td style="color:var(--ink-muted);font-size:12px">${relativeTime(g.playedAt)}</td>
         </tr>`;
       }).join('');

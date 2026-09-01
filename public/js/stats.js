@@ -99,6 +99,9 @@ function renderStrengthTile(stats) {
     canvas.width = (canvas.offsetWidth || 120) * dpr;
     canvas.height = (canvas.offsetHeight || 28) * dpr;
     drawSparkline(canvas, history.map(h => h.strengthElo));
+    const vals = history.map(h => h.strengthElo);
+    const rangeEl = document.getElementById('spark-strength-range');
+    if (rangeEl) rangeEl.textContent = `${Math.min(...vals)} – ${Math.max(...vals)}`;
   } else if (canvas) {
     canvas.style.display = 'none';
   }
@@ -265,6 +268,11 @@ function renderEloTile(stats, state) {
   if (history.length) {
     const canvas = document.getElementById('spark-elo');
     drawSparkline(canvas, history.map((h) => h.elo));
+    const vals = history.map((h) => h.elo);
+    const rangeEl = document.getElementById('spark-elo-range');
+    if (rangeEl && vals.length >= 2) {
+      rangeEl.textContent = `${Math.min(...vals)} – ${Math.max(...vals)}`;
+    }
   }
 }
 
@@ -362,11 +370,12 @@ function renderPhaseBars(stats) {
   const container = document.getElementById('phase-bars');
   const max = Math.max(...Object.values(phases), 1);
 
+  const PHASE_LABEL = { opening: 'Opening', middlegame: 'Middlegame', endgame: 'Endgame' };
   container.innerHTML = ['opening', 'middlegame', 'endgame'].map((phase) => {
     const n = phases[phase] ?? 0;
     const pct = (n / max) * 100;
     return `<div style="display:flex;align-items:center;gap:12px">
-      <div style="width:100px;font-size:13px;color:var(--ink-secondary)">${phase}</div>
+      <div style="width:100px;font-size:13px;color:var(--ink-secondary)">${PHASE_LABEL[phase] ?? phase}</div>
       <div style="flex:1;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">
         <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px"></div>
       </div>
