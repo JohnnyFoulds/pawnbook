@@ -6,7 +6,7 @@ import security from 'eslint-plugin-security';
 export default [
   js.configs.recommended,
   {
-    ignores: ['node_modules/', 'coverage/', 'public/js/lib/', 'site/.vitepress/dist/'],
+    ignores: ['node_modules/', 'coverage/', 'public/js/lib/', 'site/.vitepress/dist/', 'playwright-journey-report/', 'ux-audit-screenshots/'],
   },
   // Node.js: server, tui, tests, scripts
   {
@@ -22,6 +22,11 @@ export default [
     },
     rules: {
       ...security.configs.recommended.rules,
+      // All external input crosses a Zod schema at the interface layer before it
+      // reaches domain/adapters code, and dynamic lookups (EPD keys, move maps)
+      // are core to the chess domain. The rule's false-positive rate here makes
+      // real warnings indistinguishable from noise.
+      'security/detect-object-injection': 'off',
       'import/order': ['error', { 'newlines-between': 'always' }],
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       'no-console': 'warn',
@@ -40,6 +45,9 @@ export default [
     },
     rules: {
       ...security.configs.recommended.rules,
+      // Browser code reads indexed data keyed by validated API responses;
+      // see the Node block rationale for the object-injection rule.
+      'security/detect-object-injection': 'off',
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       'no-console': 'warn',
     },

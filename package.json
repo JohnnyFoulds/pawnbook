@@ -34,7 +34,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "vitepress": "^1.6.3",
     "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.9.1",
@@ -42,6 +41,7 @@
     "eslint-plugin-security": "^4.0.1",
     "globals": "^17.11.0",
     "supertest": "^7.2.2",
+    "vitepress": "^2.0.0-alpha.20",
     "vitest": "^4.1.11"
   },
   "optionalDependencies": {
