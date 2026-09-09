@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Fetch Maia weight files into weights/.
-# Priority: 1) ~/code/lucaschess darwin tree  2) linux tree  3) CSSLab release (1100-1900 only)
+# Fetch Maia weight files into a destination directory.
+# Priority: 1) existing files  2) local lucaschess tree  3) CSSLab release (1100-1900)
+#
+# Usage: fetch-weights.sh [DEST_DIR]
+#   DEST_DIR defaults to <repo>/weights (for local dev, via `make setup`).
+#   The Dockerfile calls this with /app/weights so CI builds get weights
+#   without a machine-specific checkout step.
 set -euo pipefail
 
-DEST="$(cd "$(dirname "$0")/.." && pwd)/weights"
+DEST="${1:-$(cd "$(dirname "$0")/.." && pwd)/weights}"
 mkdir -p "$DEST"
 
 DARWIN_SRC="$HOME/code/lucaschess/bin/OS/darwin/Engines/maia"
@@ -33,7 +38,7 @@ download_from_csslab() {
     curl -fsSL --max-time 60 -o "$DEST/$file" "$url"
 }
 
-echo "Fetching Maia weights into weights/ ..."
+echo "Fetching Maia weights into $DEST ..."
 
 for elo in "${REQUIRED[@]}"; do
     file="maia-${elo}.pb.gz"
@@ -57,5 +62,10 @@ for elo in "${OPTIONAL[@]}"; do
         || echo "  maia-${elo}.pb.gz not available (optional, skipping)"
 done
 
-echo "Done. Contents of weights/:"
-ls -lh "$DEST"/*.pb.gz 2>/dev/null || echo "  (empty)"
+echo "Done. Contents of $DEST:"
+ls -1 "$DEST"
+count=$(ls -1 "$DEST"/maia-*.pb.gz 2>/dev/null | wc -l | tr -d ' ')
+if [ "$count" -lt 9 ]; then
+    echo "ERROR: only $count required weight files present (need 9)" >&2
+    exit 1
+fi
