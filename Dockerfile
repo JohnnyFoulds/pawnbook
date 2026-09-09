@@ -68,7 +68,7 @@ RUN chmod +x /usr/local/bin/lc0 /usr/local/bin/stockfish /usr/local/bin/drawfish
 # Copy Maia weights. The runtime stage needs curl to fetch them if the local
 # weights/ dir is empty (CI checkouts never contain the ~200 MB weight files).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libopenblas0 curl \
+    libopenblas0 curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
