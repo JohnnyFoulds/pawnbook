@@ -65,9 +65,10 @@ COPY --from=engines-build /usr/local/bin/stockfish /usr/local/bin/stockfish
 COPY --from=engines-build /usr/local/bin/drawfish /usr/local/bin/drawfish
 RUN chmod +x /usr/local/bin/lc0 /usr/local/bin/stockfish /usr/local/bin/drawfish
 
-# Runtime dependency for lc0's OpenBLAS backend
+# Copy Maia weights. The runtime stage needs curl to fetch them if the local
+# weights/ dir is empty (CI checkouts never contain the ~200 MB weight files).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libopenblas0 \
+    libopenblas0 curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -81,11 +82,13 @@ COPY public/ ./public/
 COPY bin/ ./bin/
 COPY tui/ ./tui/
 
-# Copy scripts (includes smoke.sh for in-container engine acceptance tests)
+# Copy scripts (includes smoke.sh and fetch-weights.sh)
 COPY scripts/ /app/scripts/
 
-# Copy Maia weights (populated by make setup / fetch-weights.sh)
+# Copy Maia weights: use files present in the build context if any, otherwise
+# fetch-weights.sh downloads the 9 required files from the public CSSLab release.
 COPY weights/ /app/weights/
+RUN bash scripts/fetch-weights.sh /app/weights
 
 # Guard: fail at build time if weights are missing rather than at runtime
 RUN test "$(ls -1 /app/weights/*.pb.gz 2>/dev/null | wc -l)" -ge 9 || \

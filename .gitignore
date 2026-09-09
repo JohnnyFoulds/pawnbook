@@ -12,6 +12,8 @@ coverage/
 *.db-wal
 dist/
 playwright-report/
+playwright-journey-report/
+ux-audit-screenshots/
 test-results/
 site/.vitepress/dist/
 site/.vitepress/cache/

@@ -200,5 +200,37 @@ describe('queue', () => {
       const sorted = sortDueCards(cards, now, null);
       expect(sorted[0].instructiveness).toBe(100);
     });
+
+    it('opening cards with equal reachProb fall through to instructiveness × overdue tiebreak', () => {
+      const base = new Date('2025-01-10T00:00:00Z').getTime();
+      const tactical = Array.from({ length: DUE_SOFT_CAP - 1 }, (_, i) => ({
+        due: new Date(base - i * 86_400_000).toISOString(),
+        instructiveness: 10,
+        kind: 'tactical',
+      }));
+      const opening = [
+        // Equal reachProb → tiebreak: more overdue × higher instructiveness first
+        { due: new Date(base).toISOString(), instructiveness: 5, kind: 'opening', reachProb: 0.5 },
+        { due: new Date(base - 5 * 86_400_000).toISOString(), instructiveness: 5, kind: 'opening', reachProb: 0.5 },
+        { due: new Date(base - 5 * 86_400_000).toISOString(), instructiveness: 9, kind: 'opening', reachProb: 0.5 },
+      ];
+      const sorted = sortDueCards([...tactical, ...opening], now);
+      const openingSorted = sorted.filter(c => c.kind === 'opening');
+      // Higher instructiveness wins among equally overdue cards
+      expect(openingSorted[0].instructiveness).toBe(9);
+      expect(openingSorted[1].instructiveness).toBe(5);
+    });
+
+    it('weakDimension: tacticals with no matching motif keep instructiveness × overdue order', () => {
+      const base = now.getTime();
+      const cards = Array.from({ length: DUE_SOFT_CAP + 2 }, (_, i) => ({
+        due: new Date(base - i * 86_400_000).toISOString(),
+        instructiveness: i === 1 ? 100 : 1,
+        kind: 'tactical',
+        motif_tag: 'back_rank', // nobody matches 'tactics' → aWeak === bWeak → tiebreak
+      }));
+      const sorted = sortDueCards(cards, now, 'tactics');
+      expect(sorted[0].instructiveness).toBe(100);
+    });
   });
 });

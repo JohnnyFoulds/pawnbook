@@ -40,7 +40,9 @@ export function electCanonical(moves, nowMs) {
       const ageDays = (nowMs - obs.playedAt) / 86400_000;
       return sum + recencyWeight(ageDays);
     }, 0);
-    return { uci: m.uci, weightedScore, meanWinLossPts: m.meanWinLossPts, score: m.score };
+    // Count observations within one half-life of nowMs (for the alternation check)
+    const recentCount = m.observations.filter(o => (nowMs - o.playedAt) <= halfLifeMs).length;
+    return { uci: m.uci, weightedScore, meanWinLossPts: m.meanWinLossPts, score: m.score, recentCount };
   }).filter(m => m.weightedScore > 0);
 
   if (!scored.length) return { canonical: null, alts: [] };
@@ -53,19 +55,11 @@ export function electCanonical(moves, nowMs) {
 
   const winner = scored[0];
 
-  // Alternation: check if a second move qualifies alongside the winner
-  const alts = [];
-  for (let i = 1; i < scored.length; i++) {
-    const m = moves.find(x => x.uci === scored[i].uci);
-    if (!m) continue;
-    // Count observations within one half-life of nowMs
-    const recentCount = m.observations.filter(o => (nowMs - o.playedAt) <= halfLifeMs).length;
-    const winnerRecentCount = moves.find(x => x.uci === winner.uci)
-      ?.observations.filter(o => (nowMs - o.playedAt) <= halfLifeMs).length ?? 0;
-    if (recentCount >= REP_ALT_ALTERNATION_MIN && winnerRecentCount >= REP_ALT_ALTERNATION_MIN) {
-      alts.push(scored[i].uci);
-    }
-  }
+  // Alternation: a second move qualifies alongside the winner only when both
+  // have at least REP_ALT_ALTERNATION_MIN observations within one half-life.
+  const alts = scored.slice(1)
+    .filter(m => m.recentCount >= REP_ALT_ALTERNATION_MIN && winner.recentCount >= REP_ALT_ALTERNATION_MIN)
+    .map(m => m.uci);
 
   return { canonical: winner.uci, alts };
 }
